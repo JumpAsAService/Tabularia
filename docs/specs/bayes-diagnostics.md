@@ -409,3 +409,22 @@ None.
   rows for each of the 2,000 quantities and 5 more for each of the 600 entries: 26,000 + 3,000 + 25,920 (charts) + 1,800
   (6 pairs × 300) + 24,000 + 6,000 + 1,600 + 90 + 80 + 5,000 = **93,490**, 6,510 under the limit. The count of the 600 holds
   only if the lot that writes the original scale writes it for coefficients of effects alone.
+
+### Lot X5: the measure at the map's size
+
+`test_diag_measure.py` (skipped unless `BAYES_DIAG_MEASURE` is set; by hand, alone) writes the fake draws file of 20,000
+quantities × 4 chains × 1,000 draws (S = 4,000, 80 million values; `fake_draws.write(keep=False)`, row groups of 52 draws)
+and runs `second_pass` on it with the limits' defaults (`memory_bytes` 2 GiB, so `pass_bytes` 512 MiB and `compute_bytes`
+256 MiB; `block_values` 1,048,576; a constant prior variance, so the contraction is computed) in a child started with
+`MALLOC_MMAP_THRESHOLD_` and `MALLOC_TRIM_THRESHOLD_` at 256 KiB. Measured on a laptop with 8 logical CPUs (a 2018
+quad-core i5 at 1.7 GHz), 16 GB of memory, an NVMe disk, one measure, nothing else heavy running:
+
+| Measure | Value |
+|---|---|
+| The second pass | **74 s**: 4.3 s reading, 68.5 s computing the measures (32 sub-blocks, 2 blocks of quantities) |
+| Peak resident memory | **727 MB above the start of the pass** (the interpreter at 135 MB; 861 MB absolute), under the budgets' 768 MB plus the row group and the interpreter's slack |
+| The draws file | 606 MB on disk (zstd; the fixture's values are rounded to six decimals, real ones compress less), written in 21 s |
+| The pass's files | summary output 2.4 MB (20,000 rows), results 0.7 MB (43,784 rows) |
+
+The files were in a temporary folder removed at the end. The pass is bound by the measures' arithmetic (ranks, the FFT of
+the autocorrelations), not by the reads; the 606 MB file was read twice (two blocks of quantities) in 4.3 s.
