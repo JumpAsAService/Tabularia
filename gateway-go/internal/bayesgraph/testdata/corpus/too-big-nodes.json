@@ -1,0 +1,1886 @@
+{
+  "name": "too-big-nodes",
+  "rule": "graph.too_big",
+  "expect": "trips",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Price",
+        "name": "price",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Area",
+        "name": "area",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d3",
+        "kind": "data",
+        "label": "Rooms",
+        "name": "rooms",
+        "plate": "rows",
+        "support": "nonnegative",
+        "type": "int"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Intercept",
+        "name": "alpha",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "10"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Area effect",
+        "name": "b_area",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Rooms effect",
+        "name": "b_rooms",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "p1",
+        "intercept": {
+          "expr": "alpha"
+        },
+        "kind": "linear_predictor",
+        "label": "Expected price",
+        "name": "eta",
+        "plate": "rows",
+        "terms": [
+          {
+            "coef": {
+              "expr": "b_area"
+            },
+            "data": "d2"
+          },
+          {
+            "coef": {
+              "ref": "m3"
+            },
+            "data": "d3"
+          }
+        ]
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "eta"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Prices",
+        "observed": "d1"
+      },
+      {
+        "id": "z0",
+        "kind": "transformed",
+        "label": "Z0",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z1",
+        "kind": "transformed",
+        "label": "Z1",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z2",
+        "kind": "transformed",
+        "label": "Z2",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z3",
+        "kind": "transformed",
+        "label": "Z3",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z4",
+        "kind": "transformed",
+        "label": "Z4",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z5",
+        "kind": "transformed",
+        "label": "Z5",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z6",
+        "kind": "transformed",
+        "label": "Z6",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z7",
+        "kind": "transformed",
+        "label": "Z7",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z8",
+        "kind": "transformed",
+        "label": "Z8",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z9",
+        "kind": "transformed",
+        "label": "Z9",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z10",
+        "kind": "transformed",
+        "label": "Z10",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z11",
+        "kind": "transformed",
+        "label": "Z11",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z12",
+        "kind": "transformed",
+        "label": "Z12",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z13",
+        "kind": "transformed",
+        "label": "Z13",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z14",
+        "kind": "transformed",
+        "label": "Z14",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z15",
+        "kind": "transformed",
+        "label": "Z15",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z16",
+        "kind": "transformed",
+        "label": "Z16",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z17",
+        "kind": "transformed",
+        "label": "Z17",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z18",
+        "kind": "transformed",
+        "label": "Z18",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z19",
+        "kind": "transformed",
+        "label": "Z19",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z20",
+        "kind": "transformed",
+        "label": "Z20",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z21",
+        "kind": "transformed",
+        "label": "Z21",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z22",
+        "kind": "transformed",
+        "label": "Z22",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z23",
+        "kind": "transformed",
+        "label": "Z23",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z24",
+        "kind": "transformed",
+        "label": "Z24",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z25",
+        "kind": "transformed",
+        "label": "Z25",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z26",
+        "kind": "transformed",
+        "label": "Z26",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z27",
+        "kind": "transformed",
+        "label": "Z27",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z28",
+        "kind": "transformed",
+        "label": "Z28",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z29",
+        "kind": "transformed",
+        "label": "Z29",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z30",
+        "kind": "transformed",
+        "label": "Z30",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z31",
+        "kind": "transformed",
+        "label": "Z31",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z32",
+        "kind": "transformed",
+        "label": "Z32",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z33",
+        "kind": "transformed",
+        "label": "Z33",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z34",
+        "kind": "transformed",
+        "label": "Z34",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z35",
+        "kind": "transformed",
+        "label": "Z35",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z36",
+        "kind": "transformed",
+        "label": "Z36",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z37",
+        "kind": "transformed",
+        "label": "Z37",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z38",
+        "kind": "transformed",
+        "label": "Z38",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z39",
+        "kind": "transformed",
+        "label": "Z39",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z40",
+        "kind": "transformed",
+        "label": "Z40",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z41",
+        "kind": "transformed",
+        "label": "Z41",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z42",
+        "kind": "transformed",
+        "label": "Z42",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z43",
+        "kind": "transformed",
+        "label": "Z43",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z44",
+        "kind": "transformed",
+        "label": "Z44",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z45",
+        "kind": "transformed",
+        "label": "Z45",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z46",
+        "kind": "transformed",
+        "label": "Z46",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z47",
+        "kind": "transformed",
+        "label": "Z47",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z48",
+        "kind": "transformed",
+        "label": "Z48",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z49",
+        "kind": "transformed",
+        "label": "Z49",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z50",
+        "kind": "transformed",
+        "label": "Z50",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z51",
+        "kind": "transformed",
+        "label": "Z51",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z52",
+        "kind": "transformed",
+        "label": "Z52",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z53",
+        "kind": "transformed",
+        "label": "Z53",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z54",
+        "kind": "transformed",
+        "label": "Z54",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z55",
+        "kind": "transformed",
+        "label": "Z55",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z56",
+        "kind": "transformed",
+        "label": "Z56",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z57",
+        "kind": "transformed",
+        "label": "Z57",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z58",
+        "kind": "transformed",
+        "label": "Z58",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z59",
+        "kind": "transformed",
+        "label": "Z59",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z60",
+        "kind": "transformed",
+        "label": "Z60",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z61",
+        "kind": "transformed",
+        "label": "Z61",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z62",
+        "kind": "transformed",
+        "label": "Z62",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z63",
+        "kind": "transformed",
+        "label": "Z63",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z64",
+        "kind": "transformed",
+        "label": "Z64",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z65",
+        "kind": "transformed",
+        "label": "Z65",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z66",
+        "kind": "transformed",
+        "label": "Z66",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z67",
+        "kind": "transformed",
+        "label": "Z67",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z68",
+        "kind": "transformed",
+        "label": "Z68",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z69",
+        "kind": "transformed",
+        "label": "Z69",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z70",
+        "kind": "transformed",
+        "label": "Z70",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z71",
+        "kind": "transformed",
+        "label": "Z71",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z72",
+        "kind": "transformed",
+        "label": "Z72",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z73",
+        "kind": "transformed",
+        "label": "Z73",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z74",
+        "kind": "transformed",
+        "label": "Z74",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z75",
+        "kind": "transformed",
+        "label": "Z75",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z76",
+        "kind": "transformed",
+        "label": "Z76",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z77",
+        "kind": "transformed",
+        "label": "Z77",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z78",
+        "kind": "transformed",
+        "label": "Z78",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z79",
+        "kind": "transformed",
+        "label": "Z79",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z80",
+        "kind": "transformed",
+        "label": "Z80",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z81",
+        "kind": "transformed",
+        "label": "Z81",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z82",
+        "kind": "transformed",
+        "label": "Z82",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z83",
+        "kind": "transformed",
+        "label": "Z83",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z84",
+        "kind": "transformed",
+        "label": "Z84",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z85",
+        "kind": "transformed",
+        "label": "Z85",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z86",
+        "kind": "transformed",
+        "label": "Z86",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z87",
+        "kind": "transformed",
+        "label": "Z87",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z88",
+        "kind": "transformed",
+        "label": "Z88",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z89",
+        "kind": "transformed",
+        "label": "Z89",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z90",
+        "kind": "transformed",
+        "label": "Z90",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z91",
+        "kind": "transformed",
+        "label": "Z91",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z92",
+        "kind": "transformed",
+        "label": "Z92",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z93",
+        "kind": "transformed",
+        "label": "Z93",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z94",
+        "kind": "transformed",
+        "label": "Z94",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z95",
+        "kind": "transformed",
+        "label": "Z95",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z96",
+        "kind": "transformed",
+        "label": "Z96",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z97",
+        "kind": "transformed",
+        "label": "Z97",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z98",
+        "kind": "transformed",
+        "label": "Z98",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z99",
+        "kind": "transformed",
+        "label": "Z99",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z100",
+        "kind": "transformed",
+        "label": "Z100",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z101",
+        "kind": "transformed",
+        "label": "Z101",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z102",
+        "kind": "transformed",
+        "label": "Z102",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z103",
+        "kind": "transformed",
+        "label": "Z103",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z104",
+        "kind": "transformed",
+        "label": "Z104",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z105",
+        "kind": "transformed",
+        "label": "Z105",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z106",
+        "kind": "transformed",
+        "label": "Z106",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z107",
+        "kind": "transformed",
+        "label": "Z107",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z108",
+        "kind": "transformed",
+        "label": "Z108",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z109",
+        "kind": "transformed",
+        "label": "Z109",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z110",
+        "kind": "transformed",
+        "label": "Z110",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z111",
+        "kind": "transformed",
+        "label": "Z111",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z112",
+        "kind": "transformed",
+        "label": "Z112",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z113",
+        "kind": "transformed",
+        "label": "Z113",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z114",
+        "kind": "transformed",
+        "label": "Z114",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z115",
+        "kind": "transformed",
+        "label": "Z115",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z116",
+        "kind": "transformed",
+        "label": "Z116",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z117",
+        "kind": "transformed",
+        "label": "Z117",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z118",
+        "kind": "transformed",
+        "label": "Z118",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z119",
+        "kind": "transformed",
+        "label": "Z119",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z120",
+        "kind": "transformed",
+        "label": "Z120",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z121",
+        "kind": "transformed",
+        "label": "Z121",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z122",
+        "kind": "transformed",
+        "label": "Z122",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z123",
+        "kind": "transformed",
+        "label": "Z123",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z124",
+        "kind": "transformed",
+        "label": "Z124",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z125",
+        "kind": "transformed",
+        "label": "Z125",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z126",
+        "kind": "transformed",
+        "label": "Z126",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z127",
+        "kind": "transformed",
+        "label": "Z127",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z128",
+        "kind": "transformed",
+        "label": "Z128",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z129",
+        "kind": "transformed",
+        "label": "Z129",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z130",
+        "kind": "transformed",
+        "label": "Z130",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z131",
+        "kind": "transformed",
+        "label": "Z131",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z132",
+        "kind": "transformed",
+        "label": "Z132",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z133",
+        "kind": "transformed",
+        "label": "Z133",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z134",
+        "kind": "transformed",
+        "label": "Z134",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z135",
+        "kind": "transformed",
+        "label": "Z135",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z136",
+        "kind": "transformed",
+        "label": "Z136",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z137",
+        "kind": "transformed",
+        "label": "Z137",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z138",
+        "kind": "transformed",
+        "label": "Z138",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z139",
+        "kind": "transformed",
+        "label": "Z139",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z140",
+        "kind": "transformed",
+        "label": "Z140",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z141",
+        "kind": "transformed",
+        "label": "Z141",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z142",
+        "kind": "transformed",
+        "label": "Z142",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z143",
+        "kind": "transformed",
+        "label": "Z143",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z144",
+        "kind": "transformed",
+        "label": "Z144",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z145",
+        "kind": "transformed",
+        "label": "Z145",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z146",
+        "kind": "transformed",
+        "label": "Z146",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z147",
+        "kind": "transformed",
+        "label": "Z147",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z148",
+        "kind": "transformed",
+        "label": "Z148",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z149",
+        "kind": "transformed",
+        "label": "Z149",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z150",
+        "kind": "transformed",
+        "label": "Z150",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z151",
+        "kind": "transformed",
+        "label": "Z151",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z152",
+        "kind": "transformed",
+        "label": "Z152",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z153",
+        "kind": "transformed",
+        "label": "Z153",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z154",
+        "kind": "transformed",
+        "label": "Z154",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z155",
+        "kind": "transformed",
+        "label": "Z155",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z156",
+        "kind": "transformed",
+        "label": "Z156",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z157",
+        "kind": "transformed",
+        "label": "Z157",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z158",
+        "kind": "transformed",
+        "label": "Z158",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z159",
+        "kind": "transformed",
+        "label": "Z159",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z160",
+        "kind": "transformed",
+        "label": "Z160",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z161",
+        "kind": "transformed",
+        "label": "Z161",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z162",
+        "kind": "transformed",
+        "label": "Z162",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z163",
+        "kind": "transformed",
+        "label": "Z163",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z164",
+        "kind": "transformed",
+        "label": "Z164",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z165",
+        "kind": "transformed",
+        "label": "Z165",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z166",
+        "kind": "transformed",
+        "label": "Z166",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z167",
+        "kind": "transformed",
+        "label": "Z167",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z168",
+        "kind": "transformed",
+        "label": "Z168",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z169",
+        "kind": "transformed",
+        "label": "Z169",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z170",
+        "kind": "transformed",
+        "label": "Z170",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z171",
+        "kind": "transformed",
+        "label": "Z171",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z172",
+        "kind": "transformed",
+        "label": "Z172",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z173",
+        "kind": "transformed",
+        "label": "Z173",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z174",
+        "kind": "transformed",
+        "label": "Z174",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z175",
+        "kind": "transformed",
+        "label": "Z175",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z176",
+        "kind": "transformed",
+        "label": "Z176",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z177",
+        "kind": "transformed",
+        "label": "Z177",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z178",
+        "kind": "transformed",
+        "label": "Z178",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z179",
+        "kind": "transformed",
+        "label": "Z179",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z180",
+        "kind": "transformed",
+        "label": "Z180",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z181",
+        "kind": "transformed",
+        "label": "Z181",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z182",
+        "kind": "transformed",
+        "label": "Z182",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z183",
+        "kind": "transformed",
+        "label": "Z183",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z184",
+        "kind": "transformed",
+        "label": "Z184",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z185",
+        "kind": "transformed",
+        "label": "Z185",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z186",
+        "kind": "transformed",
+        "label": "Z186",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z187",
+        "kind": "transformed",
+        "label": "Z187",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z188",
+        "kind": "transformed",
+        "label": "Z188",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z189",
+        "kind": "transformed",
+        "label": "Z189",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z190",
+        "kind": "transformed",
+        "label": "Z190",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      },
+      {
+        "id": "z191",
+        "kind": "transformed",
+        "label": "Z191",
+        "plate": null,
+        "value": {
+          "expr": "1"
+        }
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Houses"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.too_big",
+      "severity": "error",
+      "args": {
+        "got": 201,
+        "max": 200,
+        "what": "nodes"
+      }
+    }
+  ]
+}

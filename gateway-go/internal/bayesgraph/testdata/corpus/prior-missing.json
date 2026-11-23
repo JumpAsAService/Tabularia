@@ -1,0 +1,148 @@
+{
+  "name": "prior-missing",
+  "rule": "graph.prior",
+  "expect": "trips",
+  "node": "m1",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Price",
+        "name": "price",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Area",
+        "name": "area",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d3",
+        "kind": "data",
+        "label": "Rooms",
+        "name": "rooms",
+        "plate": "rows",
+        "support": "nonnegative",
+        "type": "int"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Intercept",
+        "name": "alpha"
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Area effect",
+        "name": "b_area",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Rooms effect",
+        "name": "b_rooms",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "p1",
+        "intercept": {
+          "expr": "alpha"
+        },
+        "kind": "linear_predictor",
+        "label": "Expected price",
+        "name": "eta",
+        "plate": "rows",
+        "terms": [
+          {
+            "coef": {
+              "expr": "b_area"
+            },
+            "data": "d2"
+          },
+          {
+            "coef": {
+              "ref": "m3"
+            },
+            "data": "d3"
+          }
+        ]
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "eta"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Prices",
+        "observed": "d1"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Houses"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.prior",
+      "severity": "error",
+      "node": "m1",
+      "slot": "prior",
+      "args": {
+        "reason": "missing"
+      }
+    }
+  ]
+}

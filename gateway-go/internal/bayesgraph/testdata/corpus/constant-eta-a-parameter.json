@@ -1,0 +1,181 @@
+{
+  "name": "constant-eta-a-parameter",
+  "rule": "graph.constant",
+  "expect": "trips",
+  "node": "e1.correlation",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Passed",
+        "name": "passed",
+        "plate": "rows",
+        "support": "binary",
+        "type": "int"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Hours",
+        "name": "hours",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d3",
+        "kind": "data",
+        "label": "School",
+        "name": "school",
+        "plate": "rows",
+        "target": "p1",
+        "type": "group_index"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Mean intercept",
+        "name": "mu_a",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "2"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Mean slope",
+        "name": "mu_b",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Intercept spread",
+        "name": "tau_a",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Slope spread",
+        "name": "tau_b",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "components": [
+          {
+            "id": "c1",
+            "label": "Intercept",
+            "mean": {
+              "expr": "mu_a"
+            },
+            "name": "icpt",
+            "scale": {
+              "expr": "tau_a"
+            }
+          },
+          {
+            "id": "c2",
+            "label": "Slope",
+            "mean": {
+              "ref": "m2"
+            },
+            "name": "slope",
+            "scale": {
+              "expr": "tau_b"
+            }
+          }
+        ],
+        "correlation": {
+          "eta": {
+            "expr": "tau_a"
+          },
+          "label": "Correlation",
+          "name": "omega"
+        },
+        "id": "e1",
+        "kind": "correlated_effects",
+        "label": "School effects",
+        "plate": "p1"
+      },
+      {
+        "id": "t1",
+        "kind": "transformed",
+        "label": "Log-odds",
+        "name": "logit_p",
+        "plate": "rows",
+        "value": {
+          "expr": "icpt[school] + slope[school] * hours"
+        }
+      },
+      {
+        "args": {
+          "alpha": {
+            "expr": "logit_p"
+          }
+        },
+        "dist": "bernoulli_logit",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Passes",
+        "observed": "d1"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Pupils"
+      },
+      {
+        "form": "non_centred",
+        "id": "p1",
+        "key": "d3",
+        "kind": "group",
+        "label": "School"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.constant",
+      "severity": "error",
+      "node": "e1.correlation",
+      "slot": "eta"
+    }
+  ]
+}

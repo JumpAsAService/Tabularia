@@ -1,0 +1,17 @@
+{
+  "name": "too-big-bytes",
+  "rule": "graph.too_big",
+  "expect": "trips",
+  "generated": true,
+  "findings": [
+    {
+      "code": "graph.too_big",
+      "severity": "error",
+      "args": {
+        "got": 301283,
+        "max": 262144,
+        "what": "bytes"
+      }
+    }
+  ]
+}

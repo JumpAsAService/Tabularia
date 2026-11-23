@@ -1,0 +1,15 @@
+{
+  "name": "format-case-folded-key",
+  "rule": "graph.format",
+  "expect": "trips",
+  "raw": "{\"Format_Version\":1,\"plates\":[],\"nodes\":[]}",
+  "findings": [
+    {
+      "code": "graph.format",
+      "severity": "error",
+      "args": {
+        "detail": "format_version is missing"
+      }
+    }
+  ]
+}

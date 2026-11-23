@@ -1,0 +1,15 @@
+{
+  "name": "format-not-an-object",
+  "rule": "graph.format",
+  "expect": "trips",
+  "raw": "[1,2,3]",
+  "findings": [
+    {
+      "code": "graph.format",
+      "severity": "error",
+      "args": {
+        "detail": "the document must be a JSON object"
+      }
+    }
+  ]
+}

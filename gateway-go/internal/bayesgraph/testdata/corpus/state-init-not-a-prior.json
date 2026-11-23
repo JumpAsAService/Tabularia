@@ -1,0 +1,113 @@
+{
+  "name": "state-init-not-a-prior",
+  "rule": "graph.state",
+  "expect": "trips",
+  "node": "s1",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Day",
+        "name": "day",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Flow",
+        "name": "flow",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Level drift",
+        "name": "sigma_level",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma_obs",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "form": "non_centred",
+        "id": "s1",
+        "init": {
+          "args": {
+            "alpha": {
+              "expr": "0"
+            }
+          },
+          "dist": "poisson_log"
+        },
+        "kind": "state",
+        "label": "Level",
+        "name": "level",
+        "plate": "rows",
+        "process": "random_walk",
+        "scale": {
+          "expr": "sigma_level"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "level"
+          },
+          "sigma": {
+            "expr": "sigma_obs"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Flow",
+        "observed": "d2"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Days",
+        "series": {
+          "by": null,
+          "time": "d1"
+        }
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.state",
+      "severity": "error",
+      "node": "s1",
+      "slot": "init",
+      "args": {
+        "dist": "poisson_log",
+        "reason": "not_prior"
+      }
+    }
+  ]
+}

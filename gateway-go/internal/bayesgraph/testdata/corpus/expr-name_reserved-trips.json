@@ -1,0 +1,300 @@
+{
+  "name": "expr-name_reserved-trips",
+  "rule": "expr.name_reserved",
+  "expect": "trips",
+  "node": "x1",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "District",
+        "name": "district",
+        "plate": "rows",
+        "target": "p1",
+        "type": "group_index"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "School",
+        "name": "school",
+        "plate": "rows",
+        "target": "p2",
+        "type": "group_index"
+      },
+      {
+        "id": "d3",
+        "kind": "data",
+        "label": "Region",
+        "name": "region",
+        "plate": "rows",
+        "type": "category"
+      },
+      {
+        "id": "d4",
+        "kind": "data",
+        "label": "Day",
+        "name": "day",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d5",
+        "kind": "data",
+        "label": "Score",
+        "name": "score",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "d6",
+        "kind": "data",
+        "label": "District size",
+        "name": "size",
+        "plate": "p1",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d7",
+        "kind": "data",
+        "label": "Hours",
+        "name": "hours",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d8",
+        "kind": "data",
+        "label": "Count",
+        "name": "count",
+        "plate": "rows",
+        "support": "nonnegative",
+        "type": "int"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Mean",
+        "name": "mu",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "District mean",
+        "name": "mu_district",
+        "plate": "p1",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "mu"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "School mean",
+        "name": "mu_school",
+        "plate": "p2",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "mu_district[district]"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Region effect",
+        "name": "b_region",
+        "plate": "levels:d3",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m5",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "m6",
+        "kind": "parameter",
+        "label": "Hours effect",
+        "name": "b_hours",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m7",
+        "kind": "parameter",
+        "label": "Count effect",
+        "name": "b_count",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "t1",
+        "kind": "transformed",
+        "label": "Trend",
+        "name": "trend",
+        "plate": "rows",
+        "value": {
+          "expr": "lag(score, 1) + lag(score, 2)"
+        }
+      },
+      {
+        "id": "t2",
+        "kind": "transformed",
+        "label": "Size doubled",
+        "name": "dsize",
+        "plate": "p1",
+        "value": {
+          "expr": "size * 2"
+        }
+      },
+      {
+        "id": "q1",
+        "kind": "linear_predictor",
+        "label": "Predictor",
+        "name": "eta",
+        "plate": "rows",
+        "terms": [
+          {
+            "coef": {
+              "expr": "b_hours"
+            },
+            "data": "d7"
+          },
+          {
+            "coef": {
+              "ref": "m7"
+            },
+            "data": "d8"
+          }
+        ]
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "mu_school[school] + b_region[region] + trend + eta + dsize[district]"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Scores",
+        "observed": "d5"
+      },
+      {
+        "id": "x1",
+        "kind": "transformed",
+        "label": "Under test",
+        "plate": "rows",
+        "value": {
+          "expr": "mu__"
+        }
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Pupils",
+        "series": {
+          "by": null,
+          "time": "d4"
+        }
+      },
+      {
+        "id": "p1",
+        "key": "d1",
+        "kind": "group",
+        "label": "District"
+      },
+      {
+        "id": "p2",
+        "key": "d2",
+        "kind": "group",
+        "label": "School",
+        "parent": "p1"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "expr.name_reserved",
+      "severity": "error",
+      "node": "x1",
+      "slot": "value",
+      "args": {
+        "len": 4,
+        "pos": 0
+      }
+    }
+  ]
+}

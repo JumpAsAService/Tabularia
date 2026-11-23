@@ -1,0 +1,166 @@
+{
+  "name": "hostile-cycle-through-transformed-and-lag",
+  "rule": "graph.cycle",
+  "expect": "trips",
+  "node": "t1",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Month",
+        "name": "month",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Sales",
+        "name": "sales",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Constant",
+        "name": "c",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "5"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "First lag",
+        "name": "phi1",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Second lag",
+        "name": "phi2",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "t1",
+        "kind": "transformed",
+        "label": "Expected sales",
+        "name": "mean_sales",
+        "plate": "rows",
+        "value": {
+          "expr": "c + lag(u1, 1)"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "mean_sales"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Sales",
+        "observed": "d2"
+      },
+      {
+        "id": "t2",
+        "kind": "transformed",
+        "label": "T2",
+        "name": "u1",
+        "plate": "rows",
+        "value": {
+          "expr": "mean_sales"
+        }
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Months",
+        "series": {
+          "by": null,
+          "time": "d1"
+        }
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.unused_parameter",
+      "severity": "warning",
+      "node": "m2"
+    },
+    {
+      "code": "graph.unused_parameter",
+      "severity": "warning",
+      "node": "m3"
+    },
+    {
+      "code": "graph.cycle",
+      "severity": "error",
+      "node": "t1",
+      "slot": "value",
+      "args": {
+        "cycle": [
+          "t1",
+          "t2"
+        ],
+        "names": [
+          "mean_sales",
+          "u1"
+        ]
+      }
+    }
+  ]
+}

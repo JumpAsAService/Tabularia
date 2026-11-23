@@ -1,0 +1,128 @@
+{
+  "name": "self-predictor-lag",
+  "rule": "graph.self_predictor",
+  "expect": "clean",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Month",
+        "name": "month",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Sales",
+        "name": "sales",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Constant",
+        "name": "c",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "5"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "First lag",
+        "name": "phi1",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Second lag",
+        "name": "phi2",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "t1",
+        "kind": "transformed",
+        "label": "Expected sales",
+        "name": "mean_sales",
+        "plate": "rows",
+        "value": {
+          "expr": "c + phi1 * lag(sales, 1) + phi2 * lag(sales, 2)"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "mean_sales"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Sales",
+        "observed": "d2"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Months",
+        "series": {
+          "by": null,
+          "time": "d1"
+        }
+      }
+    ]
+  },
+  "findings": []
+}

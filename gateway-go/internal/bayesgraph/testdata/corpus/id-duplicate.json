@@ -1,0 +1,179 @@
+{
+  "name": "id-duplicate",
+  "rule": "graph.id",
+  "expect": "trips",
+  "input": {
+    "format_version": 1,
+    "layout": {
+      "n6": {
+        "x": 40,
+        "y": 60
+      },
+      "p1": {
+        "h": 260,
+        "w": 420,
+        "x": 0,
+        "y": 0
+      }
+    },
+    "nodes": [
+      {
+        "id": "n1",
+        "kind": "data",
+        "label": "Test score",
+        "name": "score",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "n1",
+        "kind": "data",
+        "label": "Hours of study",
+        "name": "hours",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "n3",
+        "kind": "data",
+        "label": "School",
+        "name": "school",
+        "plate": "rows",
+        "target": "p1",
+        "type": "group_index"
+      },
+      {
+        "id": "n4",
+        "kind": "parameter",
+        "label": "Mean of the schools",
+        "name": "mu",
+        "plate": null,
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "10"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "bounds": {
+          "lower": 0
+        },
+        "id": "n5",
+        "kind": "parameter",
+        "label": "Spread between schools",
+        "name": "tau",
+        "plate": null,
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "5"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "n6",
+        "kind": "parameter",
+        "label": "Mean of a school",
+        "name": "alpha_school",
+        "plate": "p1",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "mu"
+            },
+            "sigma": {
+              "expr": "tau"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "n7",
+        "kind": "parameter",
+        "label": "Effect of one more hour",
+        "name": "beta",
+        "plate": null,
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "n8",
+        "kind": "parameter",
+        "label": "Spread within a school",
+        "plate": null,
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "alpha_school[school] + beta * hours"
+          },
+          "sigma": {
+            "ref": "n8"
+          }
+        },
+        "dist": "normal",
+        "id": "n9",
+        "kind": "likelihood",
+        "label": "Scores",
+        "observed": "n1"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Pupils"
+      },
+      {
+        "form": "non_centred",
+        "id": "p1",
+        "key": "n3",
+        "kind": "group",
+        "label": "School",
+        "parent": null
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.id",
+      "severity": "error",
+      "node": "n1",
+      "args": {
+        "count": 2,
+        "id": "n1",
+        "reason": "duplicate"
+      }
+    }
+  ]
+}

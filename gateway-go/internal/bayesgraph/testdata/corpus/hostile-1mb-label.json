@@ -1,0 +1,17 @@
+{
+  "name": "hostile-1mb-label",
+  "rule": "graph.too_big",
+  "expect": "trips",
+  "generated": true,
+  "findings": [
+    {
+      "code": "graph.too_big",
+      "severity": "error",
+      "args": {
+        "got": 1049844,
+        "max": 262144,
+        "what": "bytes"
+      }
+    }
+  ]
+}

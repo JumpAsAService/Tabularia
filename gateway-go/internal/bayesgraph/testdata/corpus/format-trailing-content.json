@@ -1,0 +1,15 @@
+{
+  "name": "format-trailing-content",
+  "rule": "graph.format",
+  "expect": "trips",
+  "raw": "{\"format_version\":1,\"plates\":[],\"nodes\":[]} {}",
+  "findings": [
+    {
+      "code": "graph.format",
+      "severity": "error",
+      "args": {
+        "detail": "unexpected content after the document"
+      }
+    }
+  ]
+}

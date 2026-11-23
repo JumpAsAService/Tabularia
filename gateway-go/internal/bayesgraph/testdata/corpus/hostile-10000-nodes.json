@@ -1,0 +1,17 @@
+{
+  "name": "hostile-10000-nodes",
+  "rule": "graph.too_big",
+  "expect": "trips",
+  "generated": true,
+  "findings": [
+    {
+      "code": "graph.too_big",
+      "severity": "error",
+      "args": {
+        "got": 859053,
+        "max": 262144,
+        "what": "bytes"
+      }
+    }
+  ]
+}

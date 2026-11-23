@@ -1,0 +1,164 @@
+{
+  "name": "node-plate-state-not-on-rows",
+  "rule": "graph.node_plate",
+  "expect": "trips",
+  "node": "x1",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Day",
+        "name": "day",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Flow",
+        "name": "flow",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Level drift",
+        "name": "sigma_level",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma_obs",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "form": "non_centred",
+        "id": "s1",
+        "init": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "10"
+            }
+          },
+          "dist": "normal"
+        },
+        "kind": "state",
+        "label": "Level",
+        "name": "level",
+        "plate": "rows",
+        "process": "random_walk",
+        "scale": {
+          "expr": "sigma_level + sigma_obs"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "level"
+          },
+          "sigma": {
+            "expr": "sigma_obs"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Flow",
+        "observed": "d2"
+      },
+      {
+        "form": "centred",
+        "id": "x1",
+        "init": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        },
+        "kind": "state",
+        "label": "Level",
+        "plate": "p9",
+        "process": "random_walk",
+        "scale": {
+          "expr": "tau"
+        }
+      },
+      {
+        "id": "d9",
+        "kind": "data",
+        "label": "K",
+        "plate": "rows",
+        "target": "p9",
+        "type": "group_index"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Days",
+        "series": {
+          "by": null,
+          "time": "d1"
+        }
+      },
+      {
+        "id": "p9",
+        "key": "d9",
+        "kind": "group",
+        "label": "G"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "graph.node_plate",
+      "severity": "error",
+      "node": "x1",
+      "slot": "plate",
+      "args": {
+        "kind": "state",
+        "plate": "p9",
+        "reason": "not_allowed"
+      }
+    },
+    {
+      "code": "expr.unknown_name",
+      "severity": "error",
+      "node": "x1",
+      "slot": "scale",
+      "args": {
+        "len": 3,
+        "name": "tau",
+        "pos": 0
+      }
+    }
+  ]
+}
