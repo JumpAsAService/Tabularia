@@ -71,7 +71,7 @@ The data the model is fitted to are the one exception the map allows: Stan holds
 | Limits | Every limit is a setting with a visible default, checked **before any partial result**; a refusal leaves nothing written | Owner (answer 10) |
 | Verdicts | **None.** R-hat, ESS, MCSE, divergences, tree depth, E-BFMI are measures or facts; no row holds a threshold, a reference value or a verdict word; no row stops the step on divergences; **no posterior predictive p-value or probability** | Owner (answers 11, 12; rule of 2026-11-20) |
 | The common Python library | **Read, not changed**: the runner reuses `tab_protocol` (refusals, JSON, files) and `tab_results` (the schema of the ten columns), and has its own dispatcher and its own task reader, because `tab_protocol.MODES` is `("fit", "predict", "selftest")` (verified) and changing it would change every Python group's `RunnerHash` and start their rechecks | Spec |
-| CSV precision | **CmdStan's default: 6 significant digits** a draw; the report says it in «How this report was computed» («The CSV files») | Owner (2026-11-23, against this spec's recommendation of 17) |
+| CSV precision | **CmdStan's default: 8 significant digits** a draw (`sig_figs = 8`, measured on CmdStan 2.40.0); the report says it in «How this report was computed» («The CSV files») | Owner (2026-11-23, against this spec's recommendation of 17; 8 instead of 6 on 2026-11-24, «Decisions of 2026-11-24 (K0)») |
 | Internal parameters | The program's own variables that are not a node of the graph (a Cholesky factor, the standard normals of a non-centred correlated effect) are **read from the CSV and dropped**: never in the draws, never in the summary | Spec decision, 2026-11-23, owner may revisit |
 | Sampler fields in the draws | `lp__`, `accept_stat__`, `stepsize__`, `treedepth__`, `n_leapfrog__`, `divergent__`, `energy__` are kept in the draws (a person looking for where divergences happen needs them) | Spec decision, 2026-11-23, owner may revisit |
 | The card | **Written** (`model.json`, `card: true`), registered in MLflow by the gateway; **no Predict** in the first release (predictions on new rows are out of scope, map) | Spec (the map's «Out of scope» and answer 14) |
@@ -289,11 +289,11 @@ is a number the runner formats itself; no text of a person reaches it. CmdStan w
 names) and its progress to standard output, which the runner sends to `/tmp/run/stdout.txt` and follows like the
 CSVs.
 
-- **6 significant digits** (owner, 2026-11-23): no `sig_figs` argument is passed, so CmdStan writes its default of 6
-  (assumed from the CmdStan guide, «output» arguments; lot K3 reads it on the pinned CmdStan). **Every draw in the
-  parquet, and every number computed from the draws, rests on values rounded to 6 significant digits**: a draw x is
-  off by at most 5·10⁻⁶·|x|. The text takes about **8.5 bytes a value** (measured on normal draws; `bayes-image`
-  measured 10.3 on its programs), which the disk projection counts. The report says the precision in «How this report
+- **8 significant digits** (owner, 2026-11-23 and 2026-11-24): no `sig_figs` argument is passed, so CmdStan writes its
+  default, `sig_figs = 8` (measured on CmdStan 2.40.0 of the image by lot K0: `-0.29838641`). **Every draw in the
+  parquet, and every number computed from the draws, rests on values rounded to 8 significant digits**: a draw x is
+  off by at most 5·10⁻⁸·|x|. The text takes about **10.3 bytes a value** (measured by `bayes-image` on its programs),
+  which the disk projection counts. The report says the precision in «How this report
   was computed» (`bayes-report`); the cost is a risk («Risks»).
 - Lines: `#` comments (the configuration; after warm-up the adaptation — «Step size = …» and the inverse metric's
   diagonal, a line as long as the parameters; at the end the elapsed times), one header line, then one line a draw:
@@ -323,12 +323,12 @@ the row groups therefore depends only on the block size and the number of draws,
 same task gives the **same file**, byte for byte (a self-test check).
 
 **The block.** `B = max(1, floor(block_values / columns))` draws, `block_values` a limit of the task (default
-1,048,576 values: 8 MiB of doubles), `columns` the CSV's columns. The text of a block is about 8.5 × `block_values`
-bytes (9 MiB). The parse of a block: `bytes.split` then `numpy.array(…, dtype=float)`, measured at **36–45 MB of CSV
+1,048,576 values: 8 MiB of doubles), `columns` the CSV's columns. The text of a block is about 10.3 × `block_values`
+bytes (10.3 MiB). The parse of a block: `bytes.split` then `numpy.array(…, dtype=float)`, measured at **36–45 MB of CSV
 text a second** for 10 to 20,000 columns, one thread, on 17-digit text (`pyarrow.csv.read_csv` reached 112–165 MB/s
 at 10 and 1,000 columns but fell to 13 MB/s at 20,000 columns with 20 lines; lot R0 of `bayes-runner` may use it below
-some width if its doubles are the same bits). At 20,000 quantities × 4 × 1,000 draws the CSVs hold about 0.68 GB of
-6-digit text; the parse of 6-digit text was not measured (assumed no slower a value than the 17-digit one, about
+some width if its doubles are the same bits). At 20,000 quantities × 4 × 1,000 draws the CSVs hold about 0.82 GB of
+8-digit text; the parse of 8-digit text was not measured (assumed no slower a value than the 17-digit one, about
 2 million values a second: about 40 s at that size), and the time projection measures it on the run itself.
 
 ## The draws parquet
@@ -362,7 +362,7 @@ One row a quantity of a draw (owner, 2026-11-23: always long):
 | `node` | String (dictionary-encoded) | the identifier |
 | `unit` | String (dictionary-encoded), nullable | the unit |
 | `index`, `index_2` | Int32, nullable | the unit's positions |
-| `value` | Float64 | the draw (6 significant digits) |
+| `value` | Float64 | the draw (8 significant digits) |
 
 Inside a row group the rows are **quantity-major** (all the block's draws of one quantity, then the next): the
 second pass slices a block of quantities out of a row group without sorting a column. No order of the rows is
@@ -420,7 +420,7 @@ gained by holding them.
 
 | Section | `level` | `level_2` | Holds |
 |---|---|---|---|
-| `model` | null | null | Texts: `model` (`bayes_model`), `variant`, `rows_from`, `group_version`, `software` («CmdStan 2.40.0; stanc3 v2.40.0; Python 3.14.x; numpy 2.5.5; pyarrow 26.0.1», from the image's lock), `bayes_model` (the saved model's id), `bayes_version`, `semantic_hash`, `program_sha256`, `binary_sha256`, `sampler` (`nuts` or `fixed_param`), `metric` (`diag_e`), `precision` (`6 significant digits`), `note_<id>`. Numbers: `n` (rows used), `n_missing`, `n_not_finite`, `chains`, `warmup`, `draws`, `seed`, `adapt_delta`, `max_treedepth`, `threads`, `n_quantities`, `n_in_summary`, `seconds_data`, `seconds_warmup`, `seconds_sampling`, `seconds_conversion`, `seconds_pass_2` |
+| `model` | null | null | Texts: `model` (`bayes_model`), `variant`, `rows_from`, `group_version`, `software` («CmdStan 2.40.0; stanc3 v2.40.0; Python 3.14.x; numpy 2.5.5; pyarrow 26.0.1», from the image's lock), `bayes_model` (the saved model's id), `bayes_version`, `semantic_hash`, `program_sha256`, `binary_sha256`, `sampler` (`nuts` or `fixed_param`), `metric` (`diag_e`), `precision` (`8 significant digits`), `note_<id>`. Numbers: `n` (rows used), `n_missing`, `n_not_finite`, `chains`, `warmup`, `draws`, `seed`, `adapt_delta`, `max_treedepth`, `threads`, `n_quantities`, `n_in_summary`, `seconds_data`, `seconds_warmup`, `seconds_sampling`, `seconds_conversion`, `seconds_pass_2` |
 | `quantity` | the identifier | null | The mapping (answer 5): texts `label`, `name` (null when generated), `node_id`, `kind`, `plate`, `plate_label`; numbers `n_quantities` (its scalars), `rhat_max`, `ess_bulk_min`, `ess_tail_min` (over all its scalars, measures) |
 | `summary` | the identifier | the unit (null for a scalar) | The summary's numbers for the quantities in the report's scope (below); with a linear-predictor pair also `orig_mean`, `orig_sd`, `orig_q5`, `orig_q50`, `orig_q95` |
 | `data` | the data identifier | null | Texts `column`, `type`, `reference` (a category's first level), `standardized` (`yes`, `no`); numbers `mean`, `sd` (the standardization), `n_units` or `n_levels`, `n_missing` |
@@ -558,18 +558,19 @@ rate — and refuses `too_slow` when the projection passes the budget; it checks
 the first block of each chain it projects the disk. A refusal stops CmdStan (`terminate`, then `kill` after 5 s) and
 deletes `/tmp/run`.
 
-**The disk, estimated** (measured 2026-11-23 on normal draws: 8.5 bytes a value of 6-digit CSV text; 7.5 bytes a
-value of the long parquet with 6-digit values, 60.1 MB for 2,000 quantities × 4 × 1,000 draws, 7.75 with full
-doubles): about **16 bytes a value** while both are on `/tmp`, so the map's reference size of 20,000 quantities × 4
-chains × 1,000 draws (80 million values) takes about 1.3 GB, plus the data file (tens of MB at `max_rows`) and the
-binary (3 MB). The default `tmp_bytes` of **2 GiB** holds it with about 0.7 GB to spare (some 125 million values);
+**The disk, estimated** (recomputed 2026-11-24 for 8 digits: 10.3 bytes a value of 8-digit CSV text, measured by
+`bayes-image`; the long parquet measured 2026-11-23 at 7.5 bytes a value with 6-digit values and 7.75 with full
+doubles, so at most 7.75 with 8-digit ones): about **18 bytes a value** while both are on `/tmp`, so the map's
+reference size of 20,000 quantities × 4 chains × 1,000 draws (80 million values) takes about 1.45 GB, plus the data
+file (tens of MB at `max_rows`) and the binary (3 MB). The default `tmp_bytes` of **2 GiB** holds it with about 0.7 GB
+to spare (some 119 million values);
 beyond, the projection refuses `too_much_disk` before any result.
 
 ## Risks
 
 | Risk | Where it bites | Answer |
 |---|---|---|
-| **6 significant digits** (owner, 2026-11-23) | A draw is rounded by up to 5·10⁻⁶ of its size, so a quantity whose mean is large beside its posterior standard deviation loses its posterior: an intercept of 1,000.123 with a standard deviation of 0.001 is written as 1,000.12 on every draw, and its sd, quantiles, R-hat and ESS describe the rounding, not the posterior. The predictors are standardized by default (answer 6), which keeps the coefficients near the scale of their sd; **the outcome is not**, so the intercept sits on the outcome's scale (an outcome in the millions, measured precisely on many rows, is the case) | A fact said in «How this report was computed» (the precision of the draws); the summary's numbers are what they are, never adjusted; no threshold, no verdict. The person can rescale the outcome before the node |
+| **8 significant digits** (owner, 2026-11-23 and 2026-11-24) | A draw is rounded by up to 5·10⁻⁸ of its size, so a quantity whose mean is large beside its posterior standard deviation loses its posterior: an intercept of 1,000,000.123 with a standard deviation of 0.001 is written as 1,000,000.1 on every draw, and its sd, quantiles, R-hat and ESS describe the rounding, not the posterior. The predictors are standardized by default (answer 6), which keeps the coefficients near the scale of their sd; **the outcome is not**, so the intercept sits on the outcome's scale (an outcome in the millions, measured precisely on many rows, is the case) | A fact said in «How this report was computed» (the precision of the draws); the summary's numbers are what they are, never adjusted; no threshold, no verdict. The person can rescale the outcome before the node |
 | **The disk** | Large models with many draws | The projection after the first block, `too_much_disk` before any result |
 | **CmdStan's text** (file names, progress lines, the initialization message, `nan`) | The follower misreads a line | Assumed here; lot K3 reads them on the pinned CmdStan and the fake sampler copies them |
 
@@ -694,7 +695,7 @@ measurement above are never in the suite.
     process's start.
 - **On the image** (lot K3, by hand, one heavy job at a time): the compile mode on `bayes-image`'s reference AR(1),
   the termination message's content, the sample mode on the normal model with 4 chains; the CSV names, the
-  default of 6 significant digits, the progress lines' format and the initialization message read from the pinned CmdStan.
+  default of 8 significant digits (measured by K0), the progress lines' format and the initialization message read from the pinned CmdStan.
 - **Regression**: the models' catalogue tests, `test_models_results` (the check of the ten columns), the other Python
   groups' runner hashes unchanged (no file of `common/py` changed).
 
@@ -730,12 +731,14 @@ measurement above are never in the suite.
 
 | Lot | Objective | Files | Accepted when | Agent |
 |---|---|---|---|---|
-| **K0** | The Go types and manifests, `Task.Bayes`, `testdata/tasks/`; the catalogue's entry, shapes and limits | `internal/bayescontract/*`, `groups.go`, `catalog.json`, its tests | Go and catalogue tests green; other groups' bytes unchanged | sonnet |
+| **K0** | The Go types and manifests, `Task.Bayes`, `testdata/tasks/`; the shapes, sections and limits declared in Go (`testdata/contract.json`) | `internal/bayescontract/*`, `groups.go`, its tests | Go tests green; other groups' bytes unchanged (done, «As built — lot K0») | sonnet |
+| **K0b** | The filtered view: the `catalog.json` and the `card.schema.json` of every other group's ConfigMap are the catalogue and the schema without the group `bayes` (its group, its model, its limits, shapes and kinds; the schema's `bayes` object), filtered in the order of the file; the group `bayes` receives them whole. Then the entry `bayes_model` in `catalog.py` (equal to `bayescontract`'s declaration, a test compares them), its copies, and the card schema's `bayes` object, in one commit with the interface's lot (the copy, the words in five languages, the node left out of the Models palette) and `bayes-report`'s first lot (the layout, a fixture per variant, the texts) | `internal/modelgroups/groups.go` (`codeFiles`), `internal/modelcatalog`, `catalog.py`, `card.schema.json`, its tests | **the golden bytes of the seven groups unchanged, without rewriting them** (`TestTheOtherGroupsBytesAreAsTheyWere`, `TestTheOtherGroupsBuildAndCheckAreAsTheyWere`); the catalogue's tests and `model_catalog.py --check` green | sonnet |
 | **K1** | The task reader, the data passes, the writers (draws, checks, results), the card | `bayes_main.py`, `bayes_task.py`, `bayes_data.py`, `bayes_draws.py`, `bayes_rows.py`, `bayes_card.py`, tests | unit green on fake inputs | sonnet |
 | **K2** | The follower and `fake_cmdstan.py`; the memory test | `bayes_follow.py`, `tests/fake_cmdstan.py`, `test_memory.py` | criteria 2 and 3 | **opus** (the owner's rule; concurrency of files) |
 | **K3** | The compile mode, the termination message, the check on the image (by hand) | `bayes_compile.py`, tests | criterion 7 on the image, alone | sonnet |
 
-K0 first (it needs `model-graph`'s M2 for the validated model); K1 and K2 in parallel after it; K3 after
+K0 first (it needs `model-graph`'s M2 for the validated model); K1 and K2 in parallel after it; K0b before or with
+`bayes-report`'s first lot, and before K1 writes the card's schema; K3 after
 `bayes-image`'s B0. Only K2's memory test and K3 are heavy: one at a time.
 
 ## Correction of 2026-11-24 from K0
@@ -781,9 +784,9 @@ what the sections above left open. Where this section and the text above differ,
    own against `testdata/tasks/<mode>.header.json`).
 6. **The default precision is 8 significant digits, not 6.** CmdStan 2.40.0 writes `sig_figs = 8 (Default)` in the CSV's
    configuration and 8 digits a value (`-0.29838641`); with `sig_figs=6` it writes `-0.298386`. «6, CmdStan's default»
-   (Decisions of 2026-11-23) holds two things that differ: see «Open questions». It is also why `bayes-image` measured
-   10.3 bytes a value where this spec assumed 8.5. Nothing of K0 depends on it; the argument list of K1/K2 and the disk
-   estimate do.
+   (Decisions of 2026-11-23) held two things that differ; the owner chose CmdStan's default, 8 digits («Decisions of
+   2026-11-24 (K0)»), and the text above says 8. It is also why `bayes-image` measured 10.3 bytes a value where this
+   spec assumed 8.5.
 7. **`task.json`'s `bayes` object, as built** (`bayescontract.Task`, the Go name; «BayesTask» above): `model`, `sampler`,
    **`plates`** (`[{id, kind, label}]`: the `quantity` section's `plate_label`), **`mapping`** (stan-codegen's mapping
    table as saved with the version: the labels, names, kinds and components the summary and the `quantity` section
@@ -810,8 +813,8 @@ what the sections above left open. Where this section and the text above differ,
 10. **What every group's ConfigMap holds.** `catalog.json` **and `card.schema.json`** are in the ConfigMap of every
     model group (`modelgroups.codeFiles`) and in its `RunnerHash`: adding `bayes_model` to the catalogue or the `bayes`
     object to `card.schema.json` changes the bytes of all seven other groups and starts their recheck. K0 did not add
-    the catalogue's entry («Open questions»); K1 must not edit `card.schema.json` until the same question is answered
-    (the card's `bayes` object is in `bayescontract.Card` meanwhile).
+    the catalogue's entry; the owner chose the filtered view (lot K0b, «Decisions of 2026-11-24 (K0)»). K1 does not edit
+    `card.schema.json` before K0b (the card's `bayes` object is in `bayescontract.Card` meanwhile).
 
 ## As built — lot K0
 
@@ -833,20 +836,15 @@ The models' catalogue is unchanged (no `bayes_model` yet), and the seven groups'
 | Question | Decision | By |
 |---|---|---|
 | The draws: wide, long, or decided from the graph | **Always long**: no wide layout, no limit, no choice; the schema is the same for every model and known before any run | Owner, 2026-11-23 |
-| The CSV's precision: 17, 9 or 6 significant digits | **6, CmdStan's default** (against this spec's recommendation of 17): the precision of every draw is 6 significant digits, said in «How this report was computed»; the loss for an intercept large beside its sd is in «Risks»; the disk is estimated at 8.5 bytes a value of CSV | Owner, 2026-11-23 |
+| The CSV's precision: 17, 9 or 6 significant digits | **6, CmdStan's default** (replaced on 2026-11-24 by 8, CmdStan's true default: below) (against this spec's recommendation of 17): the precision of every draw is 6 significant digits, said in «How this report was computed»; the loss for an intercept large beside its sd is in «Risks»; the disk is estimated at 8.5 bytes a value of CSV | Owner, 2026-11-23 |
+
+## Decisions of 2026-11-24 (K0)
+
+| Question | Decision | By |
+|---|---|---|
+| The entry `bayes_model` in the models' catalogue, which every group's ConfigMap holds | **Option A**: the entry goes in the models' catalogue; every other group's ConfigMap receives a **view** of the catalogue without the group `bayes`, filtered in the order of the file, and the same for `card.schema.json`, so that their bytes do not change; the entry comes with the interface's lot (the copy, the words, the node left out of the Models palette) and `bayes-report`'s lot (the layout, the fixtures, the texts). The view is lot K0b | Owner, 2026-11-24 |
+| The CSV's precision, CmdStan 2.40.0's default being 8 significant digits (measured by K0), not 6 | **8 significant digits, CmdStan's true default** (`sig_figs = 8`), instead of 6: no `sig_figs` argument; the disk recomputed at about 18 bytes a value while the CSV and the parquet are both on `/tmp` (the reference size about 1.45 GB, under the 2 GiB default) | Owner, 2026-11-24 |
 
 ## Open questions
 
-Opened by lot K0 (2026-11-24), for the owner:
-
-1. **The precision of the draws** («Correction of 2026-11-24 from K0», 6): CmdStan's default is 8 significant digits.
-   Either keep CmdStan's default (no argument: 8 digits, about 10.5 bytes a value of CSV, the reference size about
-   1.5 GB of `/tmp`, still under the 2 GiB default) or keep 6 digits (`sig_figs=6` in the fixed argument list). The
-   recommendation: CmdStan's default, 8 digits — it is what «CmdStan's default» meant to keep, it makes the rounding
-   of «Risks» a hundred times smaller (5·10⁻⁸ of a draw instead of 5·10⁻⁶), and the disk default holds it.
-2. **The entry `bayes_model` of the models' catalogue** («Correction of 2026-11-24 from K0», 10): it is not only the
-   ConfigMaps. The catalogue is copied byte for byte to the interface (`frontend/assets/model-catalog.json`), whose
-   tests ask every model for its words in five languages and whose Models palette lists every model of a shown group
-   (the Bayesian node is a step node of its own, flow-node); the engine's tests ask every model and variant for a layout,
-   a fixture and the report's texts (bayes-report). The entry needs those in the same commit, and a choice for the
-   ConfigMaps (the options are in the lot's report).
+None (the two opened by K0 are answered in «Decisions of 2026-11-24 (K0)»).
