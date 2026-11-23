@@ -77,14 +77,14 @@ For a quantity θ with M chains of N draws (S = M·N), after the rows of non-fin
 |---|---|---|
 | `mean`, `sd` | the draws' mean and standard deviation (divisor S − 1) | — |
 | `q5` … `q95` | type 7 quantiles of the S draws | Hyndman and Fan (1996); the contract |
-| Split chains | each chain cut in two halves of ⌊N/2⌋ draws; with an odd N the middle draw is left out | Vehtari et al. (2021); the odd draw: `posterior`'s (assumed, the witness closes it) |
-| Rank normalization | z = Φ⁻¹((r − 3/8) / (S + 1/4)), r the rank of a draw among all S, **ties given their average rank** | Vehtari et al. (2021), the normal scores with Blom's offset; ties: `posterior`'s (assumed, the witness) |
+| Split chains | each chain cut in two halves of ⌊N/2⌋ draws; with an odd N the middle draw is left out | Vehtari et al. (2021); the odd draw: `posterior`'s (verified by X1: `.split_chains`, `reference/diagnostics/definitions.md`) |
+| Rank normalization | z = Φ⁻¹((r − 3/8) / (S′ + 1/4)), r the rank of a draw among the S′ = 2M·⌊N/2⌋ split draws (all S when N is even), **ties given their average rank** | Vehtari et al. (2021), the normal scores with Blom's offset; the split draws and ties: `posterior`'s (verified by X1: `z_scale` after `.split_chains`) |
 | `rhat` | max(R̂ of the rank-normalized split chains, R̂ of the rank-normalized split chains of the folded draws \|θ − median(θ)\|), R̂ = √(var⁺/W), var⁺ = (N′−1)/N′·W + B/N′ | Vehtari et al. (2021) |
-| `ess_bulk` | the ESS of the rank-normalized split chains: S / τ̂, τ̂ from the multi-chain autocorrelations by FFT, summed by Geyer's initial monotone sequence, floored at 1/log₁₀(S) | Vehtari et al. (2021); the floor: `posterior`'s (assumed, the witness) |
-| `ess_tail` | min(ESS of I(θ ≤ q5), ESS of I(θ ≤ q95)) on the split chains | Vehtari et al. (2021) |
+| `ess_bulk` | the ESS of the rank-normalized split chains: S / τ̂, τ̂ from the multi-chain autocorrelations by FFT, summed by Geyer's initial monotone sequence, with the last even term (the «improved estimate»), floored at 1/log₁₀(S′); τ̂ = 2 when no pair after the first is summed (R's `1:0`, split chains of at most 5 draws) | Vehtari et al. (2021); the floor and the rest: `posterior`'s (verified by X1: `.ess`, `reference/diagnostics/definitions.md`) |
+| `ess_tail` | min(ESS of I(θ ≤ q5), ESS of **I(θ ≥ q95)**) on the split chains, q5 and q95 the type 7 quantiles of all S draws | Vehtari et al. (2021); the mirrored upper indicator: `posterior`'s `.ess_quantile` (verified by X1; it differs from I(θ ≤ q95) only by the draws equal to q95: ties and atoms) |
 | `mcse_mean` | sd / √ESS of the split chains of θ (not rank-normalized) | Vehtari et al. (2021) |
-| `mcse_sd` | as `posterior::mcse_sd` 1.8.0 computes it (from the ESS of the centred squared draws; the formula transcribed from its source by lot X1 and cited there) | assumed, the witness |
-| NULLs | `rhat`, `ess_*`, `mcse_*` NULL when the quantity is constant over every draw (the contract) or a split chain has fewer than 3 draws; never `inf` or `NaN` (the ten columns' rule) | the contract |
+| `mcse_sd` | √(mean((s − mean s)²) / ESS(s) / mean(s) / 4), s = (θ − mean θ)², ESS(s) of its split chains (not rank-normalized): `posterior::mcse_sd` 1.8.0, R/convergence.R lines 504–521, transcribed in `reference/diagnostics/definitions.md` | Kenney and Keeping (1951), as `posterior` cites them (verified by X1) |
+| NULLs | `rhat`, `ess_*`, `mcse_*` NULL when the quantity is constant over every draw (the contract) or a split chain has fewer than 3 draws; also where `posterior` gives NA (a constant indicator or square: `is_constant`, a range at most 2.2·10⁻¹⁶ of its largest absolute value); never `inf` or `NaN` (the ten columns' rule) | the contract; `posterior`'s NA (verified by X1) |
 
 **Ties.** With 8 significant digits, a quantity whose posterior is narrow beside its size repeats values (an intercept of
 1,000.12345 with an sd of 0.00001 is written 1,000.1235 or 1,000.1234: the contract's «Risks», at two more digits than it
