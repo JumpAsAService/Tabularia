@@ -31,6 +31,11 @@ const (
 	ReasonMemory        = "memory"         // timeout: the container was killed for memory (the owner, 2026-11-24)
 )
 
+// LoopLock is the transaction's advisory lock of the compile loop's round (gateway-go/internal/api,
+// jobs_bayes_compile.go): one round at a time across the gateways. «Empty the cache» takes the same lock, so that the
+// objects it deletes are never counted as unheld while a round keeps a binary of the same bytes.
+const LoopLock = 7_402_160
+
 // MaxAttempts is how many times a compile runs when the cluster fails it (a Pod evicted, a node lost, an image not
 // pulled, the cluster busy): then failed with the cluster's reason.
 const MaxAttempts = 3
@@ -104,10 +109,14 @@ func move(r *Row, to string) error {
 
 // MayRetry says whether a program that passed a limit may be compiled again: only when the limit it passed is larger
 // now (the owner's rule, 2026-11-24). A deadline passed at 300 s is not tried again at 300 s, nor at 200 s; a compile
-// killed for memory at 3 GiB is not tried again at 3 GiB. Any row that is not timeout answers true (the rule is
-// about timeout alone).
+// killed for memory at 3 GiB is not tried again at 3 GiB. A binary larger than the whole cache (failed, too_large) is
+// the same rule on the cache's limit: compiled again once the limit holds its recorded size (the owner, correction of
+// 2026-11-24 from C1). Any other row answers true (the rule is about the limits alone).
 func MayRetry(r Row, now Limits) bool {
-	if r.State != StateTimeout {
+	switch {
+	case r.State == StateFailed && r.Reason == ReasonTooLarge:
+		return r.BinaryBytes > 0 && r.BinaryBytes <= now.CacheMaxBytes
+	case r.State != StateTimeout:
 		return true
 	}
 	switch r.Reason {
@@ -179,8 +188,12 @@ func Failed(r Row, reason string, at time.Time) (Row, error) {
 	return r, nil
 }
 
-// TooLarge makes a running row failed because its binary is larger than the whole cache: nothing is kept.
+// TooLarge makes a running row failed because its binary is larger than the whole cache: nothing is kept. Its size is
+// recorded: a request after the administrator raised the limit enough queues it again by itself (MayRetry).
 func TooLarge(r Row, binaryBytes, cacheMaxBytes int64, at time.Time) (Row, error) {
+	if binaryBytes <= 0 {
+		return r, fmt.Errorf("bayes compile: a binary of %d bytes", binaryBytes)
+	}
 	if err := move(&r, StateFailed); err != nil {
 		return r, err
 	}
@@ -238,8 +251,9 @@ func Used(r Row, at time.Time) (Row, error) {
 }
 
 // Refused says whether a run that needs this program fails at once instead of compiling it first (the run's
-// fallback): a timeout under the same or lower limits, or a failure of the compiler. A row the cluster failed, none
-// and a timeout under a raised limit are compiled first; queued and running are waited for.
+// fallback): a timeout under the same or lower limits, a binary still larger than the cache's limit, or a failure of
+// the compiler. A row the cluster failed, none, a timeout under a raised limit and a binary the raised cache now holds
+// are compiled first; queued and running are waited for.
 func Refused(r *Row, now Limits) bool {
 	if r == nil {
 		return false
@@ -248,7 +262,13 @@ func Refused(r *Row, now Limits) bool {
 	case StateTimeout:
 		return !MayRetry(*r, now)
 	case StateFailed:
-		return r.Reason != ReasonCluster
+		switch r.Reason {
+		case ReasonCluster:
+			return false
+		case ReasonTooLarge:
+			return !MayRetry(*r, now)
+		}
+		return true
 	}
 	return false
 }

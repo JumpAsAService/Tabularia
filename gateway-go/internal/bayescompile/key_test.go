@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 )
 
 var (
@@ -74,5 +76,19 @@ func TestCacheKeyRefusesForeignParts(t *testing.T) {
 		if _, err := CacheKey(c.prog, c.img); !errors.Is(err, ErrKey) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// The key's cmdstan line is the version the group's recipe builds.
+func TestCmdStanOf(t *testing.T) {
+	g, ok := modelgroups.Get("bayes")
+	if !ok {
+		t.Fatal("no group bayes")
+	}
+	if v := CmdStanOf(g.Recipe); v != "2.40.0" {
+		t.Errorf("the recipe's CmdStan: %q", v)
+	}
+	if v := CmdStanOf(modelgroups.Recipe{}); v != "" {
+		t.Errorf("a recipe without CmdStan: %q", v)
 	}
 }

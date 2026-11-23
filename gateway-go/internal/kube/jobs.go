@@ -243,6 +243,29 @@ func JobResult(ctx context.Context, k scriptcfg.Kubernetes, namespace, name stri
 	return Tail(out.(string), maxBytes), exitCode, reason, nil
 }
 
+// TerminationMessage is what a Pod's container left at its end: its state.terminated.message, the file of its
+// terminationMessagePath, which only the container writes (with terminationMessagePolicy File the kubelet never fills
+// it from the log). container names it ("" is the first container that ended); "" when it has not ended or left
+// nothing. JobResult does not read it: a compile Job's sha256s come from here only (docs/specs/bayes-stan-compile.md).
+func TerminationMessage(pod any, container string) string {
+	for _, st := range List(Dict(Dict(pod).Value("status")).Value("containerStatuses")) {
+		s := Dict(st)
+		if container != "" && Text(s.Value("name")) != container {
+			continue
+		}
+		terminated := Dict(Dict(s.Value("state")).Value("terminated"))
+		if _, ended := terminated.Get("exitCode"); !ended {
+			if container != "" {
+				return ""
+			}
+			continue
+		}
+		m, _ := terminated.Value("message").(string)
+		return m
+	}
+	return ""
+}
+
 // StoppedByCluster is kube_jobs.stopped_by_cluster: "Evicted" or "DisruptionTarget" when
 // the cluster took the Pod away, "" otherwise.
 func StoppedByCluster(pod any) string {

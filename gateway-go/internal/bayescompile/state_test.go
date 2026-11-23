@@ -98,6 +98,14 @@ func TestMayRetry(t *testing.T) {
 		{"memory: deadline raised is not enough", mem, with(func(l *Limits) { l.DeadlineSeconds = 600 }), false},
 		{"a timeout without a reason", Row{State: StateTimeout}, with(func(l *Limits) { l.DeadlineSeconds = 9999 }), false},
 		{"not a timeout", Row{State: StateFailed, Reason: ReasonCompileFailed}, defaults, true},
+		// the cache's limit, the same rule (the owner, correction of 2026-11-24 from C1)
+		{"too large, same cache", Row{State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30}, defaults, false},
+		{"too large, cache raised below its size", Row{State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30},
+			with(func(l *Limits) { l.CacheMaxBytes = 3<<30 - 1 }), false},
+		{"too large, cache raised to its size", Row{State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30},
+			with(func(l *Limits) { l.CacheMaxBytes = 3 << 30 }), true},
+		{"too large, no size recorded", Row{State: StateFailed, Reason: ReasonTooLarge},
+			with(func(l *Limits) { l.CacheMaxBytes = 1 << 40 }), false},
 	}
 	for _, c := range cases {
 		if got := MayRetry(c.row, c.now); got != c.want {
@@ -225,6 +233,9 @@ func TestRefused(t *testing.T) {
 		{"failed by the compiler", &Row{State: StateFailed, Reason: ReasonCompileFailed}, defaults, true},
 		{"failed: cross-check", &Row{State: StateFailed, Reason: ReasonCrossCheck}, defaults, true},
 		{"failed: too large", &Row{State: StateFailed, Reason: ReasonTooLarge}, defaults, true},
+		{"failed: too large, the same cache", &Row{State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30}, defaults, true},
+		{"failed: too large, the cache raised", &Row{State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30},
+			Limits{CacheMaxBytes: 4 << 30}, false},
 	}
 	for _, c := range cases {
 		if got := Refused(c.row, c.now); got != c.want {

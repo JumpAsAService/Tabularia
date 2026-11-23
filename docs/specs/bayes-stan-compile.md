@@ -548,3 +548,69 @@ lands:
 ## Open questions
 
 None.
+
+## Correction of 2026-11-24 from C1
+
+The owner's answers to lot C1's two questions, on 2026-11-24. Where this section and the text above differ, this
+section holds.
+
+1. **A binary larger than the cache is treated as the deadline.** A row `failed` with the reason `too_large` keeps the
+   binary's size (`binary_bytes`) and is queued again **by itself** — by any request, a save, a run or «Compile now»,
+   as a `timeout` is when its limit was raised — once the cache's limit holds that size (`binary_bytes` ≤ «Cache of
+   binaries»), and never before, «Compile now» included: the same program on the same image gives the same binary.
+   Until then a run fails at once with the row's sentence. Nothing queues it in the background: as for a `timeout`,
+   the next request does. In `bayescompile`: `MayRetry` reads the cache's limit beside the deadline and the memory,
+   and `PlanEnqueue` and `Refused` follow it (the «Transitions» gain nothing: `failed → queued` was there).
+2. **A newer save always takes the older queued version out.** When a person saves a newer version of a model, their
+   older version of that model still `queued` (never one `running`) leaves the queue, whatever the newer version's own
+   program is (`ready`, `queued`, `running`, `timeout`, `failed` or `none`). So the store asks `Enqueue` after **every**
+   save — `afterCommit` no longer skips `ready`, `queued` and `running` (lot C3; it still asks `State` for nothing
+   else) — and `Enqueue` deletes `Plan.Overtaken` even when `Plan.Queue` is false. `PlanEnqueue` plans the overtaking
+   for every state of the key's row since lot C1; lot C2 tests it for each.
+
+## As built — lot C2 (2026-11-24)
+
+- **The loop**: `gateway-go/internal/api/jobs_bayes_compile.go`, `bayes_compile_loop` (order 14), one round every
+  `SCRIPTS__POLL_SECONDS` under `bayescompile.LoopLock` (7,402,160), which «Empty the cache» (lot C4) takes too. A round
+  locks the `queued` and `running` rows `FOR UPDATE`, follows each running row's Job, deletes the queued rows of an
+  older image, brings the cache under a lowered limit, starts what `NextToStart` gives, and once a day (per gateway)
+  cleans; the Jobs whose end it read and their step's files (`model`, `artifacts/compile.json`, `error.json`,
+  `run.json`) are deleted after its commit, so a round that fails finds them again.
+- **The table's reads and writes** for C2 and C3: `bayescompile/rows.go` (`Columns`, `Scan`, `Insert`, `Write`,
+  `Delete`); the key's CmdStan line from the recipe: `bayescompile.CmdStanOf`.
+- **The Job**: as «The compile Job» says, the container named `model`, `terminationMessagePath: /dev/termination-log`
+  and `terminationMessagePolicy: File` written; the ConfigMap holds the runner, `task.json` and **`program.stan` beside
+  `task.json`** (`/tabularia/code/program.stan`); `TABULARIA_BINARY_OUT` and `TABULARIA_ARTIFACTS` are `s3://` addresses
+  of the scripts bucket, as the other model Jobs' (`…/bayes-compile/<id>-<attempt>/model` and `…/artifacts/`);
+  `task.json`'s `limits` hold the four compile values only (the runner's defaults for the rest); `recipe_hash` and
+  `runner_hash` are the shipped group's. The program's sha256 is checked by the gateway too before the Job
+  (`program_hash` otherwise).
+- **The ends, as read** (`kube.TerminationMessage(pod, container)` added): the exit code 3's reason is read from the
+  log's `TABULARIA_ERROR` line, as the model steps read it (`compile_failed` and `program_hash`; any other code is
+  `job`), not from `artifacts/error.json`. The cluster's failures, each one attempt: the Job gone; no Pod after 10 s
+  with the cluster's refusal (`FailedCreate`, a full quota); an image not pulled for 30 s; a Pod not scheduled after
+  `min(60 s, a quarter of the deadline)` (deleted and queued again, rather than left to pass the deadline it would be
+  blamed for); `DeadlineExceeded` with a Pod whose container never started; a failure without an exit code and no
+  container that ran; a Job not ended 180 s after its deadline. `DeadlineExceeded` with the Pod already gone is a
+  `timeout` (the container is taken to have run).
+- **What the message vouches for**: `info_sha256` is the sha256 of the **file** `artifacts/compile.json` as uploaded
+  («Keep», 1); the gateway reads its `program_sha256` and `binary_sha256` (equal to the message's or `job`),
+  `binary_bytes`, `info`, `seconds` and `warnings` (at most 50 kept). **For the contract (lot K3)**: compile.json holds
+  no `info_sha256` of its own — a file cannot hold its own hash; the contract's field list loses it.
+- **The keep**: a `binary_bytes` above the cache's limit is `too_large` before the engine copies anything; the size
+  recorded is the engine's measure. The cache's room is made only when the ready rows' bytes pass the limit, then with
+  `FOR UPDATE SKIP LOCKED` over the ready rows (the rows a run is placing are left out); the evicted objects are deleted
+  through the engine **before** their rows, and an engine that does not answer leaves every row in place for the next
+  round (a row whose object went anyway is refused at its next place, forgotten and compiled again).
+- **The engine's routes** (`backend/app/api/routes/scripts.py`, `backend/tests/test_scripts_binary.py`): `keep` takes
+  only `bayes-compile/<id>-<attempt>/model`, answers 404 `{"missing": true}` and 409 `{"altered": true}` or
+  `{"too_long": true}`, and `{bytes, existed}`; `place` takes only a step's key `env-<…>/<step>/model` (the form
+  `flow-node` uses), answers 404 `{"missing": true}` and 409 `{"altered": true}`; `delete` takes sha256s only, so it can
+  name nothing outside `bayes-binaries/`. The engine's own ceiling is `BINARY_MAX_BYTES` (64 MiB).
+- **Measured locally** (2026-11-24, the image `tabularia-bayes-b0` under the Job's conditions with `docker run
+  --read-only --tmpfs /tmp:rw,exec,size=512m --network none --user 10001:10001 --memory 3g --cpus 1 --cap-drop ALL`, a
+  stand-in for the runner's compile mode, which is lot K3's): the golden `hier_slopes` compiled in 23.8 s (24.4 s
+  wall), a binary of 2,788,592 bytes, 2.7 MB of `/tmp`; the termination message (written to a file in place of
+  `/dev/termination-log`) is 254 bytes, `ParseMessage` reads it, its `info_sha256` is compile.json's, and
+  `CrossCheck` finds no mismatch with the stored manifests. The message read through Kubernetes with a read-only root
+  stays lot C5's (and K3's) to check on kind.

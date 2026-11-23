@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 )
 
@@ -42,5 +43,35 @@ func TestExplainPullAndExit(t *testing.T) {
 	}
 	if got := ExplainExit(nil, "", ""); got != "it ended with exit code None" {
 		t.Errorf("none: %q", got)
+	}
+}
+
+// The termination message is the ended container's state.terminated.message: never a running container's, never the
+// log's.
+func TestTerminationMessage(t *testing.T) {
+	pod, err := pyjson.Loads(`{"status": {"containerStatuses": [
+		{"name": "sidecar", "state": {"running": {"startedAt": "2026-11-24T10:00:00Z"}}},
+		{"name": "model", "state": {"terminated": {"exitCode": 0, "reason": "Completed", "message": "{\"program_sha256\": \"a\"}"}}}]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := TerminationMessage(pod, "model"); m != `{"program_sha256": "a"}` {
+		t.Errorf("model: %q", m)
+	}
+	if m := TerminationMessage(pod, ""); m != `{"program_sha256": "a"}` {
+		t.Errorf("the first that ended: %q", m)
+	}
+	if m := TerminationMessage(pod, "sidecar"); m != "" {
+		t.Errorf("a running container: %q", m)
+	}
+	if m := TerminationMessage(pod, "other"); m != "" {
+		t.Errorf("no such container: %q", m)
+	}
+	ended, _ := pyjson.Loads(`{"status": {"containerStatuses": [{"name": "model", "state": {"terminated": {"exitCode": 137, "reason": "OOMKilled"}}}]}}`)
+	if m := TerminationMessage(ended, "model"); m != "" {
+		t.Errorf("no message: %q", m)
+	}
+	if m := TerminationMessage(nil, "model"); m != "" {
+		t.Errorf("no pod: %q", m)
 	}
 }

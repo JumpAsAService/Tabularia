@@ -2,8 +2,9 @@
 // program's binary, the states of a program's compile and their transitions, the owner's rules on the queue (one
 // compile per person, «Compiles at once», a program that passed a limit not compiled again under it, «Compile now»,
 // three attempts for the cluster's failures), the cache's eviction order under its limit, and the compile Job's
-// termination message. Nothing here reads the database or the cluster: the loop (lot C2) and the Compiler (lot C3)
-// lock the rows and apply what these functions decide.
+// termination message. Nothing here reads the cluster, and the rules never read the database: the loop (lot C2) and
+// the Compiler (lot C3) lock the rows and apply what these functions decide, reading and writing bayes_binaries through
+// rows.go (Scan, Insert, Write, Delete) alone.
 package bayescompile
 
 import (
@@ -12,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 )
 
 // KeyFormat is the key's first line: a later change of what the key holds changes it, and every old key stops
@@ -28,6 +31,17 @@ var (
 	version = regexp.MustCompile(`^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$`)
 	arches  = map[string]bool{"amd64": true, "arm64": true}
 )
+
+// CmdStanOf is the CmdStan version a group's recipe builds (its sources named cmdstan, one per machine, of one
+// version): a key's cmdstan line; "" when the recipe builds none.
+func CmdStanOf(r modelgroups.Recipe) string {
+	for _, s := range r.Sources {
+		if s.Name == "cmdstan" {
+			return s.Version
+		}
+	}
+	return ""
+}
 
 // ErrKey is a part of the key that is not of its form: never a key built from it.
 var ErrKey = errors.New("bayes compile: not a cache key's part")

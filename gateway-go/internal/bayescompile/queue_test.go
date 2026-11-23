@@ -47,6 +47,17 @@ func TestPlanEnqueueByState(t *testing.T) {
 	failed := func(reason string) Row {
 		return Row{ID: 5, CacheKey: fresh.CacheKey, State: StateFailed, Reason: reason, Detail: "x", FinishedAt: t0, Attempt: 2}
 	}
+	// a binary larger than the cache: its size recorded (the owner, correction of 2026-11-24 from C1)
+	tooLarge := func(size int64) Row {
+		r := failed(ReasonTooLarge)
+		r.BinaryBytes = size
+		return r
+	}
+	bigger := func(limit int64) Limits {
+		l := defaults
+		l.CacheMaxBytes = limit
+		return l
+	}
 	cases := []struct {
 		name  string
 		row   Row
@@ -70,6 +81,10 @@ func TestPlanEnqueueByState(t *testing.T) {
 		{"failed by the compiler, compile now", failed(ReasonCompileFailed), true, defaults, true},
 		{"failed cross-check, compile now", failed(ReasonCrossCheck), true, defaults, true},
 		{"failed too large, a run", failed(ReasonTooLarge), false, defaults, false},
+		{"failed too large, same cache, compile now", tooLarge(3 << 30), true, defaults, false},
+		{"failed too large, cache raised but still smaller", tooLarge(3 << 30), true, bigger(3<<30 - 1), false},
+		{"failed too large, cache raised to its size, a save", tooLarge(3 << 30), false, bigger(3 << 30), true},
+		{"failed too large, cache raised, a run", tooLarge(3 << 30), false, bigger(4 << 30), true},
 		{"failed job, compile now", failed(ReasonJob), true, defaults, true},
 		{"failed by the cluster, a save", failed(ReasonCluster), false, defaults, true},
 	}
@@ -130,6 +145,20 @@ func TestOvertaken(t *testing.T) {
 	p3 := PlanEnqueue(to, bayesmodels.CompileRequest{ModelID: 3, Version: 2, ProgramSHA256: progB, By: 7}, []Row{p1.Row}, defaults, t0)
 	if p3.Queue || !reflect.DeepEqual(ids(p3.Overtaken), []int64{10}) {
 		t.Fatalf("%+v", p3)
+	}
+	// whatever the new version's own row is (ready, queued, running, failed, too large), the older queued one leaves:
+	// the store asks Enqueue after every save (the owner, correction of 2026-11-24 from C1)
+	for _, st := range []Row{
+		{ID: 12, CacheKey: second.CacheKey, State: StateReady, BinarySHA256: progB, BinaryBytes: 3 << 20},
+		{ID: 12, CacheKey: second.CacheKey, State: StateQueued, RequestedBy: 8, ModelID: 5, Version: 1},
+		{ID: 12, CacheKey: second.CacheKey, State: StateRunning, RequestedBy: 8, ModelID: 5, Version: 1},
+		{ID: 12, CacheKey: second.CacheKey, State: StateFailed, Reason: ReasonCompileFailed},
+		{ID: 12, CacheKey: second.CacheKey, State: StateFailed, Reason: ReasonTooLarge, BinaryBytes: 3 << 30},
+	} {
+		p := PlanEnqueue(st, bayesmodels.CompileRequest{ModelID: 3, Version: 2, ProgramSHA256: progB, By: 7}, []Row{p1.Row}, defaults, t0)
+		if p.Queue || !reflect.DeepEqual(p.Row, st) || !reflect.DeepEqual(ids(p.Overtaken), []int64{10}) {
+			t.Errorf("%s/%s: %+v", st.State, st.Reason, p)
+		}
 	}
 	// no person, no model: nothing overtaken
 	if o := Overtaken(fresh, bayesmodels.CompileRequest{ModelID: 3, Version: 3}, others); len(o) != 0 {

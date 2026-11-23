@@ -174,6 +174,10 @@ type fakeKube struct {
 	refused    map[string]string  // by Job name: the cluster does not create its Pod, with this event's message
 	deleted    []string
 	selectors  []string // the label selectors of the Jobs deleted by a collection delete
+	secrets    map[string]map[string]any
+	// a Job's status and its Pod's status as the test writes them (the compile loop's ends), over what ends says
+	jobStatus map[string]map[string]any
+	podStatus map[string]map[string]any
 }
 
 type fakeEnd struct {
@@ -185,7 +189,8 @@ type fakeEnd struct {
 func newFakeKube(t *testing.T) *fakeKube {
 	t.Helper()
 	k := &fakeKube{jobs: map[string]map[string]any{}, configmaps: map[string]map[string]any{}, ends: map[string]fakeEnd{},
-		noLog: map[string]bool{}, refused: map[string]string{}}
+		noLog: map[string]bool{}, refused: map[string]string{}, secrets: map[string]map[string]any{},
+		jobStatus: map[string]map[string]any{}, podStatus: map[string]map[string]any{}}
 	k.srv = httptest.NewServer(http.HandlerFunc(k.serve))
 	t.Cleanup(k.srv.Close)
 	token := filepath.Join(t.TempDir(), "token")
@@ -254,6 +259,9 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 						status = map[string]any{"succeeded": 1, "conditions": []any{cond}}
 					}
 				}
+				if st, set := k.jobStatus[parts[6]]; set {
+					status = st
+				}
 				out := map[string]any{"metadata": job["metadata"], "spec": job["spec"], "status": status}
 				k.reply(w, 200, out)
 			}
@@ -267,6 +275,9 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 			pod := map[string]any{"metadata": map[string]any{"name": "pod-" + sel, "creationTimestamp": "2026-11-20T10:00:00Z"}}
 			if ended {
 				pod["status"] = map[string]any{"containerStatuses": []any{map[string]any{"state": map[string]any{"terminated": map[string]any{"exitCode": end.exit}}}}}
+			}
+			if st, set := k.podStatus[sel]; set {
+				pod["status"] = st
 			}
 			k.reply(w, 200, map[string]any{"items": []any{pod}})
 			return
@@ -285,6 +296,13 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 		name := cm["metadata"].(map[string]any)["name"].(string)
 		k.configmaps[parts[3]+"/"+name] = cm
 		k.reply(w, 201, cm)
+		return
+	case len(parts) == 5 && parts[0] == "api" && parts[4] == "secrets" && r.Method == http.MethodPost:
+		var sec map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&sec)
+		name := sec["metadata"].(map[string]any)["name"].(string)
+		k.secrets[parts[3]+"/"+name] = sec
+		k.reply(w, 201, map[string]any{"metadata": sec["metadata"]})
 		return
 	case len(parts) == 5 && parts[4] == "events":
 		name := strings.TrimPrefix(r.URL.Query().Get("fieldSelector"), "involvedObject.name=")

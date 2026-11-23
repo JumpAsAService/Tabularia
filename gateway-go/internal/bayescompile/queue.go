@@ -34,12 +34,19 @@ type Plan struct {
 //
 //  1. ready, queued, running: nothing (the cache answers, or a compile is on its way);
 //  2. timeout: nothing unless the limit it passed is larger now (MayRetry), whatever the request («Compile now»
-//     included); failed for a reason of the compiler: nothing unless the request is «Compile now» (r.Again); failed for
-//     the cluster's reason: queued again by any request (a save, a run, «Compile now»);
+//     included); failed because the binary was larger than the cache (too_large): the same rule on the cache's limit,
+//     queued again by any request once the limit holds the recorded size, never before (the owner, correction of
+//     2026-11-24 from C1); failed for another reason of the compiler: nothing unless the request is «Compile now»
+//     (r.Again); failed for the cluster's reason: queued again by any request (a save, a run, «Compile now»);
 //  3. otherwise the row becomes queued for r.By, with the request's model and version, its first attempt, queued now;
 //  4. overtaken: the person's other rows still queued (not running) for the same model at a lower version, under
 //     another key, leave the queue (deleted: their state is none, a run compiles them if a flow pins them). Another
 //     model of the same person stays: one compile per person orders them, it does not drop them.
+//
+// Step 4 is planned whatever the key's row is (ready, queued, running, timeout, failed, none): a newer save always takes
+// the older queued version out (the owner, correction of 2026-11-24 from C1), so the store asks Enqueue after every
+// save, even when the new version's program is ready or on its way, and deletes Plan.Overtaken even when Plan.Queue is
+// false.
 //
 // others are the candidate rows of step 4 (any the caller read; the rule picks).
 func PlanEnqueue(row Row, r bayesmodels.CompileRequest, others []Row, now Limits, at time.Time) Plan {
@@ -54,7 +61,13 @@ func PlanEnqueue(row Row, r bayesmodels.CompileRequest, others []Row, now Limits
 			return p
 		}
 	case StateFailed:
-		if row.Reason != ReasonCluster && !r.Again {
+		switch {
+		case row.Reason == ReasonCluster:
+		case row.Reason == ReasonTooLarge:
+			if !MayRetry(row, now) {
+				return p
+			}
+		case !r.Again:
 			return p
 		}
 	default: // ready, queued, running

@@ -32,6 +32,12 @@
   or catboost.cbm) as raw bytes, which the gateway streams from MLflow's artifact proxy:
   hashed while it is received, written to the bucket only when its size and sha256 are the
   ones the model card keeps (a file that does not match leaves no object).
+- POST /scripts/binary/keep, /scripts/binary/place, /scripts/binary/delete: a compiled Bayesian
+  model's binary between the scripts bucket and Tabularia's storage, where it is kept under
+  `bayes-binaries/<sha256>`, a prefix no client can name (docs/specs/bayes-stan-compile.md, «The
+  binary's way»). The gateway gives the sha256 it trusts (the compile Job's termination message);
+  the bytes are hashed on the way through a temporary file, and nothing is written when they are
+  not the ones it names: when they are kept, and again when they are placed for a run.
 
 The secret arrives encrypted (Fernet shared with the gateway). See
 docs/specs/script-node.md.
@@ -49,7 +55,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.ingest.s3_destination import S3ConnectionSpec
@@ -443,3 +449,176 @@ def results_rows(request: ResultsRowsRequest):
     wanted = set(request.sections)
     rows = sorted((r for r in table.to_pylist() if r["section"] in wanted), key=lambda r: r["ord"])
     return {"rows": [{k: r[k] for k in ("section", "level", "level_2", "stat", "value", "text", "x0")} for r in rows]}
+
+
+# ── a compiled Bayesian model's binary (docs/specs/bayes-stan-compile.md, «The binary's way») ──────────────────────────
+
+BINARY_PREFIX = "bayes-binaries/"
+# binary_max_bytes: 20 times the largest binary measured (3.1 MB)
+BINARY_MAX_BYTES = 64 * 1024 * 1024
+BINARY_CHUNK = 8 * 1024 * 1024
+# a compile Job's binary in the scripts bucket: bayes-compile/<row>-<attempt>/model, nowhere else
+_COMPILE_BINARY_KEY = re.compile(r"^bayes-compile/[0-9]{1,19}-[0-9]{1,3}/model$")
+# where a run finds it: a step's prefix in a scripts environment (env-<n>/<step>/model)
+_STEP_BINARY_KEY = re.compile(r"^env-[A-Za-z0-9_.-]+(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)+/model$")
+# what a bucket answers for a key that is not there (403 too: the scripts bucket's key has no listing right)
+_ABSENT = ("404", "NoSuchKey", "NotFound", "403", "Forbidden", "AccessDenied")
+
+
+class _TooLong(Exception):
+    pass
+
+
+class _Absent(Exception):
+    pass
+
+
+def _hashed_copy(client: Any, bucket: str, key: str, out: Any, most: int) -> tuple[int, str]:
+    """The object streamed in chunks (never held whole) into `out` (None: only hashed): its size and sha256.
+    _Absent when it is not there, _TooLong as soon as it passes `most` bytes."""
+    try:
+        body = client.get_object(Bucket=bucket, Key=key)["Body"]
+    except ClientError as e:
+        if (e.response.get("Error") or {}).get("Code") in _ABSENT:
+            raise _Absent() from e
+        raise
+    digest, got = hashlib.sha256(), 0
+    for chunk in body.iter_chunks(BINARY_CHUNK):
+        got += len(chunk)
+        if got > most:
+            raise _TooLong()
+        digest.update(chunk)
+        if out is not None:
+            out.write(chunk)
+    return got, digest.hexdigest()
+
+
+def _binary_refusal(status: int, detail: str, **extra: Any) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"detail": detail, **extra})
+
+
+def _check_sha256(sha256: str) -> None:
+    if not _SHA256.match(sha256):
+        raise HTTPException(status_code=422, detail="The sha256 is 64 lowercase hexadecimal digits")
+
+
+class BinaryKeepRequest(BaseModel):
+    connection: S3ConnectionSpec
+    key: str  # in the scripts bucket: bayes-compile/<row>-<attempt>/model
+    sha256: str  # the compile Job's termination message's
+    max_bytes: int
+    bucket: str  # Tabularia's
+
+
+@router.post("/binary/keep")
+def binary_keep(request: BinaryKeepRequest):
+    """{bytes, existed}: the scripts bucket's `key` copied into Tabularia's storage at bayes-binaries/<sha256>, only
+    when it is at most `max_bytes` (and BINARY_MAX_BYTES) long and its sha256 is the one given; otherwise 409 and
+    nothing written. An object already at that key is hashed first and kept when it is the same (a gateway that died
+    after the keep asks again); one that is not is replaced by the bytes the gateway vouches for. 404: no binary at
+    `key`."""
+    if not _COMPILE_BINARY_KEY.match(request.key):
+        raise HTTPException(status_code=422,
+                            detail="Not the key of a compile's binary (bayes-compile/<id>-<attempt>/model)")
+    _check_sha256(request.sha256)
+    most = min(request.max_bytes, BINARY_MAX_BYTES)
+    if most < 1:
+        raise HTTPException(status_code=422, detail="max_bytes is at least 1")
+    from app.utils import get_storage_service
+
+    conn = request.connection
+    storage = get_storage_service()
+    target = BINARY_PREFIX + request.sha256
+    fd, path = tempfile.mkstemp(suffix=".bin")
+    try:
+        try:
+            with os.fdopen(fd, "wb") as out:
+                got, sha256 = _hashed_copy(conn.client(), conn.bucket, request.key, out, most)
+        except _Absent:
+            return _binary_refusal(404, "The compile's binary is not in the scripts bucket", missing=True)
+        except _TooLong:
+            return _binary_refusal(409, f"The compile's binary is longer than {most} bytes: not kept", too_long=True)
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+        if sha256 != request.sha256:
+            logger.warning("bayes binary %s: its sha256 is not the termination message's, not kept", request.key)
+            return _binary_refusal(409, "The binary's sha256 is not the one the compile reported: not kept",
+                                   altered=True)
+        try:
+            if _hashed_copy(storage.client, request.bucket, target, None, BINARY_MAX_BYTES) == (got, sha256):
+                return {"bytes": got, "existed": True}
+        except (_Absent, _TooLong):
+            pass  # not there, or not the binary: written below
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"Tabularia's storage answered: {_reason(e)}")
+        try:
+            storage.upload_file(path, request.bucket, target)
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"Tabularia's storage answered: {_reason(e)}")
+    finally:
+        os.unlink(path)
+    return {"bytes": got, "existed": False}
+
+
+class BinaryPlaceRequest(BaseModel):
+    connection: S3ConnectionSpec
+    sha256: str  # the one recorded in Postgres
+    bucket: str  # Tabularia's
+    target_key: str  # in the scripts bucket: a step's prefix, env-<n>/<step>/model
+
+
+@router.post("/binary/place")
+def binary_place(request: BinaryPlaceRequest):
+    """{bytes}: Tabularia's bayes-binaries/<sha256> copied into the scripts bucket at `target_key`, only when its
+    bytes still hash to `sha256`; 409 {"altered": true} when they do not (a fault of the storage: the gateway forgets
+    the binary and the run compiles again), 404 {"missing": true} when it is gone. Nothing is placed then."""
+    _check_sha256(request.sha256)
+    if not _STEP_BINARY_KEY.match(request.target_key) or ".." in request.target_key.split("/"):
+        raise HTTPException(status_code=422, detail="Not the key of a step's binary (env-…/…/model)")
+    from app.utils import get_storage_service
+
+    conn = request.connection
+    fd, path = tempfile.mkstemp(suffix=".bin")
+    try:
+        try:
+            with os.fdopen(fd, "wb") as out:
+                got, sha256 = _hashed_copy(get_storage_service().client, request.bucket, BINARY_PREFIX + request.sha256,
+                                           out, BINARY_MAX_BYTES)
+        except _Absent:
+            return _binary_refusal(404, "The binary is not in Tabularia's storage", missing=True)
+        except _TooLong:
+            return _binary_refusal(409, "The stored binary is not the one recorded", altered=True)
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"Tabularia's storage answered: {_reason(e)}")
+        if sha256 != request.sha256:
+            logger.warning("bayes binary %s: the stored bytes are not the recorded ones, not placed", request.sha256)
+            return _binary_refusal(409, "The stored binary is not the one recorded", altered=True)
+        try:
+            conn.client().upload_file(path, conn.bucket, request.target_key)
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    finally:
+        os.unlink(path)
+    return {"bytes": got}
+
+
+class BinaryDeleteRequest(BaseModel):
+    bucket: str  # Tabularia's
+    sha256s: list[str]
+
+
+@router.post("/binary/delete")
+def binary_delete(request: BinaryDeleteRequest):
+    """{deleted, failed}: the binaries bayes-binaries/<sha256> removed from Tabularia's storage (an eviction, «Empty
+    the cache»); a key that is not there counts as removed. Only that prefix is ever named."""
+    for sha256 in request.sha256s:
+        _check_sha256(sha256)
+    from app.utils import get_storage_service
+
+    keys = list(dict.fromkeys(BINARY_PREFIX + s for s in request.sha256s))
+    try:
+        out = get_storage_service().delete_objects(request.bucket, keys)
+    except (ClientError, BotoCoreError) as e:
+        raise HTTPException(status_code=502, detail=f"Tabularia's storage answered: {_reason(e)}")
+    failed = [f"{e.get('Key')}: {e.get('Code') or 'error'}" for e in out.get("errors") or []]
+    return {"deleted": len(keys) - len(failed), "failed": failed}
