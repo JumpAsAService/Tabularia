@@ -398,8 +398,11 @@ self-test: they check Stan's side of the catalogue with the pinned CmdStan.
    Tabularia; the catalogue spec, «Commands») are copied byte for byte into
    `reference/data/points.json` (a Go test keeps the two equal). `reference/programs/catalog_points.stan`,
    run once with the `fixed_param` sampler (one iteration), evaluates in `generated quantities`, for every
-   case of the file (distribution, arguments, point), Stan's **`_lpdf`** (or **`_lpmf`** for a discrete case)
-   and **`_lcdf`** at that point; the runner reads the values from the CSV and compares them with the
+   case of the file of `kind` `density` or `mass` (distribution, arguments, point), Stan's **`_lpdf`** (or
+   **`_lpmf`** for a discrete case) and, where the case has one, **`_lcdf`** at that point; the cases of
+   `kind` `marginal` (LKJ's correlation, a multivariate normal's component: the browser's marginals, not
+   Stan's joint densities) are left to check 8 and to the catalogue's own suite, and the check says how many
+   it left; the file's format is the one `make_points.py` documents in its header (format 1); the runner reads the values from the CSV and compares them with the
    witness's log-density and the log of its CDF. **Tolerances, declared**: the log-density within a relative
    1e-10 (absolute 1e-12 when the witness's value is within 1e-12 of zero), the log-CDF within a relative
    1e-8 — the catalogue's browser tolerances for the density, wider for Stan's CDFs, whose tails use other
