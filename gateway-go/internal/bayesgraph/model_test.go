@@ -842,6 +842,89 @@ func TestState(t *testing.T) {
 	}
 }
 
+// A centred state's init lives on the real line (lot S2): a gamma, a lognormal, an exponential, a
+// beta, an inverse gamma or a bounded uniform makes the initialisation fail almost always.
+func TestStateInitSupport(t *testing.T) {
+	init := func(form any, dist string, args map[string]any) func(m map[string]any) {
+		return func(m map[string]any) {
+			n := nodeByID(m, "s1")
+			n["form"] = form
+			n["init"] = map[string]any{"dist": dist, "args": args}
+		}
+	}
+	for _, c := range []struct {
+		dist string
+		args map[string]any
+	}{
+		{"gamma", map[string]any{"alpha": expr("2"), "beta": expr("1")}},
+		{"lognormal", map[string]any{"mu": expr("0"), "sigma": expr("1")}},
+		{"exponential", map[string]any{"beta": expr("1")}},
+		{"beta", map[string]any{"alpha": expr("2"), "beta": expr("2")}},
+		{"inv_gamma", map[string]any{"alpha": expr("2"), "beta": expr("1")}},
+		{"uniform", map[string]any{"alpha": expr("0"), "beta": expr("1")}},
+	} {
+		f := want(t, c.dist, findings(t, locallevel, init("centred", c.dist, c.args)), "graph.state", "s1", "init")
+		if f.Args["reason"] != "init_support" || f.Args["dist"] != c.dist {
+			t.Errorf("%s: %s", c.dist, args(f))
+		}
+		// beside: the same init on a non-centred state or on the default form is the form_centred warning
+		for _, form := range []any{"non_centred", nil} {
+			wantNot(t, c.dist+" non centred", findings(t, locallevel, init(form, c.dist, c.args)), "graph.state")
+		}
+	}
+	// beside: a centred state with an init on the real line
+	for _, d := range []string{"normal", "student_t"} {
+		a := map[string]any{"mu": expr("0"), "sigma": expr("10")}
+		if d == "student_t" {
+			a = map[string]any{"nu": expr("4"), "mu": expr("0"), "sigma": expr("10")}
+		}
+		wantNot(t, d, findings(t, locallevel, init("centred", d, a)), "graph.state")
+	}
+}
+
+// A lag of a value that itself uses a lag, and a state's init that reads a lagged value (lot S2): the
+// differences are computed before, in the flow's data.
+func TestLagNested(t *testing.T) {
+	// the lag of a value that uses a lag
+	fs := findings(t, ar2, func(m map[string]any) { addNodes(m, transformed("t2", "back", "lag(mean_sales, 1)", "rows")) })
+	f := want(t, "lag of a lagged value", fs, "graph.lag_nested", "t2", "value")
+	if f.Args["reason"] != "nested" || f.Args["value"] != "t1" {
+		t.Errorf("lag of a lagged value: %s", args(f))
+	}
+	// through a transformed node that reads the lagged one
+	fs = findings(t, ar2, func(m map[string]any) {
+		addNodes(m, transformed("t2", "twice", "mean_sales * 2", "rows"), transformed("t3", "back", "lag(twice, 1)", "rows"))
+	})
+	f = want(t, "lag through a node", fs, "graph.lag_nested", "t3", "value")
+	if f.Args["value"] != "t2" {
+		t.Errorf("lag through a node: %s", args(f))
+	}
+	// beside: the lag of data, of a value without a lag, and a value that reads a lagged one without lagging it again
+	wantNot(t, "ar2", findings(t, ar2, nil), "graph.lag_nested")
+	wantNot(t, "lag of data", findings(t, ar2, func(m map[string]any) { addNodes(m, transformed("t2", "back", "lag(sales, 3)", "rows")) }), "graph.lag_nested")
+	wantNot(t, "lag of a plain value", findings(t, ar2, func(m map[string]any) {
+		addNodes(m, transformed("t2", "twice", "sales * 2", "rows"), transformed("t3", "back", "lag(twice, 1)", "rows"))
+	}), "graph.lag_nested")
+	wantNot(t, "reading a lagged value", findings(t, ar2, func(m map[string]any) { addNodes(m, transformed("t2", "twice", "mean_sales * 2", "rows")) }), "graph.lag_nested")
+	// a value that lags itself is the cycle's
+	wantNot(t, "itself", findings(t, ar2, func(m map[string]any) { nodeByID(m, "t1")["value"] = expr("c + lag(mean_sales, 1)") }), "graph.lag_nested")
+
+	// a state's init that reads a lagged value
+	initOf := func(mu string) func(m map[string]any) {
+		return func(m map[string]any) {
+			addNodes(m, transformed("t2", "prev", "lag(flow, 1)", "rows"), transformed("t3", "prev2", "prev * 2", "rows"))
+			nodeByID(m, "s1")["init"] = map[string]any{"dist": "normal", "args": map[string]any{"mu": expr(mu), "sigma": expr("10")}}
+		}
+	}
+	for _, mu := range []string{"prev", "prev2", "lag(flow, 1)"} {
+		f := want(t, "init "+mu, findings(t, locallevel, initOf(mu)), "graph.lag_nested", "s1", "init.mu")
+		if f.Args["reason"] != "init" {
+			t.Errorf("init %s: %s", mu, args(f))
+		}
+	}
+	wantNot(t, "init without a lag", findings(t, locallevel, initOf("sigma_level")), "graph.lag_nested")
+}
+
 func TestTerms(t *testing.T) {
 	term := func(data string, coef map[string]any) map[string]any {
 		return map[string]any{"data": data, "coef": coef}

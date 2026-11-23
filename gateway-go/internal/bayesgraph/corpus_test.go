@@ -528,6 +528,27 @@ func corpusCases() []corpusCase {
 		cpNode(m, "s1")["init"] = map[string]any{"dist": "poisson_log", "args": map[string]any{"alpha": expr("0")}}
 	})
 	trips("state-bad-form", "graph.state", "s1", locallevel, set("s1", "form", "weird"))
+	trips("state-init-support", "graph.state", "s1", locallevel, func(m map[string]any) {
+		cpNode(m, "s1")["form"] = "centred"
+		cpNode(m, "s1")["init"] = map[string]any{"dist": "gamma", "args": map[string]any{"alpha": expr("2"), "beta": expr("1")}}
+	})
+	clean("state-init-support-centred-on-the-real-line", "graph.state", locallevel, set("s1", "form", "centred"))
+
+	// graph.lag_nested
+	trips("lag-nested-a-lagged-value", "graph.lag_nested", "t2", ar2, func(m map[string]any) {
+		addNodes(m, transformed("t2", "back", "lag(mean_sales, 1)", "rows"))
+	})
+	clean("lag-nested-lag-of-data", "graph.lag_nested", ar2, func(m map[string]any) {
+		addNodes(m, transformed("t2", "back", "lag(sales, 3)", "rows"))
+	})
+	trips("lag-nested-state-init", "graph.lag_nested", "s1", locallevel, func(m map[string]any) {
+		addNodes(m, transformed("t2", "prev", "lag(flow, 1)", "rows"))
+		cpNode(m, "s1")["init"] = map[string]any{"dist": "normal", "args": map[string]any{"mu": expr("prev"), "sigma": expr("10")}}
+	})
+	clean("lag-nested-state-init-without-lag", "graph.lag_nested", locallevel, func(m map[string]any) {
+		addNodes(m, transformed("t2", "prev", "sigma_level * 2", "rows"))
+		cpNode(m, "s1")["init"] = map[string]any{"dist": "normal", "args": map[string]any{"mu": expr("prev"), "sigma": expr("10")}}
+	})
 
 	// graph.terms
 	trips("terms-duplicate-data", "graph.terms", "p1", regression, func(m map[string]any) {
@@ -719,7 +740,7 @@ func TestCorpusCoversEveryRule(t *testing.T) {
 		"graph.plate_empty", "graph.node_plate", "graph.data_type", "graph.standardize", "graph.prior",
 		"graph.slot", "graph.slot_shape", "graph.slot_interval", "graph.slot_maybe", "graph.prior_data",
 		"graph.constant", "graph.bounds", "graph.cycle", "graph.likelihood", "graph.self_predictor",
-		"graph.unused_data", "graph.unused_parameter", "graph.form_centred", "graph.effects", "graph.state",
+		"graph.unused_data", "graph.unused_parameter", "graph.form_centred", "graph.effects", "graph.state", "graph.lag_nested",
 		"graph.terms",
 	}
 	for _, c := range []string{"arity", "call_empty", "comment", "control", "empty", "hash", "hint", "index_alone",

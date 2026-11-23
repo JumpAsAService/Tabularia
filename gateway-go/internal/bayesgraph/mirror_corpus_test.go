@@ -471,6 +471,26 @@ func mirrorHand() []struct {
 		{"state-scale-negative", "locallevel", func(m mtree) { n(m, "s1")["scale"] = mex("-1") }},
 		{"state-scale-ref", "locallevel", func(m mtree) { n(m, "s1")["scale"] = mrf("m1") }},
 		{"state-form-centred-warning", "state", func(m mtree) { n(m, "s1")["form"] = "non_centred" }},
+		// lot S2: the init of a centred state on the real line, the lag of a lagged value, the init that reads one
+		{"state-init-support", "locallevel", func(m mtree) {
+			n(m, "s1")["form"] = "centred"
+			n(m, "s1")["init"] = mtree{"dist": "gamma", "args": mtree{"alpha": mex("2"), "beta": mex("1")}}
+		}},
+		{"state-init-support-beside", "locallevel", func(m mtree) { n(m, "s1")["form"] = "centred" }},
+		{"lag-nested", "ar2", func(m mtree) {
+			mirrorAddNode(m, mtree{"id": "t2", "kind": "transformed", "name": "back", "label": "Back", "plate": "rows", "value": mex("lag(mean_sales, 1)")})
+		}},
+		{"lag-nested-beside", "ar2", func(m mtree) {
+			mirrorAddNode(m, mtree{"id": "t2", "kind": "transformed", "name": "back", "label": "Back", "plate": "rows", "value": mex("lag(sales, 3)")})
+		}},
+		{"lag-nested-init", "locallevel", func(m mtree) {
+			mirrorAddNode(m, mtree{"id": "t2", "kind": "transformed", "name": "prev", "label": "Prev", "plate": "rows", "value": mex("lag(flow, 1)")})
+			n(m, "s1")["init"].(mtree)["args"].(mtree)["mu"] = mex("prev")
+		}},
+		{"lag-nested-init-beside", "locallevel", func(m mtree) {
+			mirrorAddNode(m, mtree{"id": "t2", "kind": "transformed", "name": "prev", "label": "Prev", "plate": "rows", "value": mex("sigma_level * 2")})
+			n(m, "s1")["init"].(mtree)["args"].(mtree)["mu"] = mex("prev")
+		}},
 		// cycles, unused, forms
 		{"cycle-self", "example", func(m mtree) { n(m, "n4")["prior"].(mtree)["args"].(mtree)["mu"] = mex("mu") }},
 		{"cycle-two", "example", func(m mtree) {
@@ -841,7 +861,7 @@ func TestMirrorCorpus(t *testing.T) {
 		"graph.note", "graph.rows", "graph.plate_parent", "graph.plate_key", "graph.series", "graph.plate_empty", "graph.node_plate",
 		"graph.data_type", "graph.standardize", "graph.prior", "graph.slot", "expr.unknown_name", "graph.slot_shape", "graph.slot_interval",
 		"graph.slot_maybe", "graph.prior_data", "graph.constant", "graph.bounds", "graph.cycle", "graph.likelihood", "graph.self_predictor",
-		"graph.unused_data", "graph.unused_parameter", "graph.form_centred", "graph.effects", "graph.state", "graph.terms",
+		"graph.unused_data", "graph.unused_parameter", "graph.form_centred", "graph.effects", "graph.state", "graph.lag_nested", "graph.terms",
 	} {
 		if !have[code] {
 			t.Errorf("no case of the mirror corpus gives %s", code)

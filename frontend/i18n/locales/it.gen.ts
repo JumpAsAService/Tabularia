@@ -8148,6 +8148,10 @@ export default {
         "direct": "Il modello usa i dati che spiega ({observed}) per prevedere sé stessi: toglili da questa formula (per usare la riga precedente scrivi lag).",
         "through": "I dati che questo nodo spiega ({observed}) lo raggiungono passando per {through} e preverrebbero sé stessi: toglili da lì (per usare la riga precedente scrivi lag).",
       },
+      "lag_nested": {
+        "nested": "Questa formula usa lag su {value}, che a sua volta usa lag: l'editor non sa scriverlo. Calcola prima le differenze nei dati del flusso e usa quelle.",
+        "init": "Il primo valore di una serie latente non può leggere un valore che usa lag ({value}): usa qui numeri o altri parametri.",
+      },
       "unused_data": "Questi dati non sono usati da nulla: usali nel modello, oppure elimina il nodo (una colonna che non cambia nulla non va collegata).",
       "unused_parameter": "Niente collega questo parametro ai dati, quindi quello che ne saprai sarà solo ciò che hai ipotizzato: usalo nel modello, oppure eliminalo.",
       "form_centred": {
@@ -8168,6 +8172,7 @@ export default {
         "not_prior": "La distribuzione {dist} descrive dati, non una convinzione: scegline un'altra per il primo valore.",
         "missing_arg": "La distribuzione {dist} ha bisogno di un valore per {arg}: compilalo.",
         "unknown_arg": "La distribuzione {dist} non ha {arg}: toglilo, oppure scegli un'altra distribuzione.",
+        "init_support": "La distribuzione {dist} non copre tutti i numeri reali, e una serie centrata parte da lì: l'avvio quasi sempre fallisce. Scegli la forma non centrata, oppure una distribuzione sui numeri reali (come la normale) per il primo valore.",
       },
       "terms": {
         "not_data": "Un termine della somma deve essere un nodo di dati: scegline uno che esista.",

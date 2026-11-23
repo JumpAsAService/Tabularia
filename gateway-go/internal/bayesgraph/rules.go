@@ -3,6 +3,7 @@ package bayesgraph
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
@@ -28,6 +29,7 @@ func (v *validation) modelRules() {
 	v.deps = v.dependencies()
 	v.cycles(v.deps)
 	v.selfPredictors()
+	v.lagNested()
 	v.unused()
 	v.formCentred()
 	v.plateEmpty()
@@ -382,6 +384,11 @@ func (v *validation) stateInit(n *Node) {
 		v.error("graph.state", n.ID, "init", map[string]any{"reason": "not_prior", "dist": d.ID})
 		return
 	}
+	if n.Form == "centred" && d.Support != bayescatalog.RealLine {
+		// A centred state is sampled on the real line: an init that lives on a ray or an interval makes
+		// the initialisation fail almost always (lot S2).
+		v.error("graph.state", n.ID, "init", map[string]any{"reason": "init_support", "dist": d.ID})
+	}
 	v.arguments(n, "init.", d, n.Init.Args, "graph.state")
 }
 
@@ -441,6 +448,85 @@ func (v *validation) selfPredictors() {
 				v.error("graph.self_predictor", l.ID, s.key.Slot, map[string]any{"observed": o.ID})
 			case through != "":
 				v.error("graph.self_predictor", l.ID, s.key.Slot, map[string]any{"observed": o.ID, "through": through})
+			}
+		}
+	}
+}
+
+// lagNested: graph.lag_nested. The lag of a value that itself uses a lag (directly, or through
+// transformed and linear-predictor nodes: a hand-written difference of differences) is refused, and
+// so is a state's init that reads a lagged value: the differences are computed before, in the flow's
+// data. The finding is on the slot, with the node whose lag is read ("nested") or the lagged value
+// the init reads ("init").
+func (v *validation) lagNested() {
+	via := func(n *Node) bool { return n != nil && (n.Kind == "transformed" || n.Kind == "linear_predictor") }
+	reads := map[*slotSpec]readSets{}
+	for _, s := range v.specs {
+		reads[s] = v.readSets(s)
+	}
+	// tainted: the transformed and linear-predictor nodes whose value uses a lag, to a fixed point.
+	tainted := map[string]bool{}
+	for changed := true; changed; {
+		changed = false
+		for _, s := range v.specs {
+			o := s.owner
+			if !via(o) || tainted[o.ID] {
+				continue
+			}
+			r := reads[s]
+			uses := len(r.lag) > 0
+			for _, id := range r.plain {
+				if tainted[ownerOf(id)] {
+					uses = true
+				}
+			}
+			if uses {
+				tainted[o.ID] = true
+				changed = true
+			}
+		}
+	}
+	// dependsOn: whether from reads to, any way; such a lag is in a cycle, which graph.cycle says.
+	dependsOn := func(from, to string) bool {
+		seen, stack := map[string]bool{from: true}, []string{from}
+		for len(stack) > 0 {
+			cur := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, w := range v.deps.reads[cur] {
+				if w == to {
+					return true
+				}
+				if !seen[w] {
+					seen[w] = true
+					stack = append(stack, w)
+				}
+			}
+		}
+		return false
+	}
+	for _, s := range v.specs {
+		r := reads[s]
+		if s.owner.Kind == "state" && strings.HasPrefix(s.key.Slot, "init.") {
+			value := ""
+			for _, id := range r.lag {
+				if o := ownerOf(id); !dependsOn(o, s.owner.ID) && (value == "" || o < value) {
+					value = o
+				}
+			}
+			for _, id := range r.plain {
+				if o := ownerOf(id); tainted[o] && !dependsOn(o, s.owner.ID) && (value == "" || o < value) {
+					value = o
+				}
+			}
+			if value != "" {
+				v.error("graph.lag_nested", s.owner.ID, s.key.Slot, map[string]any{"reason": "init", "value": value})
+			}
+			continue
+		}
+		for _, id := range r.lag {
+			if o := ownerOf(id); tainted[o] && !dependsOn(o, s.owner.ID) {
+				v.error("graph.lag_nested", s.owner.ID, s.key.Slot, map[string]any{"reason": "nested", "value": o})
+				break
 			}
 		}
 	}

@@ -148,6 +148,8 @@ model {
 |---|---|---|
 | A node or component whose **name passes the rule** | the name | the rule below |
 | A node without a name, or whose name fails the rule | `V_<node id>`, a component `V_<node id>_<component id>` | starts with an upper-case letter |
+| A component without a name or with a reserved name, written as its own variable (centred form) | `V_<node id>_<component id>` | starts with an upper-case letter |
+| A correlation without a name | `Omega_<node id>` | starts with an upper-case letter |
 | Sizes | `N`, `J_<group plate id>`, `K_<category node id>` | upper case |
 | Derived data | `Up_<index node id>_<plate id>` (a lifted index), `N_lag`, `Rows_lag`, `Lag<k>`, `N_first`, `Rows_first`, `N_next`, `Rows_next`, `Prev` | upper case |
 | The mode flag | `Mode` | upper case |

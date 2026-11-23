@@ -1404,6 +1404,7 @@ class Validation {
     this.deps = this.dependencies()
     this.cycles(this.deps)
     this.selfPredictors()
+    this.lagNested()
     this.unused()
     this.formCentred()
     this.plateEmpty()
@@ -1575,6 +1576,9 @@ class Validation {
     if (!d) { this.error('graph.state', n.id, 'init', { reason: 'unknown_dist', dist: n.init.dist }); return }
     if (d.support === 'cholesky_factor_corr') { this.error('graph.state', n.id, 'init', { reason: 'effects_only', dist: d.id }); return }
     if (!d.uses.includes('prior')) { this.error('graph.state', n.id, 'init', { reason: 'not_prior', dist: d.id }); return }
+    if (n.form === 'centred' && d.support !== 'real') {
+      this.error('graph.state', n.id, 'init', { reason: 'init_support', dist: d.id })
+    }
     this.arguments(n, 'init.', d, n.init.args, 'graph.state')
   }
 
@@ -1666,6 +1670,58 @@ class Validation {
         }
         if (direct) this.error('graph.self_predictor', l.id, s.slot, { observed: o.id })
         else if (through !== '') this.error('graph.self_predictor', l.id, s.slot, { observed: o.id, through })
+      }
+    }
+  }
+
+  // graph.lag_nested: the lag of a value that itself uses a lag, and a state's init that reads a lagged value
+  lagNested (): void {
+    const via = (n: BayesGraphNode | undefined) => !!n && (n.kind === 'transformed' || n.kind === 'linear_predictor')
+    const reads = new Map<SlotSpec, ReadSets>()
+    for (const s of this.specs) reads.set(s, this.readSets(s))
+    const tainted = new Set<string>()
+    for (let changed = true; changed;) {
+      changed = false
+      for (const s of this.specs) {
+        const o = s.owner
+        if (!via(o) || tainted.has(o.id)) continue
+        const r = reads.get(s) as ReadSets
+        if (r.lag.length > 0 || r.plain.some(id => tainted.has(ownerOf(id)))) { tainted.add(o.id); changed = true }
+      }
+    }
+    const dependsOn = (from: string, to: string): boolean => {
+      const seen = new Set<string>([from])
+      const stack = [from]
+      while (stack.length) {
+        const cur = stack.pop() as string
+        for (const w of this.deps.reads.get(cur) ?? []) {
+          if (w === to) return true
+          if (!seen.has(w)) { seen.add(w); stack.push(w) }
+        }
+      }
+      return false
+    }
+    for (const s of this.specs) {
+      const r = reads.get(s) as ReadSets
+      if (s.owner.kind === 'state' && s.slot.startsWith('init.')) {
+        let value = ''
+        for (const id of r.lag) {
+          const o = ownerOf(id)
+          if (!dependsOn(o, s.owner.id) && (value === '' || o < value)) value = o
+        }
+        for (const id of r.plain) {
+          const o = ownerOf(id)
+          if (tainted.has(o) && !dependsOn(o, s.owner.id) && (value === '' || o < value)) value = o
+        }
+        if (value !== '') this.error('graph.lag_nested', s.owner.id, s.slot, { reason: 'init', value })
+        continue
+      }
+      for (const id of r.lag) {
+        const o = ownerOf(id)
+        if (tainted.has(o) && !dependsOn(o, s.owner.id)) {
+          this.error('graph.lag_nested', s.owner.id, s.slot, { reason: 'nested', value: o })
+          break
+        }
       }
     }
   }

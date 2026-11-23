@@ -8148,6 +8148,10 @@ export default {
         "direct": "The model uses the data it explains ({observed}) to predict themselves: remove it from this formula (to use the previous row, write lag).",
         "through": "The data this node explains ({observed}) reach it through {through} and would predict themselves: remove them from there (to use the previous row, write lag).",
       },
+      "lag_nested": {
+        "nested": "This formula applies lag to {value}, which itself uses lag: the editor cannot write it. Compute the differences first, in the flow's data, and use those.",
+        "init": "The first value of a latent series cannot read a value that uses lag ({value}): use numbers or other parameters here.",
+      },
       "unused_data": "These data are not used by anything: use them in the model, or delete the node (a column that changes nothing should not be bound).",
       "unused_parameter": "Nothing connects this parameter to the data, so what you learn about it will be only what you assumed: use it in the model, or delete it.",
       "form_centred": {
@@ -8168,6 +8172,7 @@ export default {
         "not_prior": "The distribution {dist} describes data, not a belief: choose another for the first value.",
         "missing_arg": "The distribution {dist} needs a value for {arg}: fill it in.",
         "unknown_arg": "The distribution {dist} has no {arg}: remove it, or choose another distribution.",
+        "init_support": "The distribution {dist} does not cover all real numbers, and a centred series starts from there: the start almost always fails. Choose the non-centred form, or a distribution on the real numbers (like the normal) for the first value.",
       },
       "terms": {
         "not_data": "A term of the sum must be a data node: choose one that exists.",

@@ -49,6 +49,8 @@ or bind data (`flow-node`).
 | Data on a group plate | **Allowed** for real and integer data, the runner refusing a column that varies within a unit | Spec decision, 2026-11-23, owner may revisit |
 | `graph.form_centred` widened; the mirror exports `priorPlan(model)` | A bounded parameter on a non-centred plate and a state with a non-location-scale `init` stay centred, with the warning; the TypeScript mirror exports the plan `prior-preview` draws from («The TypeScript mirror») | Correction of 2026-11-23 from the step-2 specs (`bayes-stan-codegen.md`, `bayes-prior-preview.md`) |
 | `graph.id` refuses an id equal to a reserved suffix | Ids `lpdf`, `lpmf`, `lcdf`, `lccdf`, `cdf`, `ccdf`, `lupdf`, `lupmf` (reason `reserved_suffix`): a generated identifier would end with a suffix Stan reserves | Correction of 2026-11-24 from lot S0 |
+| `graph.lag_nested` (new, error) | A `lag(x, k)` whose `x` itself uses `lag`, directly or through transformed and linear-predictor nodes (reason `nested`, with `value` the node lagged), and a state's `init` that reads a lagged value (reason `init`): the differences are computed before, in the flow's data. The generator cannot write them | Correction of 2026-11-24 from lot S2 |
+| `graph.state` widened (reason `init_support`) | A state in the `centred` form whose `init` has a distribution not on the real line (gamma, lognormal, exponential, beta, inverse gamma, bounded uniform: the catalogue's `support` is not `real`) is refused: its initialisation fails almost always | Correction of 2026-11-24 from lot S2 |
 
 ## What exists and is reused (verified)
 
@@ -252,7 +254,8 @@ findings are reported, sorted by (node id, slot, code), not only the first.
 | `graph.unused_parameter` | warning | A parameter on no path to a likelihood: «its posterior is its prior» |
 | `graph.form_centred` | warning | On a `non_centred` plate, a parameter whose prior is not a location-scale one (catalogue `location_scale`), or a parameter with `bounds` (Stan's affine non-centring cannot be combined with bounds); a `non_centred` `state` whose `init` is not location-scale: «this one stays centred» (the last two cases: correction of 2026-11-23 from the step-2 specs) |
 | `graph.effects` | error | A correlated-effects node: 2 to `max_effect_components` components, names valid and unique, scales positive scalars, `eta` a positive constant, on a group plate |
-| `graph.state` | error | A state only on rows that are a series; `init` a proper prior; `scale` a positive scalar |
+| `graph.state` | error | A state only on rows that are a series; `init` a proper prior; `scale` a positive scalar; a `centred` state's `init` on the real line (reason `init_support`, with `dist`; correction of 2026-11-24 from lot S2) |
+| `graph.lag_nested` | error | The lag of a value that itself uses a lag (reason `nested`, `value` the node whose lag is read), or a state's `init` that reads a lagged value (reason `init`); a lag inside a cycle is `graph.cycle`'s (correction of 2026-11-24 from lot S2) |
 | `graph.terms` | error | A linear predictor's terms: a real or integer data node with a scalar parameter, or a category with a parameter on its levels plate; no data node twice |
 
 Every rule of this table, and every `expr.*` code, has at least two cases in the corpus (one that trips it, one

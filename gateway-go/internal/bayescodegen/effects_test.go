@@ -78,21 +78,6 @@ func TestLagOnlyWhereUsed(t *testing.T) {
 	wantLines(t, p, "  y ~ normal(a, s);", "  z[Rows_lag] ~ normal(((z[Lag1]) + a), s);")
 }
 
-// Refused with ErrUnsupported: the lag of a value itself computed with lag (it is not computed on
-// the rows the lag reads), and a state's init that reads a lagged value.
-func TestLagRefusals(t *testing.T) {
-	refusedWith(t, seriesJSON(false, paramA, paramS,
-		`{"id":"d","kind":"transformed","name":"d","label":"D","plate":"rows","value":{"expr":"y - lag(y, 1)"}}`,
-		`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lag(d, 1)"},"sigma":{"expr":"s"}}}`),
-		ErrUnsupported)
-	refusedWith(t, seriesJSON(false, paramA, paramS,
-		`{"id":"lv","kind":"state","name":"lv","label":"Level","plate":"rows","process":"random_walk","init":{"dist":"normal","args":{"mu":{"expr":"0"},"sigma":{"expr":"1"}}},"scale":{"expr":"s"}}`,
-		`{"id":"q","kind":"transformed","name":"q","label":"Q","plate":"rows","value":{"expr":"lag(lv, 1) * a"}}`,
-		`{"id":"lv2","kind":"state","name":"lv2","label":"Level 2","plate":"rows","process":"random_walk","init":{"dist":"normal","args":{"mu":{"expr":"q"},"sigma":{"expr":"1"}}},"scale":{"expr":"s"}}`,
-		`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"lv + lv2"},"sigma":{"expr":"s"}}}`),
-		ErrUnsupported)
-}
-
 // A state whose init is location-scale but not normal: the first rows' standard values from the
 // init at location 0 and scale 1, the next ones std_normal(); a series by group; lag of a state.
 func TestStates(t *testing.T) {

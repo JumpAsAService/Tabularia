@@ -8148,6 +8148,10 @@ export default {
         "direct": "Le modèle utilise les données qu'il explique ({observed}) pour se prédire lui-même : retirez-les de cette formule (pour la ligne précédente, écrivez lag).",
         "through": "Les données que ce nœud explique ({observed}) l'atteignent par {through} et se prédiraient elles-mêmes : retirez-les de là (pour la ligne précédente, écrivez lag).",
       },
+      "lag_nested": {
+        "nested": "Cette formule applique lag à {value}, qui utilise lui-même lag : l'éditeur ne sait pas l'écrire. Calculez d'abord les différences dans les données du flux et utilisez-les.",
+        "init": "La première valeur d'une série latente ne peut pas lire une valeur qui utilise lag ({value}) : utilisez ici des nombres ou d'autres paramètres.",
+      },
       "unused_data": "Ces données ne sont utilisées par rien : utilisez-les dans le modèle, ou supprimez le nœud (une colonne qui ne change rien ne devrait pas être liée).",
       "unused_parameter": "Rien ne relie ce paramètre aux données, donc ce que vous en saurez sera seulement ce que vous aviez supposé : utilisez-le dans le modèle, ou supprimez-le.",
       "form_centred": {
@@ -8168,6 +8172,7 @@ export default {
         "not_prior": "La loi {dist} décrit des données, pas une croyance : choisissez-en une autre pour la première valeur.",
         "missing_arg": "La loi {dist} a besoin d'une valeur pour {arg} : renseignez-la.",
         "unknown_arg": "La loi {dist} n'a pas de {arg} : retirez-le, ou choisissez une autre loi.",
+        "init_support": "La loi {dist} ne couvre pas tous les nombres réels, et une série centrée part de là : le démarrage échoue presque toujours. Choisissez la forme non centrée, ou une loi sur les nombres réels (comme la normale) pour la première valeur.",
       },
       "terms": {
         "not_data": "Un terme de la somme doit être un nœud de données : choisissez-en un qui existe.",

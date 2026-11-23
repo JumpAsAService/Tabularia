@@ -8148,6 +8148,10 @@ export default {
         "direct": "Das Modell benutzt die Daten, die es erklärt ({observed}), um sich selbst vorherzusagen: Entfernen Sie sie aus dieser Formel (für die vorherige Zeile schreiben Sie lag).",
         "through": "Die Daten, die dieser Knoten erklärt ({observed}), erreichen ihn über {through} und würden sich selbst vorhersagen: Entfernen Sie sie dort (für die vorherige Zeile schreiben Sie lag).",
       },
+      "lag_nested": {
+        "nested": "Diese Formel wendet lag auf {value} an, das selbst lag benutzt: Der Editor kann das nicht schreiben. Berechnen Sie die Differenzen zuerst in den Daten des Flows und verwenden Sie diese.",
+        "init": "Der erste Wert einer latenten Reihe kann keinen Wert lesen, der lag benutzt ({value}): Verwenden Sie hier Zahlen oder andere Parameter.",
+      },
       "unused_data": "Diese Daten werden von nichts verwendet: Verwenden Sie sie im Modell oder löschen Sie den Knoten (eine Spalte, die nichts ändert, sollte nicht gebunden werden).",
       "unused_parameter": "Nichts verbindet diesen Parameter mit den Daten, daher ist alles, was Sie über ihn erfahren, nur Ihre Annahme: Verwenden Sie ihn im Modell oder löschen Sie ihn.",
       "form_centred": {
@@ -8168,6 +8172,7 @@ export default {
         "not_prior": "Die Verteilung {dist} beschreibt Daten, keine Annahme: Wählen Sie für den ersten Wert eine andere.",
         "missing_arg": "Die Verteilung {dist} braucht einen Wert für {arg}: Tragen Sie ihn ein.",
         "unknown_arg": "Die Verteilung {dist} hat kein {arg}: Entfernen Sie es oder wählen Sie eine andere Verteilung.",
+        "init_support": "Die Verteilung {dist} deckt nicht alle reellen Zahlen ab, und eine zentrierte Reihe startet dort: Der Start scheitert fast immer. Wählen Sie die nicht zentrierte Form oder für den ersten Wert eine Verteilung auf den reellen Zahlen (etwa die Normalverteilung).",
       },
       "terms": {
         "not_data": "Ein Term der Summe muss ein Datenknoten sein: Wählen Sie einen, der existiert.",

@@ -1,0 +1,104 @@
+{
+  "name": "state-init-support-centred-on-the-real-line",
+  "rule": "graph.state",
+  "expect": "clean",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "d1",
+        "kind": "data",
+        "label": "Day",
+        "name": "day",
+        "plate": "rows",
+        "type": "time"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Flow",
+        "name": "flow",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Level drift",
+        "name": "sigma_level",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma_obs",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "form": "centred",
+        "id": "s1",
+        "init": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "10"
+            }
+          },
+          "dist": "normal"
+        },
+        "kind": "state",
+        "label": "Level",
+        "name": "level",
+        "plate": "rows",
+        "process": "random_walk",
+        "scale": {
+          "expr": "sigma_level"
+        }
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "level"
+          },
+          "sigma": {
+            "expr": "sigma_obs"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Flow",
+        "observed": "d2"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Days",
+        "series": {
+          "by": null,
+          "time": "d1"
+        }
+      }
+    ]
+  },
+  "findings": []
+}
