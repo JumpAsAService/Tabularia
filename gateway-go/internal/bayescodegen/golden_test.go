@@ -222,7 +222,7 @@ func TestGoldenFilesListed(t *testing.T) {
 // shuffled rewrites a graph's JSON as another document of the same model: plates and nodes in a
 // random order, every object's keys in a random order, every box moved (a box added for every node
 // that has none), every label and note replaced by text a program must never hold.
-func shuffled(t *testing.T, data []byte, seed uint64) []byte {
+func shuffled(t testing.TB, data []byte, seed uint64) []byte {
 	t.Helper()
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()

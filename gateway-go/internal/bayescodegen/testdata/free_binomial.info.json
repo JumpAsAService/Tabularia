@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "N": { "type": "int", "dimensions": 0 },
+    "trials": { "type": "int", "dimensions": 1 },
+    "x": { "type": "real", "dimensions": 1 },
+    "y": { "type": "int", "dimensions": 1 },
+    "Mode": { "type": "int", "dimensions": 0 }
+  },
+  "parameters": {
+    "alpha": { "type": "real", "dimensions": 0 },
+    "b_x": { "type": "real", "dimensions": 0 }
+  },
+  "transformed parameters": {},
+  "generated quantities": {},
+  "functions": [],
+  "distributions": [ "binomial_logit_lupmf", "normal_lupdf" ],
+  "included_files": []
+}

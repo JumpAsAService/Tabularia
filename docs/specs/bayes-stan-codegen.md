@@ -483,7 +483,7 @@ programs change only by the priors' numbers, and `CodegenVersion` does not chang
 cd gateway-go && go test ./internal/bayescodegen/...                                  # golden, properties, scans
 cd gateway-go && BAYES_GOLDEN_WRITE=1 go test ./internal/bayescodegen/ -run TestGolden  # rewrites (reviewed by hand)
 # the stanc check, as CI runs it (stanc downloaded and its sha256 checked first)
-cd gateway-go && BAYES_STANC=/path/to/linux-stanc go test ./internal/bayescodegen/ -run TestGoldenStanc -v
+cd gateway-go && BAYES_STANC=/path/to/linux-stanc go test ./internal/bayescodegen/ -run Stanc -v
 cd gateway-go && go test ./internal/bayescodegen/ -run '^$' -fuzz '^FuzzGenerate$' -fuzztime 10m   # by hand, alone
 cd gateway-go && go test ./internal/bayescodegen/ -run '^$' -bench . -benchmem          # recorded, not asserted
 ```
@@ -696,6 +696,64 @@ value).
 in each place of the table above, a long linear predictor, lag); `CrossCheck` must not expect the `E_` locals in
 `--info` (they are locals: of the model block, or of nested blocks in transformed data, transformed parameters and
 the generated quantities), though they are in the mapping table.
+
+## As built — lot S3 (the stanc check, the properties, the fuzzer)
+
+`check.go` (`CrossCheck`), `stanc_test.go`, `gen_test.go` (the generator of graphs), `property_test.go`,
+`fuzz_test.go`, `crosscheck_test.go` (with `testdata/*.info.json`, stanc's `--info` of two golden programs),
+`image_test.go` (build tag `bayesimage`), `.github/workflows/bayes-codegen.yml`.
+
+**`CrossCheck(info []byte, p *Program) []Mismatch`.** Reads `stanc --info` (a JSON object: `inputs`,
+`parameters`, `transformed parameters` and `generated quantities` as `{name: {type, dimensions}}`, then
+`functions`, `distributions`, `included_files`; read in order, `dimensions` is the number of dimensions, not the
+sizes) and compares it with the program: the data variables stanc reads are the data manifest's, in its order
+and with the dimensions of their kind (an extension's data are not compared for shape); the parameters, the
+transformed parameters and the generated quantities stanc writes are the quantity manifest's, block by block, in
+its order, with `len(dims)` dimensions (a matrix and an array of vectors are 2); every function stanc reports is a
+callable of the catalogue, every distribution too once `_lupdf` and `_lupmf` are read as `_lpdf` and `_lpmf`
+(stanc reports a statement `y ~ normal(…)` as `normal_lupdf`, measured), and nothing is included. Not compared,
+because stanc does not report them: transformed data, the locals of the model block and the nested blocks
+(`E_<id>_<k>`, `W_<id>`, `Full_<id>`, `Arg<k>_<id>`, the extension's locals), all of them in the mapping table.
+
+**The stanc check** (`TestGoldenStanc`, `TestGeneratedStanc`). `BAYES_STANC` is the path of stanc 2.40.0's linux
+executable, checked against the catalogue's Stan version; without it the tests are skipped with the way to get one,
+and `BAYES_STANC_REQUIRED=1` turns the skip into a failure (CI sets it). Each golden program is generated again
+(it must be the golden file), run through `stanc --info` (parse, type check, report) and `stanc --o=` (the C++ the
+build needs), and its report goes through `CrossCheck`; then 300 programs of the properties' generator, plain and
+with an extension, the same way (all pass; 600 programs). The workflow `bayes-codegen.yml` downloads the asset
+`linux-stanc` of the stanc3 v2.40.0 release by URL, checks the sha256 it pins (`29306a35…05e6f4`, the digest of
+the prebuilt `bin/linux-stanc` of the CmdStan tarball: «As built» of `bayes-image`; measured by downloading the
+asset), and runs gofmt, vet, the packages' suites and the stanc tests in the gateway's Go image; its actions are
+pinned by sha like the other workflows.
+
+**The generator and the properties.** `gen_test.go` writes valid graphs from a `chooser`: a seeded source for the
+properties, the fuzzer's bytes for `FuzzGenerate` (one choice a byte). Families: regressions with a linear predictor
+(up to 24 terms) or a written mean and every likelihood of the catalogue; hierarchies of one and two levels,
+centred and not, with truncated priors and long locations; correlated effects (2 to 10 components, absent and
+reserved names); series with lags (1 to 15), random-walk states (init normal, student_t, reading another state,
+centred and not); group data and transformed values; names absent or reserved, random ids and orders. Large
+expressions (10 to 20 terms a chain) are written in every place of the table of lot S5. Of 500 seeds all are valid
+models and none gives an error. `TestPropertyGeneratedPrograms`: the alphabet, the scan and the identifier rule
+pass; the same bytes twice; the same bytes when the JSON is shuffled, the boxes moved and the labels and notes
+made hostile; the same bytes when the text of every expression is replaced after validation; with the extension
+too; and the sample reaches the splitting in the model block, transformed data, transformed parameters, a
+truncated prior's loop, the lagged subset (written and read), a state's first rows, a linear predictor's sum and
+the generated quantities (the counts are asserted). `TestPropertyRenameOneNode`: renaming a node changes only the
+occurrences of its identifier. `TestPropertyMutatedGraphs`: seeded mutations of the graphs (a value swapped, a
+snippet, a key or a node removed or duplicated): what stays valid gives a program that passes the checks, what does
+not is `ErrInvalidModel`.
+
+**`FuzzGenerate`.** Builds the graph from the bytes (and now and then mutates it, and picks the extension), and
+asserts: no panic; a valid model always gives a program (never `ErrUnsupported`, never `ErrBug`); `CheckProgram` and
+`CheckIdentifiers` pass; a second generation is the same bytes; an invalid model is `ErrInvalidModel`. Its 51 seeds
+run in every `go test`. Go's default minimising of each new input (up to 60 s) took most of the first run's time:
+the run is `-fuzzminimizetime=2s`. **Run of lot S3** (2026-11-23, `-fuzztime=10m -parallel 2 -fuzzminimizetime=2s`,
+alone, under the heavy lock): 61,130 executions, 590 new interesting inputs, no failure; no bug of the generator was
+found, so `testdata/fuzz/` holds nothing.
+
+**The measure on the image** (`image_test.go`, `-tags bayesimage`, kept out of the normal run: a full CmdStan
+build): the 747-node program of the E4 measures written by `Generate` builds with `--cpus 1 --memory 3g --network
+none --read-only` in the compile Job's conditions; measured **56.2 s** (the acceptance is 90 s).
 
 ## Open questions
 

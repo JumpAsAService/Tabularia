@@ -1,0 +1,32 @@
+{
+  "inputs": {
+    "N": { "type": "int", "dimensions": 0 },
+    "J_grp": { "type": "int", "dimensions": 0 },
+    "g": { "type": "int", "dimensions": 1 },
+    "x": { "type": "real", "dimensions": 1 },
+    "y": { "type": "real", "dimensions": 1 },
+    "Mode": { "type": "int", "dimensions": 0 }
+  },
+  "parameters": {
+    "mu_a": { "type": "real", "dimensions": 0 },
+    "mu_b": { "type": "real", "dimensions": 0 },
+    "sigma": { "type": "real", "dimensions": 0 },
+    "tau_a": { "type": "real", "dimensions": 0 },
+    "tau_b": { "type": "real", "dimensions": 0 },
+    "Z_eff": { "type": "real", "dimensions": 2 },
+    "L_eff": { "type": "real", "dimensions": 2 }
+  },
+  "transformed parameters": {
+    "a_g": { "type": "real", "dimensions": 1 },
+    "b_g": { "type": "real", "dimensions": 1 }
+  },
+  "generated quantities": { "rho_g": { "type": "real", "dimensions": 2 } },
+  "functions": [
+    "diag_pre_multiply", "multiply_lower_tri_self_transpose", "to_vector"
+  ],
+  "distributions": [
+    "exponential_lupdf", "lkj_corr_cholesky_lupdf", "normal_lupdf",
+    "std_normal_lupdf"
+  ],
+  "included_files": []
+}
