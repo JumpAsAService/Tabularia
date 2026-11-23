@@ -1,0 +1,847 @@
+{
+  "format_version": 1,
+  "stan": {
+    "version": "2.40.0",
+    "source": "https://mc-stan.org/docs/reference-manual/expressions.html",
+    "reserved_words": [
+      "for",
+      "in",
+      "while",
+      "repeat",
+      "until",
+      "if",
+      "then",
+      "else",
+      "true",
+      "false",
+      "target",
+      "struct",
+      "typedef",
+      "export",
+      "auto",
+      "extern",
+      "var",
+      "static",
+      "lower",
+      "upper",
+      "offset",
+      "multiplier"
+    ],
+    "type_names": [
+      "int",
+      "real",
+      "complex",
+      "vector",
+      "simplex",
+      "unit_vector",
+      "sum_to_zero_vector",
+      "sum_to_zero_matrix",
+      "ordered",
+      "positive_ordered",
+      "row_vector",
+      "matrix",
+      "cholesky_factor_corr",
+      "column_stochastic_matrix",
+      "row_stochastic_matrix",
+      "cholesky_factor_cov",
+      "corr_matrix",
+      "cov_matrix",
+      "array"
+    ],
+    "reserved_functions": [
+      "print",
+      "reject",
+      "profile",
+      "fatal_error",
+      "target",
+      "jacobian"
+    ],
+    "block_names": [
+      "functions",
+      "model",
+      "data",
+      "parameters",
+      "quantities",
+      "transformed",
+      "generated"
+    ],
+    "reserved_suffixes": [
+      "_lpdf",
+      "_lpmf",
+      "_lcdf",
+      "_lccdf",
+      "_cdf",
+      "_ccdf",
+      "_lupdf",
+      "_lupmf"
+    ],
+    "renamed_backend_words": [
+      "alignas",
+      "alignof",
+      "and",
+      "and_eq",
+      "asm",
+      "bitand",
+      "bitor",
+      "bool",
+      "case",
+      "catch",
+      "char",
+      "char16_t",
+      "char32_t",
+      "class",
+      "compl",
+      "const",
+      "constexpr",
+      "const_cast",
+      "decltype",
+      "default",
+      "delete",
+      "do",
+      "double",
+      "dynamic_cast",
+      "enum",
+      "explicit",
+      "float",
+      "friend",
+      "goto",
+      "inline",
+      "long",
+      "mutable",
+      "namespace",
+      "new",
+      "noexcept",
+      "not",
+      "not_eq",
+      "nullptr",
+      "operator",
+      "or",
+      "or_eq",
+      "private",
+      "protected",
+      "public",
+      "register",
+      "reinterpret_cast",
+      "short",
+      "signed",
+      "sizeof",
+      "static_assert",
+      "static_cast",
+      "switch",
+      "template",
+      "this",
+      "thread_local",
+      "throw",
+      "try",
+      "typeid",
+      "typename",
+      "union",
+      "unsigned",
+      "using",
+      "virtual",
+      "volatile",
+      "wchar_t",
+      "xor",
+      "xor_eq",
+      "fvar",
+      "STAN_MAJOR",
+      "STAN_MINOR",
+      "STAN_PATCH",
+      "STAN_MATH_MAJOR",
+      "STAN_MATH_MINOR",
+      "STAN_MATH_PATCH"
+    ]
+  },
+  "intervals": {
+    "real": {},
+    "positive": {
+      "lower": 0,
+      "lower_open": true
+    },
+    "unit": {
+      "lower": 0,
+      "lower_open": true,
+      "upper": 1,
+      "upper_open": true
+    },
+    "non_negative": {
+      "lower": 0
+    },
+    "above_minus_one": {
+      "lower": -1,
+      "lower_open": true
+    },
+    "negative": {
+      "upper": 0,
+      "upper_open": true
+    }
+  },
+  "distributions": [
+    {
+      "id": "normal",
+      "uses": [
+        "prior",
+        "likelihood"
+      ],
+      "params": [
+        {
+          "name": "mu",
+          "constraint": "real"
+        },
+        {
+          "name": "sigma",
+          "constraint": "positive"
+        }
+      ],
+      "support": "real",
+      "outcome": "real",
+      "stan": {
+        "statement": "normal",
+        "density": "normal_lpdf",
+        "rng": "normal_rng",
+        "lcdf": "normal_lcdf",
+        "lccdf": "normal_lccdf"
+      },
+      "location_scale": {
+        "location": "mu",
+        "scale": "sigma"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "student_t",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "nu",
+          "constraint": "positive"
+        },
+        {
+          "name": "mu",
+          "constraint": "real"
+        },
+        {
+          "name": "sigma",
+          "constraint": "positive"
+        }
+      ],
+      "support": "real",
+      "stan": {
+        "statement": "student_t",
+        "density": "student_t_lpdf",
+        "rng": "student_t_rng",
+        "lcdf": "student_t_lcdf",
+        "lccdf": "student_t_lccdf"
+      },
+      "location_scale": {
+        "location": "mu",
+        "scale": "sigma"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "cauchy",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "mu",
+          "constraint": "real"
+        },
+        {
+          "name": "sigma",
+          "constraint": "positive"
+        }
+      ],
+      "support": "real",
+      "stan": {
+        "statement": "cauchy",
+        "density": "cauchy_lpdf",
+        "rng": "cauchy_rng",
+        "lcdf": "cauchy_lcdf",
+        "lccdf": "cauchy_lccdf"
+      },
+      "location_scale": {
+        "location": "mu",
+        "scale": "sigma"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "exponential",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "beta",
+          "constraint": "positive"
+        }
+      ],
+      "support": "positive",
+      "stan": {
+        "statement": "exponential",
+        "density": "exponential_lpdf",
+        "rng": "exponential_rng",
+        "lcdf": "exponential_lcdf",
+        "lccdf": "exponential_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "gamma",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "positive"
+        },
+        {
+          "name": "beta",
+          "constraint": "positive"
+        }
+      ],
+      "support": "positive",
+      "stan": {
+        "statement": "gamma",
+        "density": "gamma_lpdf",
+        "rng": "gamma_rng",
+        "lcdf": "gamma_lcdf",
+        "lccdf": "gamma_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "inv_gamma",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "positive"
+        },
+        {
+          "name": "beta",
+          "constraint": "positive"
+        }
+      ],
+      "support": "positive",
+      "stan": {
+        "statement": "inv_gamma",
+        "density": "inv_gamma_lpdf",
+        "rng": "inv_gamma_rng",
+        "lcdf": "inv_gamma_lcdf",
+        "lccdf": "inv_gamma_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "lognormal",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "mu",
+          "constraint": "real"
+        },
+        {
+          "name": "sigma",
+          "constraint": "positive"
+        }
+      ],
+      "support": "positive",
+      "stan": {
+        "statement": "lognormal",
+        "density": "lognormal_lpdf",
+        "rng": "lognormal_rng",
+        "lcdf": "lognormal_lcdf",
+        "lccdf": "lognormal_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "beta",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "positive"
+        },
+        {
+          "name": "beta",
+          "constraint": "positive"
+        }
+      ],
+      "support": "unit",
+      "stan": {
+        "statement": "beta",
+        "density": "beta_lpdf",
+        "rng": "beta_rng",
+        "lcdf": "beta_lcdf",
+        "lccdf": "beta_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "uniform",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "real",
+          "constant": true
+        },
+        {
+          "name": "beta",
+          "constraint": "real",
+          "constant": true
+        }
+      ],
+      "support": "bounded",
+      "stan": {
+        "statement": "uniform",
+        "density": "uniform_lpdf",
+        "rng": "uniform_rng",
+        "lcdf": "uniform_lcdf",
+        "lccdf": "uniform_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "lkj_corr_cholesky",
+      "uses": [
+        "prior"
+      ],
+      "params": [
+        {
+          "name": "eta",
+          "constraint": "positive",
+          "constant": true
+        }
+      ],
+      "support": "cholesky_factor_corr",
+      "stan": {
+        "statement": "lkj_corr_cholesky",
+        "density": "lkj_corr_cholesky_lpdf",
+        "rng": "lkj_corr_cholesky_rng"
+      },
+      "browser": "marginal"
+    },
+    {
+      "id": "multi_normal_cholesky",
+      "uses": [
+        "internal"
+      ],
+      "params": [
+        {
+          "name": "mu",
+          "constraint": "vector"
+        },
+        {
+          "name": "L",
+          "constraint": "cholesky_factor_cov"
+        }
+      ],
+      "support": "vector",
+      "stan": {
+        "statement": "multi_normal_cholesky",
+        "density": "multi_normal_cholesky_lpdf",
+        "rng": "multi_normal_cholesky_rng"
+      },
+      "location_scale": {
+        "location": "mu",
+        "scale": "L"
+      },
+      "browser": "marginal"
+    },
+    {
+      "id": "std_normal",
+      "uses": [
+        "internal"
+      ],
+      "params": [],
+      "support": "real",
+      "stan": {
+        "statement": "std_normal",
+        "density": "std_normal_lpdf",
+        "rng": "std_normal_rng",
+        "lcdf": "std_normal_lcdf",
+        "lccdf": "std_normal_lccdf"
+      },
+      "browser": "exact"
+    },
+    {
+      "id": "bernoulli_logit",
+      "uses": [
+        "likelihood"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "real"
+        }
+      ],
+      "support": "binary",
+      "outcome": "binary",
+      "link": "logit",
+      "stan": {
+        "statement": "bernoulli_logit",
+        "density": "bernoulli_logit_lpmf",
+        "rng": "bernoulli_logit_rng"
+      },
+      "browser": "none"
+    },
+    {
+      "id": "binomial_logit",
+      "uses": [
+        "likelihood"
+      ],
+      "params": [
+        {
+          "name": "N",
+          "constraint": "non_negative_integer",
+          "data": true
+        },
+        {
+          "name": "alpha",
+          "constraint": "real"
+        }
+      ],
+      "support": "zero_to_n",
+      "outcome": "zero_to_n",
+      "link": "logit",
+      "stan": {
+        "statement": "binomial_logit",
+        "density": "binomial_logit_lpmf",
+        "rng": "binomial_rng",
+        "rng_inverse_link": "inv_logit"
+      },
+      "browser": "none"
+    },
+    {
+      "id": "poisson_log",
+      "uses": [
+        "likelihood"
+      ],
+      "params": [
+        {
+          "name": "alpha",
+          "constraint": "real"
+        }
+      ],
+      "support": "counts",
+      "outcome": "counts",
+      "link": "log",
+      "stan": {
+        "statement": "poisson_log",
+        "density": "poisson_log_lpmf",
+        "rng": "poisson_log_rng"
+      },
+      "browser": "none"
+    },
+    {
+      "id": "neg_binomial_2_log",
+      "uses": [
+        "likelihood"
+      ],
+      "params": [
+        {
+          "name": "eta",
+          "constraint": "real"
+        },
+        {
+          "name": "phi",
+          "constraint": "positive"
+        }
+      ],
+      "support": "counts",
+      "outcome": "counts",
+      "link": "log",
+      "stan": {
+        "statement": "neg_binomial_2_log",
+        "density": "neg_binomial_2_log_lpmf",
+        "rng": "neg_binomial_2_log_rng"
+      },
+      "browser": "none"
+    }
+  ],
+  "language": {
+    "functions": [
+      {
+        "name": "exp",
+        "stan": "exp",
+        "arguments": 1,
+        "domain": "real",
+        "range": "positive"
+      },
+      {
+        "name": "log",
+        "stan": "log",
+        "arguments": 1,
+        "domain": "positive",
+        "range": "real"
+      },
+      {
+        "name": "log1p",
+        "stan": "log1p",
+        "arguments": 1,
+        "domain": "above_minus_one",
+        "range": "real"
+      },
+      {
+        "name": "expm1",
+        "stan": "expm1",
+        "arguments": 1,
+        "domain": "real",
+        "range": "above_minus_one"
+      },
+      {
+        "name": "sqrt",
+        "stan": "sqrt",
+        "arguments": 1,
+        "domain": "non_negative",
+        "range": "non_negative"
+      },
+      {
+        "name": "square",
+        "stan": "square",
+        "arguments": 1,
+        "domain": "real",
+        "range": "non_negative"
+      },
+      {
+        "name": "inv_logit",
+        "stan": "inv_logit",
+        "arguments": 1,
+        "domain": "real",
+        "range": "unit"
+      },
+      {
+        "name": "logit",
+        "stan": "logit",
+        "arguments": 1,
+        "domain": "unit",
+        "range": "real"
+      },
+      {
+        "name": "log1p_exp",
+        "stan": "log1p_exp",
+        "arguments": 1,
+        "domain": "real",
+        "range": "positive"
+      },
+      {
+        "name": "log_inv_logit",
+        "stan": "log_inv_logit",
+        "arguments": 1,
+        "domain": "real",
+        "range": "negative"
+      },
+      {
+        "name": "lag",
+        "arguments": 2,
+        "apart": true
+      }
+    ],
+    "operators": [
+      {
+        "symbol": "+",
+        "kind": "binary",
+        "stan": "+",
+        "elementwise": "+",
+        "precedence": 5,
+        "assoc": "left"
+      },
+      {
+        "symbol": "-",
+        "kind": "binary",
+        "stan": "-",
+        "elementwise": "-",
+        "precedence": 5,
+        "assoc": "left"
+      },
+      {
+        "symbol": "*",
+        "kind": "binary",
+        "stan": "*",
+        "elementwise": ".*",
+        "precedence": 4,
+        "assoc": "left"
+      },
+      {
+        "symbol": "/",
+        "kind": "binary",
+        "stan": "/",
+        "elementwise": "./",
+        "precedence": 4,
+        "assoc": "left"
+      },
+      {
+        "symbol": "-",
+        "kind": "unary",
+        "stan": "-",
+        "elementwise": "-",
+        "precedence": 2,
+        "assoc": "right"
+      },
+      {
+        "symbol": "^",
+        "kind": "binary",
+        "stan": "^",
+        "elementwise": ".^",
+        "precedence": 1,
+        "assoc": "right"
+      }
+    ],
+    "hints": [
+      {
+        "token": "**",
+        "message": "bayes.expr.hint.double_star"
+      },
+      {
+        "token": "%",
+        "message": "bayes.expr.hint.percent"
+      },
+      {
+        "token": "==",
+        "message": "bayes.expr.hint.double_equals"
+      },
+      {
+        "token": ";",
+        "message": "bayes.expr.hint.semicolon"
+      },
+      {
+        "token": "~",
+        "message": "bayes.expr.hint.tilde"
+      },
+      {
+        "token": ".*",
+        "message": "bayes.expr.hint.dot_star"
+      }
+    ],
+    "confusables": [
+      {
+        "codepoint": "U+2212",
+        "char": "−",
+        "ascii": "-"
+      },
+      {
+        "codepoint": "U+2013",
+        "char": "–",
+        "ascii": "-"
+      },
+      {
+        "codepoint": "U+2014",
+        "char": "—",
+        "ascii": "-"
+      },
+      {
+        "codepoint": "U+00D7",
+        "char": "×",
+        "ascii": "*"
+      },
+      {
+        "codepoint": "U+00F7",
+        "char": "÷",
+        "ascii": "/"
+      },
+      {
+        "codepoint": "U+2215",
+        "char": "∕",
+        "ascii": "/"
+      },
+      {
+        "codepoint": "U+00A0",
+        "char": " ",
+        "ascii": " "
+      },
+      {
+        "codepoint": "U+FF08",
+        "char": "（",
+        "ascii": "("
+      },
+      {
+        "codepoint": "U+FF09",
+        "char": "）",
+        "ascii": ")"
+      },
+      {
+        "codepoint": "U+FF0B",
+        "char": "＋",
+        "ascii": "+"
+      },
+      {
+        "codepoint": "U+FF0C",
+        "char": "，",
+        "ascii": ","
+      },
+      {
+        "codepoint": "U+0430",
+        "char": "а",
+        "ascii": "a"
+      },
+      {
+        "codepoint": "U+0435",
+        "char": "е",
+        "ascii": "e"
+      },
+      {
+        "codepoint": "U+043E",
+        "char": "о",
+        "ascii": "o"
+      },
+      {
+        "codepoint": "U+0440",
+        "char": "р",
+        "ascii": "p"
+      },
+      {
+        "codepoint": "U+0441",
+        "char": "с",
+        "ascii": "c"
+      },
+      {
+        "codepoint": "U+0445",
+        "char": "х",
+        "ascii": "x"
+      }
+    ]
+  },
+  "internal_functions": [
+    "to_vector",
+    "rep_vector",
+    "append_row",
+    "diag_pre_multiply",
+    "multiply_lower_tri_self_transpose",
+    "inv_logit",
+    "std_normal"
+  ],
+  "limits": {
+    "max_name_bytes": 40,
+    "max_label_chars": 200,
+    "max_note_chars": 2000,
+    "max_expression_bytes": 1000,
+    "max_expression_nesting": 32,
+    "max_expression_nodes": 256,
+    "max_number_chars": 32,
+    "max_abs_literal": 1000000000000000,
+    "max_lag": 60,
+    "max_nodes": 200,
+    "max_plates": 8,
+    "max_plate_depth": 4,
+    "max_effect_components": 10,
+    "max_total_expression_nodes": 4096,
+    "max_graph_bytes": 262144
+  }
+}
