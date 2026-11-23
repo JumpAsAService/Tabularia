@@ -21,6 +21,7 @@ export function bayesCompileCell (c: BayesCompile | null | undefined): { key: st
     case 'running': return { key: 'bayesModels.compile_running', sub: c.at ? 'at' : '', tone: 'run' }
     case 'queued': return { key: 'bayesModels.compile_queued', sub: c.at ? 'at' : '', tone: 'run' }
     case 'failed': return { key: 'bayesModels.compile_failed', sub: c.detail ? 'detail' : '', tone: 'ko' }
+    case 'timeout': return { key: 'bayesModels.compile_timeout', sub: c.detail ? 'detail' : '', tone: 'ko' }
     default: return { key: 'bayesModels.list.toCompile', sub: 'firstRun', tone: 'none' }
   }
 }

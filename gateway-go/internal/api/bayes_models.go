@@ -66,7 +66,8 @@ func init() {
 	})
 }
 
-// bayesCompiler is what stan-compile gives the store; until it is built, one that enqueues nothing.
+// bayesCompiler is what stan-compile gives the store (Deps.BayesCompiler, set at start-up where the
+// statistical models can run: BayesCompiler); elsewhere one that enqueues nothing.
 func (d *Deps) bayesCompiler() bayesmodels.Compiler {
 	if d.BayesCompiler != nil {
 		return d.BayesCompiler
@@ -839,7 +840,10 @@ func restoreBayesModelVersion(d *Deps, w http.ResponseWriter, r *http.Request, p
 }
 
 // compileBayesModelVersion is POST /bayes-models/{model_id}/versions/{version}/compile: asks
-// stan-compile for that version's program now (RUN); 409 while one is queued or running.
+// stan-compile for that version's program now (RUN, «Compile now»: a program the compiler refused is
+// queued again); 409 while one is queued or running, and 409 with the state's sentence when the
+// program is not compiled again (it passed a limit not raised since, or its binary is larger than the
+// cache's limit: stan-compile, the owner's rule).
 func compileBayesModelVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	ids, ok := pathInts(w, r, "model_id", "version")
 	if !ok {
@@ -871,12 +875,17 @@ func compileBayesModelVersion(d *Deps, w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	if err := compiler.Enqueue(ctx, bayesmodels.CompileRequest{ModelID: m.ID, Version: v.Version,
-		ProgramSHA256: v.ProgramSHA256, By: p.User.ID}); err != nil {
+		ProgramSHA256: v.ProgramSHA256, By: p.User.ID, Again: true}); err != nil {
 		fail(d, w, "bayes models: asking for the compile", err)
 		return
 	}
 	if state, err = compiler.State(ctx, v.ProgramSHA256); err != nil {
 		fail(d, w, "bayes models: the compile state", err)
+		return
+	}
+	// «Compile now» queues every failure again but these two, until an administrator raises the limit
+	if state.State == bayesmodels.CompileTimeout || state.State == bayesmodels.CompileFailed {
+		detail(w, http.StatusConflict, state.Detail)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "bayes_model.compile", TargetType: scPtrStr("bayes_model"),

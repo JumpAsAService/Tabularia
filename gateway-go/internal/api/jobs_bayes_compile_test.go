@@ -36,8 +36,8 @@ func sha(b []byte) string {
 	return hex.EncodeToString(s[:])
 }
 
-// fakeCompileEngine is the engine's part the loop calls: compile.json read from the scripts bucket, the binary kept,
-// deleted, the step's files deleted.
+// fakeCompileEngine is the engine's part the loop and the Compiler call: compile.json read from the scripts bucket, the
+// binary kept, placed for a run, deleted, the step's files deleted.
 type fakeCompileEngine struct {
 	mu      sync.Mutex
 	bucket  map[string][]byte // the scripts bucket
@@ -91,6 +91,17 @@ func (e *fakeCompileEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(200, map[string]any{"bytes": len(b), "existed": existed})
+	case "/scripts/binary/place":
+		b, ok := e.storage["bayes-binaries/"+body["sha256"].(string)]
+		switch {
+		case !ok:
+			reply(404, map[string]any{"detail": "The binary is not in Tabularia's storage", "missing": true})
+		case sha(b) != body["sha256"]:
+			reply(409, map[string]any{"detail": "The stored binary is not the one recorded", "altered": true})
+		default:
+			e.bucket[body["target_key"].(string)] = b
+			reply(200, map[string]any{"bytes": len(b)})
+		}
 	case "/scripts/binary/delete":
 		for _, s := range body["sha256s"].([]any) {
 			e.evicted = append(e.evicted, s.(string))

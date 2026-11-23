@@ -8556,6 +8556,7 @@ export default {
     "compile_running": "Compilando",
     "compile_ready": "Compilado",
     "compile_failed": "Compilación fallida",
+    "compile_timeout": "Demasiado largo para compilar",
     "list": {
       "intro": "Un modelo bayesiano describe cómo podrían haber nacido tus datos: las cantidades que no conoces, qué piensas de ellas antes de mirarlas y cómo producen lo que observas. Lo dibujas aquí; un flujo lo estima con los datos y devuelve, para cada cantidad, los valores compatibles con los datos.",
       "unavailableTitle": "Los modelos bayesianos no están disponibles para ti",

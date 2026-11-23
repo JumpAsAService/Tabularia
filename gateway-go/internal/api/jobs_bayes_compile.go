@@ -290,7 +290,9 @@ func bcSelect(ctx context.Context, q pgx.Tx, sql string, args ...any) ([]bayesco
 }
 
 // bcSettings is the row of bayes_settings (id 1) as the rules read it; none is every default.
-func bcSettings(ctx context.Context, q pgx.Tx) (bayescompile.Settings, error) {
+func bcSettings(ctx context.Context, q interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}) (bayescompile.Settings, error) {
 	var s bayescompile.Settings
 	var slots *int64
 	err := q.QueryRow(ctx, `SELECT compile_cpu, compile_memory, compile_seconds, compile_tmp, compile_slots, cache_max_bytes
@@ -661,13 +663,18 @@ func (r *bcRound) engineKeep(ctx context.Context, key, sha string) (int64, strin
 // engineDelete removes binaries from Tabularia's storage; a *bcWait when the engine did not remove them all (the rows
 // that held them stay, and the next round asks again).
 func (r *bcRound) engineDelete(ctx context.Context, sha256s []string) error {
+	return bcDeleteBinaries(ctx, r.c.d, sha256s)
+}
+
+// bcDeleteBinaries is the engine's /scripts/binary/delete: the binaries removed from Tabularia's storage, or a *bcWait.
+func bcDeleteBinaries(ctx context.Context, d *Deps, sha256s []string) error {
 	if len(sha256s) == 0 {
 		return nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	res, raw, err := r.c.d.Engine.JSON(cctx, http.MethodPost, "/scripts/binary/delete", pyjson.Object{
-		{Key: "bucket", Value: r.c.d.Config.EngineBucket}, {Key: "sha256s", Value: stringsAny(sha256s)}})
+	res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/scripts/binary/delete", pyjson.Object{
+		{Key: "bucket", Value: d.Config.EngineBucket}, {Key: "sha256s", Value: stringsAny(sha256s)}})
 	if err != nil {
 		return &bcWait{"the engine did not delete the binaries: " + err.Error()}
 	}

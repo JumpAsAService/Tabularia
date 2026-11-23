@@ -33,8 +33,9 @@ type Deps struct {
 	SQL       *aisvc.Client
 	// Lineage sends the OpenLineage events (services/openlineage.py); nil or off: nothing
 	Lineage *openlineage.Emitter
-	// BayesCompiler is what stan-compile gives the saved Bayesian models (bayesmodels.Compiler);
-	// nil: one that enqueues nothing and answers «none» (bayesmodels.NoCompiler)
+	// BayesCompiler is what stan-compile gives the saved Bayesian models (bayesmodels.Compiler),
+	// set at start-up by BayesCompiler(deps); nil: one that enqueues nothing and answers «none»
+	// (bayesmodels.NoCompiler)
 	BayesCompiler bayesmodels.Compiler
 }
 

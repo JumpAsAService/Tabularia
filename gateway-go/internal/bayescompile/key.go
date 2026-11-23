@@ -3,8 +3,8 @@
 // compile per person, «Compiles at once», a program that passed a limit not compiled again under it, «Compile now»,
 // three attempts for the cluster's failures), the cache's eviction order under its limit, and the compile Job's
 // termination message. Nothing here reads the cluster, and the rules never read the database: the loop (lot C2) and
-// the Compiler (lot C3) lock the rows and apply what these functions decide, reading and writing bayes_binaries through
-// rows.go (Scan, Insert, Write, Delete) alone.
+// the Compiler (lot C3, compiler.go) lock the rows and apply what these functions decide, writing bayes_binaries through
+// rows.go (Scan, Insert, Write, Delete).
 package bayescompile
 
 import (

@@ -8556,6 +8556,7 @@ export default {
     "compile_running": "Wird kompiliert",
     "compile_ready": "Kompiliert",
     "compile_failed": "Kompilierung fehlgeschlagen",
+    "compile_timeout": "Zu lang zum Kompilieren",
     "list": {
       "intro": "Ein Bayes-Modell beschreibt, wie Ihre Daten entstanden sein könnten: die Größen, die Sie nicht kennen, was Sie von ihnen halten, bevor Sie hinsehen, und wie sie erzeugen, was Sie beobachten. Sie zeichnen es hier; ein Flow schätzt es auf den Daten und liefert für jede Größe die Werte, die mit den Daten vereinbar sind.",
       "unavailableTitle": "Die Bayes-Modelle stehen Ihnen nicht zur Verfügung",

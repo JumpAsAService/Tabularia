@@ -7,13 +7,14 @@
 /** What the graph is, derived by the gateway at every save, never chosen by the person. */
 export type BayesFamily = 'hierarchical' | 'series' | 'glm' | 'free'
 
-/** The compile of a program: `none` is «compiled the first time it runs». There is no
- * «with errors» state: a model with errors is never stored. */
-export type BayesCompileState = 'none' | 'queued' | 'running' | 'ready' | 'failed'
+/** The compile of a program: `none` is «compiled the first time it runs»; `timeout` is a program
+ * that passed the compile's deadline or memory, not compiled again until an administrator raises
+ * that limit. There is no «with errors» state: a model with errors is never stored. */
+export type BayesCompileState = 'none' | 'queued' | 'running' | 'ready' | 'failed' | 'timeout'
 
 export interface BayesCompile {
   state: BayesCompileState
-  /** a sentence for the page: why it failed, in the compiler's words */
+  /** a sentence for the page: why it waits, when it compiled, why it failed or passed a limit */
   detail: string
   at: string | null
 }
@@ -179,7 +180,8 @@ export function useBayesModels() {
     version: (id: number, version: number) => apiFetch<BayesModelVersion>(`/bayes-models/${id}/versions/${version}`),
     restore: (id: number, version: number) =>
       apiFetch<BayesModelDetail>(`/bayes-models/${id}/versions/${version}/restore`, { method: 'POST' }),
-    /** compiles that version's program now (RUN); 409 while it is queued or running */
+    /** compiles that version's program now (RUN); 409 while it is queued or running, and 409 with
+     * the state's sentence while it is not compiled again (a limit passed and not raised since) */
     compile: (id: number, version: number) =>
       apiFetch<BayesCompile>(`/bayes-models/${id}/versions/${version}/compile`, { method: 'POST' }),
     uses: (id: number) => apiFetch<BayesUses>(`/bayes-models/${id}/uses`),

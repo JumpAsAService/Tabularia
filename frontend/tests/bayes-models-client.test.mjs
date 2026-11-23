@@ -35,10 +35,10 @@ test('the family is read as the gateway derives it; anything else is free-form',
   for (const f of ['', null, undefined, 'weird']) assert.equal(B.bayesFamilyKey(f), 'bayesModels.family_free')
 })
 
-test('every language names the families, the four compile states, the kind and the audit actions', () => {
+test('every language names the families, the compile states, the kind and the audit actions', () => {
   const keys = [
     ['bayesModels', ['family_glm', 'family_hierarchical', 'family_series', 'family_free',
-      'compile_none', 'compile_queued', 'compile_running', 'compile_ready', 'compile_failed']],
+      'compile_none', 'compile_queued', 'compile_running', 'compile_ready', 'compile_failed', 'compile_timeout']],
     ['projectBrowser', ['kind_bayes', 'confirmDeleteBayesModel', 'bayesModelDeleted']],
     ['globalSearch', ['kind_bayes_model']],
     ['audit', ['bayesModelCreateAction', 'bayesModelUpdateAction', 'bayesModelRestoreAction', 'bayesModelDeleteAction', 'bayesModelCompileAction']],
@@ -53,8 +53,8 @@ test('every language names the families, the four compile states, the kind and t
   }
   // a compile state or a family differs from the others in every language
   for (const [lang, cat] of Object.entries(langs)) {
-    const states = ['none', 'queued', 'running', 'ready', 'failed'].map((s) => cat.bayesModels[`compile_${s}`])
-    assert.equal(new Set(states).size, 5, `${lang}: the compile states read apart`)
+    const states = ['none', 'queued', 'running', 'ready', 'failed', 'timeout'].map((s) => cat.bayesModels[`compile_${s}`])
+    assert.equal(new Set(states).size, 6, `${lang}: the compile states read apart`)
   }
 })
 
@@ -71,4 +71,10 @@ test('Explore lists the models of a folder through the client, one request for t
   assert.match(page, /kind: 'bayes', id: b\.id/)
   const client = readFileSync(new URL('../composables/useBayesModels.ts', import.meta.url), 'utf8')
   assert.match(client, /`\/projects\/\$\{projectId\}\/bayes-models`/)
+})
+
+test('the client knows the state timeout and the 409 of «Compile now»', () => {
+  const client = readFileSync(new URL('../composables/useBayesModels.ts', import.meta.url), 'utf8')
+  assert.match(client, /export type BayesCompileState = 'none' \| 'queued' \| 'running' \| 'ready' \| 'failed' \| 'timeout'/)
+  assert.match(client, /409 with\s+\* the state's sentence/)
 })

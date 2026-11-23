@@ -614,3 +614,36 @@ section holds.
   `/dev/termination-log`) is 254 bytes, `ParseMessage` reads it, its `info_sha256` is compile.json's, and
   `CrossCheck` finds no mismatch with the stored manifests. The message read through Kubernetes with a read-only root
   stays lot C5's (and K3's) to check on kind.
+
+## As built — lot C3 (2026-11-24)
+
+- **The compiler**: `gateway-go/internal/bayescompile/compiler.go`, `Compiler` (`bayesmodels.Compiler`,
+  `BatchCompiler` and `Binaries`) over `bayes_binaries`, given the group's current image and the limits in force by a
+  function (`Current`: nil while the group cannot run a Job, and then every state is `none` and a request queues
+  nothing) and the binaries' bytes by the engine (`Storage`). The gateway builds it in
+  `gateway-go/internal/api/bayes_compiler.go` (`BayesCompiler(deps)`, reading the image with `ReadyModelGroupImage` and
+  the limits with `bayes_settings` and `Resolve`, as a round of the loop does) and sets `Deps.BayesCompiler` at
+  start-up where the statistical models can run (`modelsOff` empty and the group shipped); elsewhere `NoCompiler` stays.
+- **`Enqueue`** is one transaction: two advisory locks of the two-key space (which never meets `LoopLock`'s), first the
+  person's model and then the key, so that two requests of one key insert its row once (the unique constraint is never
+  the answer) and a newer version always sees the older one's queued row; then one `SELECT … FOR UPDATE` in id order of
+  the key's row and the overtaking's candidates, `PlanEnqueue`, `Insert` or `Write`, and the overtaken rows deleted
+  whatever the key's row is.
+- **`afterCommit`** asks `Enqueue` after every save and reads no state (the correction from C1); `Saved.Enqueued` says
+  that `Enqueue` answered.
+- **The states**: `States` is one `SELECT … WHERE cache_key = ANY($1)` that also says whether each row's person has
+  another compile running (the queued sentence); `State` is `States` of one program. A sha256 not of its form is `none`.
+- **«Compile now»** (`POST …/versions/{v}/compile`): 409 while queued or running (as before); otherwise `Enqueue` with
+  `Again`, then the state: `timeout`, or `failed` (after `Again` only a binary larger than the cache stays failed),
+  answers 409 with the state's sentence and is not audited. A raised deadline, memory or cache makes the same request
+  queue it (202).
+- **A run** (`Binaries`, for `flow-node`): `Ready`; `Need` (the run's fallback: the binary when ready, `ErrRefused` with
+  the state when `Refused`, otherwise `Enqueue` with the run's authority, never `Again`, and the state to wait on);
+  `Place(b, key)`, the key only of the form `env-<…>/<step>/model`, the row `FOR SHARE` during the engine's copy and
+  the use recorded after it in a short transaction of its own (`FOR UPDATE SKIP LOCKED`: two runs of one binary never
+  wait on each other). A 409 `altered` or 404 `missing` of the engine is `ErrAltered`: under `LoopLock` the row is
+  deleted and the object too when no other ready row holds its bytes, and the run's next `Need` queues it again;
+  `ErrGone` is a row evicted between `Ready` and `Place`.
+- **The client**: `BayesCompileState` gains `'timeout'`; the list's cell (`bayesCompileCell`) shows «too long to compile»
+  (`bayesModels.compile_timeout`, five languages) in danger with the gateway's sentence; Explore's row names it as the
+  other states. The editor's header shows no compile state today, so nothing changed there.

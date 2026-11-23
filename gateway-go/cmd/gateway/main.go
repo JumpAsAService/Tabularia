@@ -82,6 +82,8 @@ func run(log *slog.Logger) error {
 	// the loops need the AI service too (a SQL script on the catalog): every role has it
 	deps := &api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
 		AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)}
+	// stan-compile: the saved Bayesian models' compiles, where the statistical models can run
+	deps.BayesCompiler = api.BayesCompiler(deps)
 	// services/openlineage.py: its queue, emptied at the stop (main.py's lifespan, wait_idle 5 s)
 	deps.Lineage = openlineage.New(openlineage.FromEnv(), pool, deps.SQL, panel.OpenLineageTimeout, log)
 	log.Info(deps.Lineage.Describe())

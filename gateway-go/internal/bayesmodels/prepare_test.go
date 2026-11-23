@@ -363,13 +363,9 @@ func TestAfterCommit(t *testing.T) {
 	var logged bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&logged, nil))
 	r := CompileRequest{ModelID: 1, Version: 2, ProgramSHA256: "abc", By: 5}
-	for _, s := range []string{CompileReady, CompileQueued, CompileRunning} {
-		f := &fakeCompiler{state: CompileState{State: s}}
-		if afterCommit(ctx, f, log, r) || len(f.enqueued) != 0 {
-			t.Errorf("%s: asked again", s)
-		}
-	}
-	for _, s := range []string{CompileNone, CompileFailed} {
+	// every state asks Enqueue: it queues nothing for a program ready, on its way or past a limit, but a
+	// newer save always takes the older queued version out (stan-compile, correction of 2026-11-24 from C1)
+	for _, s := range []string{CompileReady, CompileQueued, CompileRunning, CompileTimeout, CompileNone, CompileFailed} {
 		f := &fakeCompiler{state: CompileState{State: s}}
 		if !afterCommit(ctx, f, log, r) || len(f.enqueued) != 1 || f.enqueued[0] != r {
 			t.Errorf("%s: not asked: %+v", s, f.enqueued)

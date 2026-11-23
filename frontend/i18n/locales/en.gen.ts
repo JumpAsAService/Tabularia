@@ -8556,6 +8556,7 @@ export default {
     "compile_running": "Compiling",
     "compile_ready": "Compiled",
     "compile_failed": "Compile failed",
+    "compile_timeout": "Too long to compile",
     "list": {
       "intro": "A Bayesian model describes how your data could have come about: the quantities you do not know, what you think of them before looking, and how they produce what you observe. You draw it here; a flow fits it to the data and gives back, for each quantity, the values compatible with the data.",
       "unavailableTitle": "The Bayesian models are not available to you",

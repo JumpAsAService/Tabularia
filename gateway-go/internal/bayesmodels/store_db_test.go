@@ -173,10 +173,13 @@ func TestStoreOnADatabase(t *testing.T) {
 		t.Fatalf("an unchanged save: %+v %v", s, err)
 	}
 
-	// a box moved: version 2, the same program; its binary is ready, so nothing is asked
+	// a box moved: version 2, the same program; its binary is ready, and Enqueue is asked all the same (it
+	// queues nothing then, but takes the person's older queued version out: stan-compile, the owner's
+	// correction of 2026-11-24 from C1)
 	f.compiler.state = CompileState{State: CompileReady}
 	s, err = f.store.Save(ctx, m.ID, 1, moved(t, g, 25), f.editor.ID, nil)
-	if err != nil || !s.Written || s.Version != 2 || s.Note != NoteLayout || s.SemanticChanged || s.Enqueued {
+	if err != nil || !s.Written || s.Version != 2 || s.Note != NoteLayout || s.SemanticChanged || !s.Enqueued ||
+		len(f.compiler.enqueued) != 2 || f.compiler.enqueued[1].Version != 2 {
 		t.Fatalf("a layout-only save: %+v %v", s, err)
 	}
 	v2 := f.version(m, 2)
@@ -190,14 +193,14 @@ func TestStoreOnADatabase(t *testing.T) {
 	_, err = f.store.Save(ctx, m.ID, 1, edited, f.editor.ID, nil)
 	var stale *Stale
 	if !errors.As(err, &stale) || stale.Current != 2 || stale.Error() != "version 2 was saved by someone else meanwhile: reload to see it" ||
-		f.count(m.ID) != 2 || len(f.compiler.enqueued) != 1 {
+		f.count(m.ID) != 2 || len(f.compiler.enqueued) != 2 {
 		t.Fatalf("a stale save: %v", err)
 	}
 
 	// a graph with an error: refused with its findings, nothing stored, nothing asked
 	_, err = f.store.Save(ctx, m.ID, 2, errorGraph(t), f.editor.ID, nil)
 	var refused *Refused
-	if !errors.As(err, &refused) || len(refused.Findings) == 0 || f.count(m.ID) != 2 || len(f.compiler.enqueued) != 1 {
+	if !errors.As(err, &refused) || len(refused.Findings) == 0 || f.count(m.ID) != 2 || len(f.compiler.enqueued) != 2 {
 		t.Fatalf("a graph with an error: %v", err)
 	}
 

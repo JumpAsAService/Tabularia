@@ -9,8 +9,8 @@ import (
 )
 
 // The table bayes_binaries as the loop (lot C2) and the Compiler (lot C3) read and write it: a Row is one row, a NULL
-// column its zero value. These are the only functions of the package that touch the database; the rules above decide,
-// the callers lock (the loop's advisory lock LoopLock, the rows FOR UPDATE) and call these.
+// column its zero value. These and the Compiler (compiler.go) are the only parts of the package that touch the
+// database; the rules decide, the callers lock (the loop's advisory lock LoopLock, the rows FOR UPDATE) and call these.
 
 // Columns are bayes_binaries' columns in the order Scan reads them.
 const Columns = `id, cache_key, program_sha256, cmdstan, image_digest, arch, group_version, state, reason, detail,

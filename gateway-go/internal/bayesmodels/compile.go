@@ -55,21 +55,13 @@ func (NoCompiler) State(context.Context, string) (CompileState, error) {
 	return CompileState{State: CompileNone}, nil
 }
 
-// afterCommit asks for the compile of a version just committed, unless its program has a binary
-// already or one is on its way (the cache answers: a layout-only save, a restore, a duplicate). An
-// error is logged and never fails the save: the run compiles when nothing else did.
+// afterCommit asks for the compile of a version just committed, whatever its program's state: Enqueue does nothing
+// for a program that is ready or on its way, or that passed a limit not raised since, but it always takes the person's
+// older queued version of the model out of the queue (the owner's correction of 2026-11-24 from C1, stan-compile). An
+// error is logged and never fails the save: the run compiles when nothing else did. It says whether Enqueue answered.
 func afterCommit(ctx context.Context, c Compiler, log *slog.Logger, r CompileRequest) bool {
 	if c == nil {
 		return false
-	}
-	s, err := c.State(ctx, r.ProgramSHA256)
-	if err != nil {
-		logError(log, "bayes models: the compile state", err, r)
-	} else {
-		switch s.State {
-		case CompileReady, CompileQueued, CompileRunning:
-			return false
-		}
 	}
 	if err := c.Enqueue(ctx, r); err != nil {
 		logError(log, "bayes models: asking for the compile", err, r)

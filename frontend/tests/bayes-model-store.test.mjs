@@ -203,6 +203,10 @@ test('the list: the filter reads name, description, folder and template; the com
   assert.deepEqual(L.bayesCompileCell({ state: 'ready', detail: '', at: null }), { key: 'bayesModels.compile_ready', sub: '', tone: 'ok' })
   assert.deepEqual(L.bayesCompileCell({ state: 'running', detail: '', at: '2026-11-24T15:02:00Z' }), { key: 'bayesModels.compile_running', sub: 'at', tone: 'run' })
   assert.deepEqual(L.bayesCompileCell({ state: 'failed', detail: 'timeout', at: null }), { key: 'bayesModels.compile_failed', sub: 'detail', tone: 'ko' })
+  // a program that passed the compile's limit: «too long to compile», in danger, with the gateway's sentence
+  assert.deepEqual(L.bayesCompileCell({ state: 'timeout', detail: 'The program did not compile within the limit of 300 s (24 Nov)…', at: '2026-11-24T15:02:00Z' }),
+    { key: 'bayesModels.compile_timeout', sub: 'detail', tone: 'ko' })
+  assert.deepEqual(L.bayesCompileCell({ state: 'timeout', detail: '', at: null }), { key: 'bayesModels.compile_timeout', sub: '', tone: 'ko' })
   assert.deepEqual(L.bayesCompileCell({ state: 'none', detail: '', at: null }), { key: 'bayesModels.list.toCompile', sub: 'firstRun', tone: 'none' })
   assert.deepEqual(L.bayesCompileCell(undefined).tone, 'none')
 })

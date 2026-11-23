@@ -8556,6 +8556,7 @@ export default {
     "compile_running": "Compilation en cours",
     "compile_ready": "Compilé",
     "compile_failed": "Compilation échouée",
+    "compile_timeout": "Trop long à compiler",
     "list": {
       "intro": "Un modèle bayésien décrit comment vos données ont pu naître : les quantités que vous ne connaissez pas, ce que vous en pensez avant de les regarder et comment elles produisent ce que vous observez. Vous le dessinez ici ; un flux l’estime sur les données et rend, pour chaque quantité, les valeurs compatibles avec les données.",
       "unavailableTitle": "Les modèles bayésiens ne vous sont pas accessibles",
