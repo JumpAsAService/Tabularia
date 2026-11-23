@@ -227,6 +227,56 @@ func TestCheckThreats(t *testing.T) {
 	}
 }
 
+// TestCheckRefusesMalformedTrees: a tree Parse cannot make is ErrInvalidTree, never a panic
+// (E4, finding 7).
+func TestCheckRefusesMalformedTrees(t *testing.T) {
+	env := newTestEnv(t, readEnvs(t)["schools"], "rows")
+	name := func() *Node { return &Node{Kind: KindName, Name: "mu"} }
+	cycle := &Node{Kind: KindNeg}
+	cycle.Args = []*Node{cycle}
+	deep := name()
+	for i := 0; i < 100000; i++ {
+		deep = &Node{Kind: KindNeg, Args: []*Node{deep}}
+	}
+	cases := map[string]*Node{
+		"nil":                   nil,
+		"neg without operand":   {Kind: KindNeg},
+		"neg with two":          {Kind: KindNeg, Args: []*Node{name(), name()}},
+		"binary with one":       {Kind: KindBinary, Op: "+", Args: []*Node{name()}},
+		"binary without op":     {Kind: KindBinary, Args: []*Node{name(), name()}},
+		"binary of another op":  {Kind: KindBinary, Op: ".*", Args: []*Node{name(), name()}},
+		"name with operands":    {Kind: KindName, Name: "mu", Args: []*Node{name()}},
+		"number with operands":  {Kind: KindNum, Num: 1, Args: []*Node{name()}},
+		"lag with operands":     {Kind: KindLag, Name: "mu", K: 1, Args: []*Node{name()}},
+		"index with operands":   {Kind: KindIndex, Name: "mu", By: "school", Args: []*Node{name()}},
+		"no kind":               {},
+		"unknown kind":          {Kind: 200},
+		"call with a nil":       {Kind: KindCall, Name: "exp", Args: []*Node{nil}},
+		"nested nil":            {Kind: KindBinary, Op: "+", Args: []*Node{name(), {Kind: KindNeg, Args: []*Node{nil}}}},
+		"cycle":                 cycle,
+		"deeper than any parse": deep,
+	}
+	for what, n := range cases {
+		c, err := Check(n, env)
+		if !errors.Is(err, ErrInvalidTree) || c != nil {
+			t.Errorf("%s: Check = %v, %v; want ErrInvalidTree", what, c, err)
+		}
+		var e *Error
+		if errors.As(err, &e) {
+			t.Errorf("%s: an *Error (a person's) for an internal one", what)
+		}
+	}
+	if _, err := Check(name(), nil); !errors.Is(err, ErrInvalidTree) {
+		t.Errorf("no environment: %v", err)
+	}
+	// A call of the wrong arity is a tree Parse makes: the checker's error, with its span.
+	_, err := Check(&Node{Kind: KindCall, Name: "exp", Args: []*Node{name(), name()}}, env)
+	var e *Error
+	if !errors.As(err, &e) || e.Code != CodeArity {
+		t.Errorf("exp(mu, mu): %v, want %s", err, CodeArity)
+	}
+}
+
 func check(t *testing.T, env Env, src string) *Checked {
 	t.Helper()
 	c, err := CheckText(src, env)

@@ -505,6 +505,13 @@ Stan's terms but not in C++'s: **reserved names** (finding 2: a valid model that
 boundary «a model too big to compile» (finding 1: the graph's limits allow, by a wide margin, programs that the
 default compile limits cannot build). Neither is an injection.
 
+### Corrections of 2026-11-24 (from E4)
+
+- **Finding 7**: `Check` first checks the tree's shape, without recursion: a nil node, a node of no kind, an operand
+  count that is not its kind's, an operator outside `+ - * / ^`, more than `max_expression_nodes` nodes (a cycle) is
+  `ErrInvalidTree` (wrapped), an internal error and not an `*Error`; the graph reports it as `graph.slot` with
+  `reason: unreadable`. A test builds each malformed tree (and one of 100,000 nested minus signs).
+
 ## Boundaries
 
 - **Always**: the gateway parses again whatever the browser sends; Stan text only from `Emit`; the limits

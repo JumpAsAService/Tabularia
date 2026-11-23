@@ -1,6 +1,8 @@
 package bayesexpr
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 
@@ -150,9 +152,60 @@ func CheckText(src string, env Env) (*Checked, error) {
 	return Check(n, env)
 }
 
+// ErrInvalidTree is Check's error for a tree Parse cannot make: a nil node, a node of no kind, an
+// operand count that is not its kind's, an operator outside + - * / ^, more nodes than
+// max_expression_nodes (a cycle among them). It is an internal error, never a person's: every
+// caller passes a tree Parse made (correction of 2026-11-24 from E4, finding 7).
+var ErrInvalidTree = errors.New("bayesexpr: a tree Parse cannot make")
+
+// validTree checks a tree's shape before the checker trusts it, without recursion (a hand-built
+// tree may be deeper than any parse, or hold a cycle): at most max_expression_nodes nodes, each
+// with the operands its kind has.
+func validTree(root *Node) error {
+	budget := catalogLimits.MaxExpressionNodes
+	stack := []*Node{root}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if n == nil {
+			return fmt.Errorf("%w: a nil node", ErrInvalidTree)
+		}
+		if budget--; budget < 0 {
+			return fmt.Errorf("%w: more nodes than max_expression_nodes", ErrInvalidTree)
+		}
+		want := 0
+		switch n.Kind {
+		case KindNum, KindName, KindIndex, KindLag:
+		case KindNeg:
+			want = 1
+		case KindBinary:
+			want = 2
+			if !slices.Contains([]string{"+", "-", "*", "/", "^"}, n.Op) {
+				return fmt.Errorf("%w: the operator %s", ErrInvalidTree, strconv.Quote(n.Op))
+			}
+		case KindCall:
+			want = len(n.Args) // the arity is the checker's error (expr.arity), with its span
+		default:
+			return fmt.Errorf("%w: a node of no kind (%d)", ErrInvalidTree, n.Kind)
+		}
+		if len(n.Args) != want {
+			return fmt.Errorf("%w: a node of kind %d with %d operands", ErrInvalidTree, n.Kind, len(n.Args))
+		}
+		stack = append(stack, n.Args...)
+	}
+	return nil
+}
+
 // Check types a tree against env. The error, when there is one, is an *Error: the first met
-// walking the tree left to right, a node's own errors before its operands'.
+// walking the tree left to right, a node's own errors before its operands'; or ErrInvalidTree
+// (wrapped) for a tree Parse cannot make.
 func Check(n *Node, env Env) (*Checked, error) {
+	if err := validTree(n); err != nil {
+		return nil, err
+	}
+	if env == nil {
+		return nil, fmt.Errorf("%w: no environment", ErrInvalidTree)
+	}
 	c := &checker{env: env, ctx: env.Context(), maxLag: int64(catalogLimits.MaxLag)}
 	t, err := c.check(n)
 	if err != nil {
