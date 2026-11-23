@@ -2,7 +2,8 @@
 # docs/specs/bayes-stan-codegen.md): its suite (golden programs, properties, the fuzzer's seeds), then
 # the stanc check — every golden program and every program the properties' generator writes parses
 # and type-checks with the pinned stanc 2.40.0, and its `stanc --info` matches the manifests and the
-# catalogue's allow-list (CrossCheck).
+# catalogue's allow-list (CrossCheck); so does every valid graph of the validator's corpora (bayesgraph's
+# corpus and the mirror's), without an extension and with predictive-checks' (bayeschecks).
 #
 # stanc is the asset `linux-stanc` of the stanc3 v2.40.0 release, downloaded by URL and checked
 # against the sha256 pinned here (the digest of the prebuilt bin/linux-stanc of the CmdStan 2.40.0
@@ -22,6 +23,8 @@ on:
       - "gateway-go/internal/bayesgraph/**"
       - "gateway-go/internal/bayesexpr/**"
       - "gateway-go/internal/bayescatalog/**"
+      - "gateway-go/internal/bayeschecks/**"
+      - "gateway-go/internal/bayescontract/**"
       - "gateway-go/go.mod"
       - "gateway-go/go.sum"
       - ".github/workflows/bayes-codegen.yml"
@@ -31,6 +34,8 @@ on:
       - "gateway-go/internal/bayesgraph/**"
       - "gateway-go/internal/bayesexpr/**"
       - "gateway-go/internal/bayescatalog/**"
+      - "gateway-go/internal/bayeschecks/**"
+      - "gateway-go/internal/bayescontract/**"
       - "gateway-go/go.mod"
       - "gateway-go/go.sum"
       - ".github/workflows/bayes-codegen.yml"
@@ -70,7 +75,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/go \
             -e BAYES_STANC=/stanc/linux-stanc -e BAYES_STANC_REQUIRED=1 \
             -v "$PWD/gateway-go":/src -v "$RUNNER_TEMP/stanc":/stanc:ro -w /src "$GO_IMAGE" \
-            sh -c 'test -z "$(gofmt -l internal/bayescodegen)" || { gofmt -l internal/bayescodegen; echo "gofmt: the files above"; exit 1; }
-                   go vet ./internal/bayescodegen/... &&
-                   go test -count=1 ./internal/bayescodegen/... ./internal/bayesgraph/... ./internal/bayesexpr/... ./internal/bayescatalog/... &&
-                   go test -count=1 -v -run "Stanc" ./internal/bayescodegen/'
+            sh -c 'test -z "$(gofmt -l internal/bayescodegen internal/bayeschecks)" || { gofmt -l internal/bayescodegen internal/bayeschecks; echo "gofmt: the files above"; exit 1; }
+                   go vet ./internal/bayescodegen/... ./internal/bayeschecks/... &&
+                   go test -count=1 ./internal/bayescodegen/... ./internal/bayeschecks/... ./internal/bayesgraph/... ./internal/bayesexpr/... ./internal/bayescatalog/... &&
+                   go test -count=1 -v -run "Stanc" ./internal/bayescodegen/ ./internal/bayeschecks/'

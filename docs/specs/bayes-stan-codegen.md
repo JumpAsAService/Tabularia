@@ -679,6 +679,16 @@ order the program writes them; **the statement holds the last part** (at most 64
 
 Every local is in the mapping table: `kind` `internal`, the node's id, `role` null, never written (no quantity).
 
+(Correction of 2026-11-23, a finding of lot P2 of predictive-checks) A non-centred state's init location or scale
+may read a value per row of the model block (a transformed node on the rows reading parameters or states; it reads
+no data, `graph.prior_data`): the transformed parameters read it before the model block declares it, and stanc
+refused the program. The nested block of the state's first values now rebuilds, before them, the per-row locals
+(and any category's `Full_`) its location and scale read, in `Order`, with the model block's identifiers, as the
+extension's block does (not in the mapping again, never written). No golden program changed (`CodegenVersion`
+stays 2); the golden `ts_state_init_per_row` pins it, the properties' generator writes such inits, and
+`TestCorpusStanc` runs stanc on every valid graph of the validator's corpora (bayesgraph's and the mirror's),
+without an extension and with predictive-checks'.
+
 **A linear predictor's sum** is split the same way: a term holds 3 nodes (the product, the coefficient, the data)
 and its addition 1, a single-value intercept 1; when the next term would pass 64, the sum so far becomes a local
 (15 terms a part).

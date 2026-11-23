@@ -94,11 +94,6 @@ func TestGoldenStanc(t *testing.T) {
 	}
 }
 
-// codegenRefused are graphs whose program stanc refuses without the extension too: a fault of the
-// codegen, not of this module (the init of a non-centred state reading a value per row, declared in
-// the model block after the transformed parameters that read it).
-var codegenRefused = map[string]bool{"corpus_lag-nested-state-init-without-lag.json": true}
-
 func TestCorpusStanc(t *testing.T) {
 	stanc := stancPath(t)
 	dir := t.TempDir()
@@ -111,7 +106,7 @@ func TestCorpusStanc(t *testing.T) {
 	checked := 0
 	for i, name := range names {
 		m, ok := validModel(graphs[name])
-		if !ok || codegenRefused[name] {
+		if !ok {
 			continue
 		}
 		p, err := bayescodegen.Generate(m, Extension{})

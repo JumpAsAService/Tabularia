@@ -57,6 +57,10 @@ var goldenCases = []string{
 	// functions: a hierarchy with a truncated scale (hier_intercepts' graph), three outcomes of each
 	// kind and a fourth left out, a lagged likelihood reading a value without lag.
 	"extension_checks", "extension_checks_counts", "extension_checks_lagged",
+	// A non-centred state whose init reads values per row of the model block (a linear predictor
+	// with a category's Full_, a transformed value): the transformed parameters' nested block
+	// rebuilds them before the first values (P2's finding: they were read before their declaration).
+	"ts_state_init_per_row",
 }
 
 // goldenExtension is the extension a case is generated with (nil for none).

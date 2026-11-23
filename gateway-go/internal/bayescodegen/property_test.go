@@ -176,7 +176,20 @@ func (r reached) add(text string) {
 	if regexp.MustCompile(`E_q[a-z0-9]*_[0-9]+`).MatchString(text) {
 		r["linear predictor"]++
 	}
+	// a value per row of the model block rebuilt in the transformed parameters (a non-centred
+	// state's init reading it)
+	if _, tp, ok := strings.Cut(text, "transformed parameters {\n"); ok {
+		tp, _, _ = strings.Cut(tp, "\nmodel {")
+		for _, m := range perRowLocal.FindAllStringSubmatch(tp, -1) {
+			if !strings.HasPrefix(m[1], "E_") {
+				r["per-row value in transformed parameters"]++
+				break
+			}
+		}
+	}
 }
+
+var perRowLocal = regexp.MustCompile(`(?m)^    vector\[N\] ([A-Za-z][A-Za-z0-9_]*) = `)
 
 // TestPropertyGeneratedPrograms: every valid graph of the generator gives a program that passes the
 // alphabet, the scan and the identifier rule (never ErrUnsupported, never ErrBug), the same twice,
@@ -271,7 +284,8 @@ func TestPropertyGeneratedPrograms(t *testing.T) {
 	if valid < n*9/10 {
 		t.Errorf("only %d of the %d generated graphs are valid", valid, n)
 	}
-	for _, place := range []string{"model", "transformed data", "transformed parameters", "truncated loop", "lag subset", "first subset", "linear predictor", "lagged read"} {
+	for _, place := range []string{"model", "transformed data", "transformed parameters", "truncated loop", "lag subset", "first subset", "linear predictor", "lagged read",
+		"per-row value in transformed parameters"} {
 		if places[place] == 0 {
 			t.Errorf("no generated program writes locals in %q: %v", place, places)
 		}

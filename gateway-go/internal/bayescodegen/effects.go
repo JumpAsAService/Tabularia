@@ -391,7 +391,10 @@ func (g *gen) stepScale(n *bayesgraph.Node) (string, error) {
 // scale, then each next value from the one before it, in the rows' order (the runner sorts the
 // rows by unit and time, so Prev[I] < Rows_next[I] and every value is set before it is read). When
 // the location and the scale together hold more than maxLocalNodes vector nodes, the larger becomes
-// a local (lot S5), in a nested block with the first values' assignment.
+// a local (lot S5), in a nested block with the first values' assignment. A location or a scale that
+// reads a value per row, or a category's Full_, reads a local of the model block, which is written
+// after this block: the nested block rebuilds them first, in Order, as the extension's block of the
+// generated quantities does (the same identifiers, not in the mapping again, never written).
 func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 	s := g.states[n.ID]
 	d, err := g.initDist(n)
@@ -408,11 +411,12 @@ func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 		return err
 	}
 	sink := &splitSink{block: blockTransformed}
-	loc, _, err := g.emitSlot(lk, emitEnv{g: g, sink: sink, rootLocal: locLocal})
+	reads := &scope{g: g, locals: map[string]bool{}, fulls: map[string]bool{}}
+	loc, _, err := g.emitSlot(lk, emitEnv{g: g, sink: sink, rootLocal: locLocal, use: reads.use})
 	if err != nil {
 		return err
 	}
-	scale, st, err := g.emitSlot(sk, emitEnv{g: g, sink: sink, rootLocal: scaleLocal})
+	scale, st, err := g.emitSlot(sk, emitEnv{g: g, sink: sink, rootLocal: scaleLocal, use: reads.use})
 	if err != nil {
 		return err
 	}
@@ -429,10 +433,13 @@ func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 	g.mapping = append(g.mapping, g.entry(n, blockTransformed, bayescontract.RoleQuantity))
 	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: x, Role: bayescontract.RoleQuantity, Node: n.ID, Dims: []bayescontract.Dim{{Plate: g.rows.ID}}})
 	first := x + "[" + identRowsFirst + "] = (" + loc + " + (" + scale + op + s.z + "[" + identRowsFirst + "]));"
-	if sink.empty() {
+	if sink.empty() && len(reads.locals) == 0 && len(reads.fulls) == 0 {
 		g.w.line(first)
 	} else {
 		g.w.openNested()
+		if err := reads.writeLocals(); err != nil {
+			return err
+		}
 		g.flush(sink)
 		g.w.line(first)
 		g.w.close()

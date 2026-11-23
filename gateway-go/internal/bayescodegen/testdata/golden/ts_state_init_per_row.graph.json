@@ -1,0 +1,191 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "alpha",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Offset of the start",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigmatrend",
+      "kind": "parameter",
+      "name": "sigma_trend",
+      "label": "Spread of the trend's steps",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "trend",
+      "kind": "state",
+      "name": "trend",
+      "label": "Trend",
+      "plate": "rows",
+      "process": "random_walk",
+      "init": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "10"
+          }
+        }
+      },
+      "scale": {
+        "expr": "sigma_trend"
+      },
+      "form": "centred"
+    },
+    {
+      "id": "start",
+      "kind": "transformed",
+      "name": "start",
+      "label": "Start of the level",
+      "plate": "rows",
+      "value": {
+        "expr": "alpha + 0.5 * trend"
+      }
+    },
+    {
+      "id": "sigmastart",
+      "kind": "parameter",
+      "name": "sigma_start",
+      "label": "Spread of the start",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "spread",
+      "kind": "transformed",
+      "name": "spread",
+      "label": "Spread of the start per row",
+      "plate": "rows",
+      "value": {
+        "expr": "sigma_start * 2"
+      }
+    },
+    {
+      "id": "sigmalevel",
+      "kind": "parameter",
+      "name": "sigma_level",
+      "label": "Spread of the level's steps",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigmaobs",
+      "kind": "parameter",
+      "name": "sigma_obs",
+      "label": "Spread of the observation around the level",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "level",
+      "kind": "state",
+      "name": "level",
+      "label": "Hidden level",
+      "plate": "rows",
+      "process": "random_walk",
+      "init": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "start"
+          },
+          "sigma": {
+            "expr": "spread"
+          }
+        }
+      },
+      "scale": {
+        "expr": "sigma_level"
+      },
+      "form": "non_centred"
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given the hidden level",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "level"
+        },
+        "sigma": {
+          "expr": "sigma_obs"
+        }
+      }
+    }
+  ]
+}

@@ -497,6 +497,17 @@ func (b *gb) build() {
 					mu = b.longTerms(b.size(), []string{mu}, nil)
 				}
 				init = normalPrior(mu, "1")
+			} else if b.yes(1, 4) {
+				// an init that reads a value per row of the model block (from parameters and states
+				// alone: an init reads no data), which the transformed parameters rebuild
+				value := sd.name + " * 2"
+				if len(states) > 0 {
+					value = states[len(states)-1].name + " + " + value
+				}
+				start := gref{id: b.id("t"), name: b.name("start", false)}
+				b.add(map[string]any{"id": start.id, "kind": "transformed", "name": start.name, "label": "Start", "plate": "rows",
+					"value": expr(value)})
+				init = normalPrior(start.name, "1")
 			}
 			st := gref{id: b.id("s"), name: b.name("level", false)}
 			b.add(map[string]any{"id": st.id, "kind": "state", "name": st.name, "label": "Level", "plate": "rows", "process": "random_walk",
