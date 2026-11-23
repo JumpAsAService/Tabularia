@@ -1,0 +1,200 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "Group of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "u",
+      "kind": "data",
+      "name": "u",
+      "label": "Group predictor",
+      "plate": "grp",
+      "type": "real"
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "a",
+      "label": "Scale of the curve",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "b",
+      "kind": "parameter",
+      "name": "b",
+      "label": "Half-saturation",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "tau",
+      "kind": "parameter",
+      "name": "tau",
+      "label": "Spread between groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "Spread within a group",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "xd",
+      "kind": "transformed",
+      "name": "xd",
+      "label": "Saturated predictor",
+      "plate": "rows",
+      "value": {
+        "expr": "x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) - x * x / (x + 1) + 1"
+      }
+    },
+    {
+      "id": "m",
+      "kind": "transformed",
+      "name": "m",
+      "label": "Curve",
+      "plate": "rows",
+      "value": {
+        "expr": "a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) - a * x / (x + b) + 1"
+      }
+    },
+    {
+      "id": "ug",
+      "kind": "transformed",
+      "name": "ug",
+      "label": "Group curve",
+      "plate": "grp",
+      "value": {
+        "expr": "a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) - a * u / (u + b) + 1"
+      }
+    },
+    {
+      "id": "bg",
+      "kind": "parameter",
+      "name": "bg",
+      "label": "Rate of a group",
+      "plate": "grp",
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "al",
+      "kind": "parameter",
+      "name": "al",
+      "label": "Level of a group",
+      "plate": "grp",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) - a * bg / (bg + b) + 1"
+          },
+          "sigma": {
+            "expr": "tau"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the curve",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "m + al[g] + ug[g] + xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) - xd * x / (x + b) + 1"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

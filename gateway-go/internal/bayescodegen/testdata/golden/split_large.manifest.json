@@ -1,0 +1,111 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "09fc6b903f3fc32654aa223478b5494390d7554269e8ccb9557867415ec9bde1",
+  "program_sha256": "5bed21c681f796ad159c5f4e0fc1da7fb47cd0231b4f08a5710d42b750206150",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "u",
+      "kind": "real",
+      "plate": "grp",
+      "node": "u"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "a",
+      "role": "quantity",
+      "node": "a",
+      "dims": []
+    },
+    {
+      "stan": "b",
+      "role": "quantity",
+      "node": "b",
+      "dims": []
+    },
+    {
+      "stan": "bg",
+      "role": "quantity",
+      "node": "bg",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "s",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    },
+    {
+      "stan": "tau",
+      "role": "quantity",
+      "node": "tau",
+      "dims": []
+    },
+    {
+      "stan": "Z_al",
+      "role": "internal",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "al",
+      "role": "quantity",
+      "node": "al",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "ug",
+      "role": "quantity",
+      "node": "ug",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    }
+  ]
+}

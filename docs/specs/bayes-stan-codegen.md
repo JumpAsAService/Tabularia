@@ -154,6 +154,7 @@ model {
 | Derived data | `Up_<index node id>_<plate id>` (a lifted index), `N_lag`, `Rows_lag`, `Lag<k>`, `N_first`, `Rows_first`, `N_next`, `Rows_next`, `Prev` | upper case |
 | The mode flag | `Mode` | upper case |
 | Internal parameters and locals | `Z_<id>` (standard normals), `L_<id>` (a Cholesky factor), `W_<id>`, `Full_<id>` (a category's coefficients with the reference's 0), `Arg<k>_<id>`, `I` (a loop's index) | upper case |
+| A part of a split vector expression (**As built S5**) | `E_<node id>_<k>`, `k` = 1, 2, … over the node's parts in the order the program writes them (the node whose slot, or whose linear predictor's sum, is split; a likelihood has its own); the extension's split values take the numbers after the node's | upper case; the id holds no `_`, so `E_<id>_<k>` reads back to one node |
 
 **The rule** for a person's name (lexically valid already, `[a-z][a-z0-9_]*`, at most 40 bytes, not ending in `__`:
 the graph spec): it is used as is unless it is one of the catalogue's `stan.reserved_words`, `type_names`,
@@ -458,6 +459,7 @@ written by Go with `BAYES_GOLDEN_WRITE=1` and reviewed by hand, compared byte fo
 | `names_backend` | data nodes named after every word of the catalogue's `backend_member_words` and one name of each `backend_member_patterns`: all renamed; the program **compiles with g++** in the image of the group `bayes` (a full CmdStan build, by hand, under the compile Job's limits; E4, finding 2) |
 | `names_unnamed` | nodes without names referenced by `ref` |
 | `extension_fake` | the test extension: data after `Mode`, written declarations sized by `Mode`, the nested block |
+| `split_large` | lot S5: large vector expressions split into locals in every block a value is written in — a per-row value of the model block (241 nodes: four locals and the declaration), transformed data and a value on a group plate (nested blocks), a non-centred parameter whose location passes the bound (the explicit form, its location split in transformed parameters), a likelihood's mean (locals before the statement) |
 
 The ten templates' graphs are written here by hand first; `templates` (step 3) writes its own and a test of that
 module checks that they give these programs. **The golden graphs of the ten template cases are then the templates'
@@ -616,6 +618,84 @@ S5 after S2 (it writes the locals S1 and S2 write), before `stan-compile` compil
 | Question | Decision | By |
 |---|---|---|
 | A valid graph whose program does not compile in the compile Job's 300 s (the expression language's E4, finding 1: one per-row expression of 249 nodes 106 s, three of them more than 330 s, with 1 CPU and 3 GiB) | **The generator splits large vector expressions into locals** (lot S5). The rule: an expression over a plate (a vector) of more than **64 nodes** is written bottom-up as a chain of locals of the block it belongs to, each holding at most 64 nodes of the tree (`vector[N] E_<node id>_<k> = …;`, generated identifiers, in the mapping table as `internal`), the statement then using the last; a scalar expression is never split. Measured by hand: the 249-node mean 23 s split instead of 106 s, the 747-node program 62 s instead of more than 330 s; a local of 8 nodes or of 63 compiles in the same time, so 64 bounds the expression templates without multiplying the locals. Accepted by the golden `split_large` and the measure of S5. The catalogue's limits do not change; the program's vector nodes are bounded by `max_program_vector_nodes` (1,500, the owner's budget: split, 1,494 compile in 133 s, 3,984 still pass 330 s), checked by the graph's validator | Owner, 2026-11-24 (the splitting); the threshold and the form: spec, from the measures |
+
+## As built — lot S5 (the splitting)
+
+`split.go`, with the places that write a value in `model.go`, `params.go`, `effects.go` and `generated.go`;
+`Emit` is not changed: a part is emitted from a copy of the typed tree whose cut sub-trees are names standing for
+their locals (a key no node id can be, answered by the `EmitEnv`), so every part passes `Emit`'s checks and its
+alphabet like any expression.
+
+**What a part holds.** A part counts the nodes of the expression template: each vector node (its value over the
+context plate) and each single-value operand of one, whatever its size (a single value inside a vector expression
+is computed at once, a scalar of Stan's autodiff that enters the template as one operand; it is never split, and a
+scalar expression is never split). For the language's forms this is the tree's nodes: `a * x / (x + b)` is 7. The
+bound is **64** (`maxLocalNodes`). Measured on 2026-11-24, one build at a time, image `tabularia-bayes-b0:local`,
+`--cpus 1 --memory 3g`: the 1,497-node program (below) compiled in **190.0 s** with parts of 64 *vector* nodes (about
+82 nodes with their scalar operands), **122.6 s** with parts of 48 vector nodes, and the hand-split program of E4
+(1,494 nodes, 8 terms a local) **135.2 s** that day (132.5 s in E4): the size of a part matters beyond about 64
+nodes, so the bound counts the scalar operands, as the E4 measures did.
+
+**How the parts are chosen.** Bottom-up, while a node holds more than 64, its largest vector operand becomes a
+local (the first on a tie): Kundu and Misra's greedy partition of a tree, the fewest parts for the bound. A tree of
+at most 64 is written as before, so no program of the golden corpus before S5 changed and `CodegenVersion` stays
+**1**. The parts are written in the tree's post-order, `E_<node id>_<k>` numbered over the node's parts in the
+order the program writes them; **the statement holds the last part** (at most 64 nodes): `vector[N] m = ((E_m_4 -
+…) + 1.0);`, `y ~ normal(((… E_lik_1 …)), s);`. Same tree, same parts, same names (the golden test's shuffles).
+
+**Where the locals go.**
+
+| Where the value is written | The locals |
+|---|---|
+| `model` (a per-row value, a prior's or a likelihood's argument, a state's statement) | before the statement, at its level |
+| `transformed data`, `transformed parameters` (a value on a group plate, the explicit form, a non-centred state's first values) | the value declared, then a nested block holding the locals and the assignment (a declaration at the block's level would be a variable of the block, written in the CSV for transformed parameters) |
+| A truncated prior over a plate | in the loop's nested block, before its `Arg<k>_<id>` |
+| On a subset of the rows (`Rows_lag`: a lagged value or likelihood; `Rows_first`: a state's init) | `vector[N] E_x_k;` then `E_x_k[Rows_lag] = …;`: what reads it reads it on the subset, as `Emit` writes every per-row name of such a statement |
+| The extension's nested block | a per-row local it reads is rebuilt with the model block's names (not in the mapping again, as S2's locals); a value it asks for (`Scope.Slot`, `ValueWith`) has locals of its own numbered after the node's (`E_lik_2`), written before the statement that uses it, in the mapping (`generated quantities`); the same split value in two statements is `ErrExtension` (ask for it again) |
+
+Every local is in the mapping table: `kind` `internal`, the node's id, `role` null, never written (no quantity).
+
+**A linear predictor's sum** is split the same way: a term holds 3 nodes (the product, the coefficient, the data)
+and its addition 1, a single-value intercept 1; when the next term would pass 64, the sum so far becomes a local
+(15 terms a part).
+
+**The generator's forms around a location and a scale** (`(loc + (scale * Z))`: the explicit non-centred form, a
+non-centred state's first values) add 3 nodes; while the form would pass 64, the larger of the location and the
+scale (the location on a tie) becomes a whole local, read as one node.
+
+**The affine form and its offset.** An offset or a multiplier cannot be split (a local of `parameters` is not
+possible), the affine form writes them twice (the declaration and the statement), and Stan's C++ repeats an offset
+in each of its transforms. Measured (same conditions; a location of the E4 form, 61 nodes, on a group plate): the
+model without it 15.0 s; written once in the model block (centred) 18.2 s (+3.2 s); as an affine offset 24.0 s
+(+9.0 s); in the explicit form 19.6 s (+4.6 s). **Decision (spec, from the measures): a location or a scale over the
+plate of more than 8 nodes (`maxAffineNodes`) takes the explicit form** (and a parameter whose location reads it
+follows, as for a transformed parameter). Up to 8 nodes (an indexing, a lift, a coefficient times a group's data)
+the affine form costs under a second more; no golden program changed. **The validator's count is not corrected**:
+the graph counts an affine location once, the program writes at most 8 nodes of it three times or so in C++, a
+difference bounded by about 16 nodes a non-centred parameter, well inside the margin of `max_program_vector_nodes`
+(1,500 compile in about 130 s, the deadline is 300 s). The graph's count of a linear predictor (1 + 3 a term)
+counts 3 a term where a part counts 4 (the coefficient): the budget it bounds was measured on expressions, and a
+sum of 1,500 nodes would be 375 terms, beyond `max_nodes`.
+
+**Measured (S5's acceptance), programs written by `Generate`**, full CmdStan builds, one at a time, `--network none
+--read-only --cpus 1 --memory 3g`, `timeout 330`:
+
+| Program | Nodes | Build | Peak memory |
+|---|---|---|---|
+| Three transformed nodes on the rows of 249 nodes (the E4 program; 4 locals each) | 747 | **60.7 s** (< 90 s; 62.2 s by hand in E4, more than 330 s unsplit) | 1.42 GB |
+| Five of 249 and one of 241 (the budget, `max_program_vector_nodes` 1,500; 1,497 counted by the validator) | 1,497 | **130.5 s** (132.5 s by hand in E4) | 1.63 GB |
+| The golden `split_large` | — | 52.5 s | 1.32 GB |
+
+stanc 2.40.0 of the image parses and types the golden `split_large`, the three measured programs and the 13 programs
+of `split_test.go` (the bound at 64 and 65, a lagged value and likelihood, a linear predictor of 24 terms on the rows
+and on a group plate and one on lagged rows, a truncated prior over a plate, the affine form at 8 and the explicit
+one at 9 and 65, the wrapped form, a state's init non-centred, centred and through `nu`, the extension's split
+value).
+
+**For S3**: the property and fuzz generators should reach the splitting (a vector expression of more than 64 nodes
+in each place of the table above, a long linear predictor, lag); `CrossCheck` must not expect the `E_` locals in
+`--info` (they are locals: of the model block, or of nested blocks in transformed data, transformed parameters and
+the generated quantities), though they are in the mapping table.
 
 ## Open questions
 

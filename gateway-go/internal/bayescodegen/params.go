@@ -83,7 +83,10 @@ func (g *gen) param(id string) (bayesgraph.Param, bayescatalog.Distribution, err
 // before it (a transformed parameter: a transformed node that depends on a parameter, a linear
 // predictor on a group plate, a parameter itself explicit, a component of correlated effects, which
 // is a transformed parameter in both of their forms), the affine form otherwise (data, transformed
-// data, the parameters of the affine or centred forms).
+// data, the parameters of the affine or centred forms). A location or a scale over the plate of
+// more than maxAffineNodes nodes also takes the explicit form (lot S5): the affine form writes them
+// in the declaration of the parameters block, where no local can split them, and in its statement
+// again, and Stan's C++ repeats an offset in each of its transforms.
 func (g *gen) indexForms() error {
 	declared := func(id string) bool {
 		n := g.node(id)
@@ -124,6 +127,9 @@ func (g *gen) indexForms() error {
 				if !declared(r) {
 					explicit = true
 				}
+			}
+			if t.Expr != nil && planSplit(t.Expr.Tree).total > maxAffineNodes {
+				explicit = true
 			}
 		}
 		if explicit {
@@ -226,66 +232,98 @@ func (g *gen) writeParameters() error {
 	return nil
 }
 
-// locationScale is the text of a location-scale prior's location and scale.
+// locationScale is the text of a location-scale prior's location and scale, in the affine form's
+// declaration: never split (indexForms gives the explicit form to a location or a scale that would
+// be).
 func (g *gen) locationScale(n *bayesgraph.Node, d bayescatalog.Distribution) (loc, scale string, err error) {
 	if d.LocationScale == nil {
 		return "", "", bug("the prior of %q is not location-scale", n.ID)
 	}
-	if loc, _, err = g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Location}); err != nil {
+	if loc, _, err = g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Location}, nil); err != nil {
 		return "", "", err
 	}
-	if scale, _, err = g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Scale}); err != nil {
+	if scale, _, err = g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Scale}, nil); err != nil {
 		return "", "", err
 	}
 	return loc, scale, nil
 }
 
-// explicitValue is the declaration of an explicit non-centred parameter in transformed parameters:
-// its location plus its scale times its standard normals, elementwise when the scale is a vector.
-func (g *gen) explicitValue(n *bayesgraph.Node) (string, error) {
+// writeExplicit writes an explicit non-centred parameter in transformed parameters: its location
+// plus its scale times its standard normals, elementwise when the scale is a vector. When the
+// location and the scale together hold more than maxLocalNodes vector nodes, the larger becomes a
+// local (lot S5): the parameter is declared, then assigned in a nested block holding the locals.
+func (g *gen) writeExplicit(n *bayesgraph.Node, self *MappingEntry) error {
 	_, d, err := g.param(n.ID)
 	if err != nil {
-		return "", err
+		return err
 	}
-	loc, scale, err := g.locationScale(n, d)
+	if d.LocationScale == nil {
+		return bug("the prior of %q is not location-scale", n.ID)
+	}
+	lk := bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Location}
+	sk := bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Scale}
+	locLocal, scaleLocal, err := g.wrapped(lk, sk)
 	if err != nil {
-		return "", err
+		return err
 	}
-	st := g.m.Slots[bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + d.LocationScale.Scale}]
+	sink := &splitSink{block: blockTransformed}
+	loc, _, err := g.emitSlot(lk, emitEnv{g: g, sink: sink, rootLocal: locLocal})
+	if err != nil {
+		return err
+	}
+	scale, st, err := g.emitSlot(sk, emitEnv{g: g, sink: sink, rootLocal: scaleLocal})
+	if err != nil {
+		return err
+	}
 	op := " * "
-	if st.Type.Plate != "" {
+	if st.Plate != "" {
 		op = " .* "
 	}
 	_, size, err := g.units(n)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return "vector[" + size + "] " + g.ident[n.ID] + " = (" + loc + " + (" + scale + op + g.explicit[n.ID] + "));", nil
+	x, value := g.ident[n.ID], "("+loc+" + ("+scale+op+g.explicit[n.ID]+"))"
+	if sink.empty() {
+		g.w.line("vector[" + size + "] " + x + " = " + value + ";")
+		g.mapping = append(g.mapping, *self)
+		return nil
+	}
+	g.w.line("vector[" + size + "] " + x + ";")
+	g.mapping = append(g.mapping, *self)
+	g.w.openNested()
+	g.flush(sink)
+	g.w.line(x + " = " + value + ";")
+	g.w.close()
+	return nil
 }
 
 // writePrior writes a parameter's statement: "x ~ dist(args);", with " T[L, U]" when the program
 // truncates. On a plate a truncated statement is written for one unit, in a loop over the units,
 // each argument that varies over the plate first a local vector Arg<k>_<id>. A parameter in the
 // explicit non-centred form has its standard normals' statement instead: std_normal() for a normal
-// prior, the prior itself at location 0 and scale 1 otherwise.
+// prior, the prior itself at location 0 and scale 1 otherwise. The locals of a split argument (lot
+// S5) come before the statement, in the loop's nested block when there is one.
 func (g *gen) writePrior(n *bayesgraph.Node) error {
 	w := g.w
 	p, d, err := g.param(n.ID)
 	if err != nil {
 		return err
 	}
+	sink := &splitSink{block: blockModel}
 	if z, ok := g.explicit[n.ID]; ok {
-		s, err := g.standardPrior(n, z, d)
+		s, err := g.standardPrior(n, z, d, sink)
 		if err != nil {
 			return err
 		}
+		g.flush(sink)
 		w.line(s + ";")
 		return nil
 	}
 	args := make([]string, 0, len(d.Params))
 	types := make([]bayesexpr.Type, 0, len(d.Params))
 	for _, a := range d.Params {
-		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + a.Name})
+		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + a.Name}, sink)
 		if err != nil {
 			return err
 		}
@@ -304,6 +342,7 @@ func (g *gen) writePrior(n *bayesgraph.Node) error {
 		if err != nil {
 			return err
 		}
+		g.flush(sink)
 		w.line(s + ";")
 		return nil
 	}
@@ -331,8 +370,10 @@ func (g *gen) writePrior(n *bayesgraph.Node) error {
 	if err != nil {
 		return err
 	}
-	if len(locals) > 0 {
+	nested := len(locals) > 0 || !sink.empty()
+	if nested {
 		w.openNested()
+		g.flush(sink)
 		for _, l := range locals {
 			w.line(l)
 		}
@@ -344,14 +385,15 @@ func (g *gen) writePrior(n *bayesgraph.Node) error {
 	w.open("for (I in 1:" + bound + ")")
 	w.line(s + ";")
 	w.close()
-	if len(locals) > 0 {
+	if nested {
 		w.close()
 	}
 	return nil
 }
 
-// standardPrior is the statement of an explicit non-centred parameter's standard normals.
-func (g *gen) standardPrior(n *bayesgraph.Node, z string, d bayescatalog.Distribution) (string, error) {
+// standardPrior is the statement of an explicit non-centred parameter's standard normals; the locals
+// of a split argument go to sink.
+func (g *gen) standardPrior(n *bayesgraph.Node, z string, d bayescatalog.Distribution, sink *splitSink) (string, error) {
 	if d.LocationScale == nil {
 		return "", bug("the prior of %q is not location-scale", n.ID)
 	}
@@ -370,7 +412,7 @@ func (g *gen) standardPrior(n *bayesgraph.Node, z string, d bayescatalog.Distrib
 		case d.LocationScale.Scale:
 			args = append(args, "1.0")
 		default:
-			v, _, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + a.Name})
+			v, _, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "prior." + a.Name}, sink)
 			if err != nil {
 				return "", err
 			}

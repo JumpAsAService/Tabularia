@@ -182,6 +182,10 @@ type Expr struct {
 	root  string   // the identifier an indexing starts from
 	ext   []string // the extension's names it reads
 	loop  bool     // it reads the loop's index
+	// pre are the locals of a split value (lot S5), written before the statement that uses it,
+	// with their mapping entries.
+	pre     []string
+	entries []MappingEntry
 }
 
 func (e Expr) ok() bool { return e.text != "" }
@@ -214,7 +218,8 @@ func Index(e, i Expr) (Expr, error) {
 	if !e.ok() || !i.ok() || e.root == "" {
 		return Expr{}, fmt.Errorf("%w: an indexing of what is not a variable", ErrExtension)
 	}
-	return Expr{text: e.text + "[" + i.text + "]", root: e.root, ext: join(e.ext, i.ext), loop: e.loop || i.loop}, nil
+	return Expr{text: e.text + "[" + i.text + "]", root: e.root, ext: join(e.ext, i.ext), loop: e.loop || i.loop,
+		pre: join(e.pre, i.pre), entries: append(append([]MappingEntry(nil), e.entries...), i.entries...)}, nil
 }
 
 func join(a, b []string) []string { return append(append([]string(nil), a...), b...) }
@@ -459,6 +464,9 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		if err := g.usable(inLoop, s.target, s.value); err != nil {
 			return err
 		}
+		if err := g.writePre(s.target, s.value); err != nil {
+			return err
+		}
 		g.w.line(s.target.text + " = " + s.value.text + ";")
 	case stmtFor:
 		if inLoop {
@@ -490,6 +498,9 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 			if err := g.usable(inLoop, s.value); err != nil {
 				return err
 			}
+			if err := g.writePre(s.value); err != nil {
+				return err
+			}
 			text += " = " + s.value.text
 		}
 		g.w.line(text + ";")
@@ -497,6 +508,24 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		g.mapping = append(g.mapping, MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: KindExtension})
 	default:
 		return extErr("a statement of no kind")
+	}
+	return nil
+}
+
+// writePre writes the locals of split values before the statement that reads them. A split value is
+// written once: a second statement with it would declare its locals twice (ask for it again).
+func (g *gen) writePre(es ...Expr) error {
+	for _, e := range es {
+		for _, en := range e.entries {
+			if g.extPre[en.Stan] {
+				return extErr("a split value used twice (%s): ask for it again", en.Stan)
+			}
+			g.extPre[en.Stan] = true
+		}
+		for _, l := range e.pre {
+			g.w.line(l)
+		}
+		g.mapping = append(g.mapping, e.entries...)
 	}
 	return nil
 }
@@ -603,23 +632,35 @@ func (s *scope) env(ids func(node string) (Expr, bool)) emitEnv {
 	return env
 }
 
-// valueExpr wraps an emitted value, with the extension's names it reads (from ids).
-func (s *scope) valueExpr(text string, ids func(node string) (Expr, bool), err error) (Expr, error) {
+// valueExpr wraps an emitted value, with the locals it was split into (sink) and the extension's
+// names it reads (from ids), in its text or in its locals.
+func (s *scope) valueExpr(text string, sink *splitSink, ids func(node string) (Expr, bool), err error) (Expr, error) {
 	if err != nil {
 		return Expr{}, err
 	}
 	if s.err != nil {
 		return Expr{}, s.err
 	}
-	e := Expr{text: text}
+	e := Expr{text: text, pre: sink.lines, entries: sink.entries}
 	if ids != nil {
-		for _, w := range strings.FieldsFunc(text, func(r rune) bool { return r > 127 || !wordByte(byte(r)) }) {
-			if extensionName(w) {
-				e.ext = append(e.ext, w)
+		for _, t := range append([]string{text}, sink.lines...) {
+			for _, w := range strings.FieldsFunc(t, func(r rune) bool { return r > 127 || !wordByte(byte(r)) }) {
+				if extensionName(w) {
+					e.ext = append(e.ext, w)
+				}
 			}
 		}
 	}
 	return e, nil
+}
+
+// splitEnv is the EmitEnv of a value the extension asks for, with the sink its locals go to: new
+// numbers after the node's others, declared in the extension's nested block.
+func (s *scope) splitEnv(ids func(node string) (Expr, bool)) (emitEnv, *splitSink) {
+	sink := &splitSink{block: blockGenerated, fresh: true}
+	env := s.env(ids)
+	env.sink = sink
+	return env, sink
 }
 
 func (s *scope) ValueWith(node string, ids func(node string) (Expr, bool)) (Expr, error) {
@@ -627,16 +668,18 @@ func (s *scope) ValueWith(node string, ids func(node string) (Expr, bool)) (Expr
 	if n == nil || (n.Kind != "transformed" && n.Kind != "linear_predictor") {
 		return Expr{}, extErr("%s is not a transformed node nor a linear predictor", strconv.Quote(node))
 	}
-	text, _, err := s.g.vectorValue(n, s.env(ids))
-	return s.valueExpr(text, ids, err)
+	env, sink := s.splitEnv(ids)
+	text, _, err := s.g.vectorValue(n, env)
+	return s.valueExpr(text, sink, ids, err)
 }
 
 func (s *scope) Slot(key bayesgraph.SlotKey, ids func(node string) (Expr, bool)) (Expr, error) {
 	if _, ok := s.g.m.Slots[key]; !ok {
 		return Expr{}, extErr("%s.%s is not a slot of the model", key.Node, key.Slot)
 	}
-	text, _, err := s.g.emitSlot(key, s.env(ids))
-	return s.valueExpr(text, ids, err)
+	env, sink := s.splitEnv(ids)
+	text, _, err := s.g.emitSlot(key, env)
+	return s.valueExpr(text, sink, ids, err)
 }
 
 func (s *scope) Call(name string, args ...Expr) (Expr, error) {
@@ -649,6 +692,8 @@ func (s *scope) Call(name string, args ...Expr) (Expr, error) {
 		texts[i] = a.text
 		out.ext = join(out.ext, a.ext)
 		out.loop = out.loop || a.loop
+		out.pre = join(out.pre, a.pre)
+		out.entries = append(out.entries, a.entries...)
 	}
 	text, err := call(name, texts...)
 	if err != nil {
@@ -704,7 +749,7 @@ func (s *scope) writeLocals() error {
 	}
 	for _, id := range g.m.Order {
 		if s.locals[id] {
-			if err := g.writeVectorValue(g.node(id), emitEnv{g: g}); err != nil {
+			if err := g.writeVectorValue(g.node(id), emitEnv{g: g}, "", nil); err != nil {
 				return err
 			}
 		}

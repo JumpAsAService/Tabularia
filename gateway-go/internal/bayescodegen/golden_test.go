@@ -49,6 +49,8 @@ var goldenCases = []string{
 	// The test extension (extension_test.go): its data after Mode, its written declarations sized
 	// by the mode, its nested block.
 	"extension_fake",
+	// Lot S5: large vector expressions split into locals, in every block a value is written in.
+	"split_large",
 }
 
 // goldenExtension is the extension a case is generated with (nil for none).

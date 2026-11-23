@@ -13,7 +13,8 @@
 // the non-centred forms (affine and explicit) and the centred one, the categories' levels with the
 // reference at 0, and the truncation loop over a plate. Lot S2 adds the correlated effects (LKJ),
 // the latent states, lag on a series (the statements on the rows that have every lag), transformed
-// data, and the extension point of predictive-checks.
+// data, and the extension point of predictive-checks. Lot S5 splits a large vector expression into
+// a chain of locals (split.go).
 package bayescodegen
 
 import (
@@ -147,9 +148,17 @@ type gen struct {
 	states  map[string]*state
 	comps   map[string]*bayesgraph.Component
 
+	// splitNames are the locals of each split expression (lot S5), by the slot or the linear
+	// predictor's sum they hold, in the order they are written; splitCount is the number of locals
+	// each node has, the last k of its E_<id>_<k>.
+	splitNames map[string][]string
+	splitCount map[string]int
+
 	ext Extension
 	// extNames are the identifiers the extension declared, by name: what Scope.Declared answers.
 	extNames map[string]Decl
+	// extPre are the locals of the extension's split values already written.
+	extPre map[string]bool
 
 	w          *writer
 	mapping    []MappingEntry
@@ -163,7 +172,8 @@ func newGen(m *bayesgraph.Model) (*gen, error) {
 		plates: map[string]bayesgraph.ModelPlate{}, size: map[string]string{}, lift: map[string]string{},
 		full: map[string]string{}, explicit: map[string]string{}, tdata: map[string]bool{}, lagged: map[string]bool{},
 		effects: map[string]*effect{}, states: map[string]*state{}, comps: map[string]*bayesgraph.Component{},
-		extNames: map[string]Decl{}, w: &writer{}}
+		splitNames: map[string][]string{}, splitCount: map[string]int{},
+		extNames: map[string]Decl{}, extPre: map[string]bool{}, w: &writer{}}
 	for i := range m.Graph.Nodes {
 		n := &m.Graph.Nodes[i]
 		if _, dup := g.nodes[n.ID]; dup {

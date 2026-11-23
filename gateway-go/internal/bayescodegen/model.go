@@ -35,16 +35,25 @@ import (
 // (subset Rows_lag); subset is the rows the statement runs on (Rows_lag, Rows_first for a state's
 // first values, "" for every row). ids, when set, gives an extension's identifiers in place of the
 // program's (Scope.ValueWith); use, when set, is told of each node whose identifier is written
-// (full: as its Full_), so that the extension's nested block rebuilds the locals it reads.
+// (full: as its Full_), so that the extension's nested block rebuilds the locals it reads. sink is
+// where the locals of a split expression go (lot S5; nil where no local can be written: a single
+// value, the parameters block), rootLocal makes a split slot's whole value a local (a part of the
+// generator's own forms), and locals are the names of the parts already written, by localKey.
 type emitEnv struct {
-	g      *gen
-	ctx    bayesexpr.Plate
-	subset string
-	ids    func(node string) (string, bool)
-	use    func(node string, full bool)
+	g         *gen
+	ctx       bayesexpr.Plate
+	subset    string
+	ids       func(node string) (string, bool)
+	use       func(node string, full bool)
+	sink      *splitSink
+	rootLocal bool
+	locals    map[string]string
 }
 
 func (e emitEnv) Identifier(id string) string {
+	if s, ok := e.locals[id]; ok {
+		return s
+	}
 	if e.ids != nil {
 		if s, ok := e.ids(id); ok {
 			return s
@@ -104,9 +113,10 @@ func (g *gen) subsetOf(key bayesgraph.SlotKey) string {
 }
 
 // slotValue is a slot's text: its expression through Emit, or the identifier of the node it refers
-// to; with the value's type. It is written on the rows its statement runs on (subsetOf).
-func (g *gen) slotValue(key bayesgraph.SlotKey) (string, bayesexpr.Type, error) {
-	return g.emitSlot(key, emitEnv{g: g})
+// to; with the value's type. It is written on the rows its statement runs on (subsetOf); the locals
+// of a large vector expression go to sink (nil: none may be written, a bug if one is needed).
+func (g *gen) slotValue(key bayesgraph.SlotKey, sink *splitSink) (string, bayesexpr.Type, error) {
+	return g.emitSlot(key, emitEnv{g: g, sink: sink})
 }
 
 // emitSlot is a slot's text in env, whose context and subset it sets.
@@ -117,7 +127,7 @@ func (g *gen) emitSlot(key bayesgraph.SlotKey, env emitEnv) (string, bayesexpr.T
 	}
 	env.ctx, env.subset = t.Context, g.subsetOf(key)
 	if t.Expr != nil {
-		s, err := bayesexpr.Emit(t.Expr, env)
+		s, err := g.emitSplit(key, t.Expr, env)
 		if err != nil {
 			return "", t.Type, fmt.Errorf("slot %s.%s: %w", key.Node, key.Slot, err)
 		}
@@ -335,21 +345,24 @@ func (g *gen) writeTransformedData() error {
 			continue
 		}
 		n := g.node(id)
-		if n.Plate == nil {
-			if err := g.writeSingleValue(n); err != nil {
+		self := g.entry(n, blockTransformedData, "")
+		if n.Plate != nil {
+			if err := g.writeVectorValue(n, emitEnv{g: g}, blockTransformedData, &self); err != nil {
 				return err
 			}
-		} else if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
+			continue
+		}
+		if err := g.writeSingleValue(n); err != nil {
 			return err
 		}
-		g.mapping = append(g.mapping, g.entry(n, blockTransformedData, ""))
+		g.mapping = append(g.mapping, self)
 	}
 	return nil
 }
 
 // writeSingleValue writes "real x = …;": a single transformed value.
 func (g *gen) writeSingleValue(n *bayesgraph.Node) error {
-	v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "value"})
+	v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "value"}, nil)
 	if err != nil {
 		return err
 	}
@@ -384,53 +397,82 @@ func (g *gen) writeTransformedParameters() error {
 		if p != placeTransformed {
 			continue
 		}
+		self := g.entry(n, blockTransformed, RoleQuantity)
 		var dims []Dim
 		switch {
 		case n.Kind == "parameter":
-			line, err := g.explicitValue(n)
-			if err != nil {
+			if err := g.writeExplicit(n, &self); err != nil {
 				return err
 			}
-			g.w.line(line)
 			dims = []Dim{{Plate: *n.Plate}}
 		case n.Plate == nil:
 			if err := g.writeSingleValue(n); err != nil {
 				return err
 			}
+			g.mapping = append(g.mapping, self)
 			dims = []Dim{}
 		default:
-			if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
+			if err := g.writeVectorValue(n, emitEnv{g: g}, blockTransformed, &self); err != nil {
 				return err
 			}
 			dims = []Dim{{Plate: *n.Plate}}
 		}
-		g.mapping = append(g.mapping, g.entry(n, blockTransformed, RoleQuantity))
 		g.quantities = append(g.quantities, Quantity{Stan: g.ident[id], Role: RoleQuantity, Node: id, Dims: dims})
 	}
 	return nil
 }
 
 // writeVectorValue writes a value over a plate (the rows or a group plate): a transformed node's
-// value, or a linear predictor's sum. A lagged value is declared over every row and assigned on
-// Rows_lag only.
-func (g *gen) writeVectorValue(n *bayesgraph.Node, env emitEnv) error {
+// value, or a linear predictor's sum, declared in block with its mapping entry self. A lagged value
+// is declared over every row and assigned on Rows_lag only. A value split into locals (lot S5) has
+// them before it in the model block; in transformed data and transformed parameters, where a
+// declaration of the block is a variable of the block, the value is declared, then assigned in a
+// nested block that holds the locals. block "" is the extension's nested block, where the model
+// block's per-row locals are written again with the same names (self nil: no entry).
+func (g *gen) writeVectorValue(n *bayesgraph.Node, env emitEnv, block string, self *MappingEntry) error {
+	sink := &splitSink{block: block, rebuild: block == ""}
+	env.sink = sink
 	v, t, err := g.vectorValue(n, env)
 	if err != nil {
 		return err
 	}
 	plate, x := *n.Plate, g.ident[n.ID]
-	if !g.lagged[n.ID] {
-		if v, err = g.overPlate(v, t, plate, g.size[plate]); err != nil {
-			return err
-		}
-		g.w.line("vector[" + g.size[plate] + "] " + x + " = " + v + ";")
-		return nil
+	lagged := g.lagged[n.ID]
+	over := g.size[plate]
+	if lagged {
+		over = identNLag
 	}
-	if v, err = g.overPlate(v, t, plate, identNLag); err != nil {
+	if v, err = g.overPlate(v, t, plate, over); err != nil {
 		return err
 	}
-	g.w.line("vector[" + g.size[plate] + "] " + x + ";")
-	g.w.line(x + "[" + identRowsLag + "] = " + v + ";")
+	decl := "vector[" + g.size[plate] + "] " + x
+	target := x
+	if lagged {
+		target += "[" + identRowsLag + "]"
+	}
+	declared := func() {
+		if self != nil {
+			g.mapping = append(g.mapping, *self)
+		}
+	}
+	if !sink.empty() && (block == blockTransformedData || block == blockTransformed) {
+		g.w.line(decl + ";")
+		declared()
+		g.w.openNested()
+		g.flush(sink)
+		g.w.line(target + " = " + v + ";")
+		g.w.close()
+		return nil
+	}
+	g.flush(sink)
+	if !lagged {
+		g.w.line(decl + " = " + v + ";")
+		declared()
+		return nil
+	}
+	g.w.line(decl + ";")
+	declared()
+	g.w.line(target + " = " + v + ";")
 	return nil
 }
 
@@ -445,20 +487,29 @@ func (g *gen) vectorValue(n *bayesgraph.Node, env emitEnv) (string, bayesexpr.Ty
 // linearPredictor is a linear predictor's sum, intercept first, then each term in the node's
 // order, left-associated: a coefficient times a real data vector, an integer data through
 // to_vector, a category's coefficients by its level (Full_<b>[c]); each data on Rows_lag when the
-// predictor is lagged.
+// predictor is lagged. A long sum is split as an expression is (lot S5): each term holds three nodes
+// (the product, the coefficient, the data) and its addition one, a single-value intercept one, and
+// when the next term would make the sum hold more than maxLocalNodes, the sum so far becomes a local
+// of env.sink.
 func (g *gen) linearPredictor(n *bayesgraph.Node, env emitEnv) (string, bayesexpr.Type, error) {
 	plate := *n.Plate
 	over := bayesexpr.Plate(plate)
 	sum, typ := "", bayesexpr.Type{Elem: bayesexpr.ElemReal}
-	subset := ""
+	subset, rows := "", ""
 	if g.lagged[n.ID] {
-		subset = "[" + identRowsLag + "]"
+		subset, rows = "["+identRowsLag+"]", identRowsLag
 	}
+	resid, locals := 0, 0
 	if n.Intercept != nil {
-		v, t, err := g.emitSlot(bayesgraph.SlotKey{Node: n.ID, Slot: "intercept"}, env)
+		key := bayesgraph.SlotKey{Node: n.ID, Slot: "intercept"}
+		v, t, err := g.emitSlot(key, env)
 		if err != nil {
 			return "", typ, err
 		}
+		if resid, _, err = g.slotResid(key); err != nil {
+			return "", typ, err
+		}
+		resid = max(resid, 1)
 		if t.Plate != "" {
 			if t.Elem == bayesexpr.ElemInt {
 				if v, err = call("to_vector", v); err != nil {
@@ -505,10 +556,23 @@ func (g *gen) linearPredictor(n *bayesgraph.Node, env emitEnv) (string, bayesexp
 		default:
 			return "", typ, bug("term %d of %q reads a %s data node", i, n.ID, d.Type)
 		}
-		if sum == "" {
-			sum = product
-		} else {
-			sum = "(" + sum + " + " + product + ")"
+		switch {
+		case sum == "":
+			sum, resid = product, 3
+		default:
+			if resid+4 > maxLocalNodes {
+				if env.sink == nil {
+					return "", typ, bug("the sum of %q needs a local where none can be written", n.ID)
+				}
+				ident, err := g.localName(env.sink, n.ID+"\x00#sum", n.ID, locals)
+				if err != nil {
+					return "", typ, err
+				}
+				locals++
+				env.sink.declareLocal(ident, g.size[plate], rows, sum)
+				sum, resid = ident+subset, 1
+			}
+			sum, resid = "("+sum+" + "+product+")", resid+4
 		}
 		typ.Plate = over
 	}
@@ -519,8 +583,8 @@ func (g *gen) linearPredictor(n *bayesgraph.Node, env emitEnv) (string, bayesexp
 }
 
 // likelihood is "y ~ dist(args)", vectorized over the observed node's plate (on Rows_lag when it
-// is lagged: y[Rows_lag]), the arguments in Stan's order.
-func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
+// is lagged: y[Rows_lag]), the arguments in Stan's order; the locals of a split argument go to sink.
+func (g *gen) likelihood(n *bayesgraph.Node, sink *splitSink) (string, error) {
 	d, ok := bayescatalog.LookupDistribution(n.Dist)
 	if !ok || !d.HasUse(bayescatalog.Likelihood) {
 		return "", bug("the likelihood %q has the distribution %q", n.ID, n.Dist)
@@ -531,7 +595,7 @@ func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 	}
 	args := make([]string, 0, len(d.Params))
 	for _, a := range d.Params {
-		v, _, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "args." + a.Name})
+		v, _, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "args." + a.Name}, sink)
 		if err != nil {
 			return "", err
 		}
@@ -579,10 +643,10 @@ func (g *gen) writeModel() error {
 		if p != placeLocal {
 			continue
 		}
-		if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
+		self := g.entry(n, blockModel, "")
+		if err := g.writeVectorValue(n, emitEnv{g: g}, blockModel, &self); err != nil {
 			return err
 		}
-		g.mapping = append(g.mapping, g.entry(n, blockModel, ""))
 	}
 	for _, id := range g.m.Order {
 		var err error
@@ -600,10 +664,12 @@ func (g *gen) writeModel() error {
 	}
 	for _, id := range g.m.Order {
 		if n := g.node(id); n.Kind == "likelihood" {
-			s, err := g.likelihood(n)
+			sink := &splitSink{block: blockModel}
+			s, err := g.likelihood(n, sink)
 			if err != nil {
 				return err
 			}
+			g.flush(sink)
 			w.line(s + ";")
 		}
 	}

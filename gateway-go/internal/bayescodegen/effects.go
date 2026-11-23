@@ -180,7 +180,7 @@ func (g *gen) effectSlots(e *effect) (means, scales []string, err error) {
 			slot string
 			to   *[]string
 		}{{"mean", &means}, {"scale", &scales}} {
-			v, t, err := g.slotValue(bayesgraph.SlotKey{Node: key, Slot: s.slot})
+			v, t, err := g.slotValue(bayesgraph.SlotKey{Node: key, Slot: s.slot}, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -297,7 +297,7 @@ func (g *gen) writeEffectStatements(n *bayesgraph.Node) error {
 	if !ok {
 		return bug("the catalogue has no lkj_corr_cholesky")
 	}
-	eta, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID + ".correlation", Slot: "eta"})
+	eta, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID + ".correlation", Slot: "eta"}, nil)
 	if err != nil {
 		return err
 	}
@@ -348,29 +348,35 @@ func (g *gen) writeStateParameter(n *bayesgraph.Node) {
 	g.quantities = append(g.quantities, Quantity{Stan: g.ident[n.ID], Role: RoleQuantity, Node: n.ID, Dims: []Dim{{Plate: g.rows.ID}}})
 }
 
-// initArgs are the texts of a state's init arguments, on the first rows of the series, with the
-// init's distribution and the types of its arguments.
-func (g *gen) initArgs(n *bayesgraph.Node) (bayescatalog.Distribution, []string, []bayesexpr.Type, error) {
+// initDist is a state's init distribution.
+func (g *gen) initDist(n *bayesgraph.Node) (bayescatalog.Distribution, error) {
 	d, ok := bayescatalog.LookupDistribution(n.Init.Dist)
 	if !ok || !d.HasUse(bayescatalog.Prior) {
-		return d, nil, nil, bug("the state %q has the init %q", n.ID, n.Init.Dist)
+		return d, bug("the state %q has the init %q", n.ID, n.Init.Dist)
 	}
-	args := make([]string, 0, len(d.Params))
-	types := make([]bayesexpr.Type, 0, len(d.Params))
-	for _, a := range d.Params {
-		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "init." + a.Name})
-		if err != nil {
-			return d, nil, nil, err
+	return d, nil
+}
+
+// initArgs are the texts of a state's init arguments, on the first rows of the series, for the
+// arguments want keeps ("" for the others); the locals of a split argument go to sink.
+func (g *gen) initArgs(n *bayesgraph.Node, d bayescatalog.Distribution, sink *splitSink, want func(name string) bool) ([]string, error) {
+	args := make([]string, len(d.Params))
+	for i, a := range d.Params {
+		if !want(a.Name) {
+			continue
 		}
-		args = append(args, v)
-		types = append(types, t)
+		v, _, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "init." + a.Name}, sink)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = v
 	}
-	return d, args, types, nil
+	return args, nil
 }
 
 // stepScale is the text of a state's scale, a single value.
 func (g *gen) stepScale(n *bayesgraph.Node) (string, error) {
-	v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "scale"})
+	v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "scale"}, nil)
 	if err != nil {
 		return "", err
 	}
@@ -382,25 +388,36 @@ func (g *gen) stepScale(n *bayesgraph.Node) (string, error) {
 
 // writeStateTransformed writes a non-centred state: its first values from the init's location and
 // scale, then each next value from the one before it, in the rows' order (the runner sorts the
-// rows by unit and time, so Prev[I] < Rows_next[I] and every value is set before it is read).
+// rows by unit and time, so Prev[I] < Rows_next[I] and every value is set before it is read). When
+// the location and the scale together hold more than maxLocalNodes vector nodes, the larger becomes
+// a local (lot S5), in a nested block with the first values' assignment.
 func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 	s := g.states[n.ID]
-	d, args, types, err := g.initArgs(n)
+	d, err := g.initDist(n)
 	if err != nil {
 		return err
 	}
-	var loc, scale string
+	if d.LocationScale == nil {
+		return bug("the non-centred state %q has an init that is not location-scale", n.ID)
+	}
+	lk := bayesgraph.SlotKey{Node: n.ID, Slot: "init." + d.LocationScale.Location}
+	sk := bayesgraph.SlotKey{Node: n.ID, Slot: "init." + d.LocationScale.Scale}
+	locLocal, scaleLocal, err := g.wrapped(lk, sk)
+	if err != nil {
+		return err
+	}
+	sink := &splitSink{block: blockTransformed}
+	loc, _, err := g.emitSlot(lk, emitEnv{g: g, sink: sink, rootLocal: locLocal})
+	if err != nil {
+		return err
+	}
+	scale, st, err := g.emitSlot(sk, emitEnv{g: g, sink: sink, rootLocal: scaleLocal})
+	if err != nil {
+		return err
+	}
 	op := " * "
-	for i, a := range d.Params {
-		switch a.Name {
-		case d.LocationScale.Location:
-			loc = args[i]
-		case d.LocationScale.Scale:
-			scale = args[i]
-			if types[i].Plate != "" {
-				op = " .* "
-			}
-		}
+	if st.Plate != "" {
+		op = " .* "
 	}
 	step, err := g.stepScale(n)
 	if err != nil {
@@ -410,7 +427,15 @@ func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 	g.w.line("vector[" + identRows + "] " + x + ";")
 	g.mapping = append(g.mapping, g.entry(n, blockTransformed, RoleQuantity))
 	g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: n.ID, Dims: []Dim{{Plate: g.rows.ID}}})
-	g.w.line(x + "[" + identRowsFirst + "] = (" + loc + " + (" + scale + op + s.z + "[" + identRowsFirst + "]));")
+	first := x + "[" + identRowsFirst + "] = (" + loc + " + (" + scale + op + s.z + "[" + identRowsFirst + "]));"
+	if sink.empty() {
+		g.w.line(first)
+	} else {
+		g.w.openNested()
+		g.flush(sink)
+		g.w.line(first)
+		g.w.close()
+	}
 	g.w.open("for (I in 1:" + identNNext + ")")
 	g.w.line(x + "[" + identRowsNext + "[I]] = (" + x + "[" + identPrev + "[I]] + (" + step + " * " + s.z + "[" + identRowsNext + "[I]]));")
 	g.w.close()
@@ -423,7 +448,20 @@ func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 // around the one before it.
 func (g *gen) writeStateStatements(n *bayesgraph.Node) error {
 	s := g.states[n.ID]
-	d, args, _, err := g.initArgs(n)
+	d, err := g.initDist(n)
+	if err != nil {
+		return err
+	}
+	// The arguments the statements read: all of them centred; non-centred, those that are not the
+	// location nor the scale, and none for a normal init.
+	want := func(name string) bool {
+		if !s.nonCentred {
+			return true
+		}
+		return d.ID != "normal" && d.LocationScale != nil && name != d.LocationScale.Location && name != d.LocationScale.Scale
+	}
+	sink := &splitSink{block: blockModel}
+	args, err := g.initArgs(n, d, sink, want)
 	if err != nil {
 		return err
 	}
@@ -481,6 +519,7 @@ func (g *gen) writeStateStatements(n *bayesgraph.Node) error {
 		}
 		lines = append(lines, first, next)
 	}
+	g.flush(sink)
 	for _, l := range lines {
 		g.w.line(l + ";")
 	}
