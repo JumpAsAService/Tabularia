@@ -48,6 +48,7 @@ or bind data (`flow-node`).
 | Coefficients on both scales | **Only for the terms of a `linear_predictor` node**; in free expressions the standardized scale only, with the predictor's mean and standard deviation said | Owner (2026-11-23) |
 | Data on a group plate | **Allowed** for real and integer data, the runner refusing a column that varies within a unit | Spec decision, 2026-11-23, owner may revisit |
 | `graph.form_centred` widened; the mirror exports `priorPlan(model)` | A bounded parameter on a non-centred plate and a state with a non-location-scale `init` stay centred, with the warning; the TypeScript mirror exports the plan `prior-preview` draws from («The TypeScript mirror») | Correction of 2026-11-23 from the step-2 specs (`bayes-stan-codegen.md`, `bayes-prior-preview.md`) |
+| `graph.id` refuses an id equal to a reserved suffix | Ids `lpdf`, `lpmf`, `lcdf`, `lccdf`, `cdf`, `ccdf`, `lupdf`, `lupmf` (reason `reserved_suffix`): a generated identifier would end with a suffix Stan reserves | Correction of 2026-11-24 from lot S0 |
 
 ## What exists and is reused (verified)
 
@@ -111,7 +112,7 @@ needs no `T[…]`. `alpha_school` is non-centred because its plate's `form` says
 | `nodes` | array | The nodes |
 | `layout` | object | Positions and sizes for the canvas, by node or plate id, in **canvas coordinates** (absolute, whatever box a node sits in: the editor converts them to its canvas library's coordinates relative to a parent box; correction of 2026-11-23 from the step-3/4 specs); **not part of the model** (excluded from the semantic hash) |
 
-Ids: `^[a-z][a-z0-9]{0,15}$`, unique across nodes and plates; `rows` is the rows plate's. A
+Ids: `^[a-z][a-z0-9]{0,15}$`, unique across nodes and plates; `rows` is the rows plate's; an id (a component's too) is never one of Stan's reserved suffixes without the underscore (`lpdf`, `lpmf`, `lcdf`, `lccdf`, `cdf`, `ccdf`, `lupdf`, `lupmf`), since the generated identifiers `V_<id>`, `J_<id>`… would end with it (correction of 2026-11-24 from lot S0). A
 correlated-effects component is addressed as `<node id>.<component id>`. Ids are made by the editor and never
 shown; they never reach a program except inside a generated identifier (`stan-codegen`).
 
@@ -224,7 +225,7 @@ findings are reported, sorted by (node id, slot, code), not only the first.
 |---|---|---|
 | `graph.format` | error | Known `format_version`; no unknown key; the right JSON types (strict decoding) |
 | `graph.too_big` | error | Within `max_graph_bytes`, `max_nodes`, `max_plates`, `max_total_expression_nodes` |
-| `graph.id` | error | Ids well formed and unique; `rows` only for the rows plate |
+| `graph.id` | error | Ids well formed and unique; `rows` only for the rows plate; no id equal to a reserved suffix (`lpdf`, `cdf`…; reason `reserved_suffix`, correction of 2026-11-24 from lot S0) |
 | `graph.name`, `graph.name_taken`, `graph.name_function` | error | Names lexically valid, unique, not a function of the language |
 | `graph.label`, `graph.note` | error | Labels present, of allowed characters and length; notes within `max_note_chars` |
 | `graph.rows` | error | Exactly one rows plate |

@@ -7686,6 +7686,7 @@ export default {
         "duplicate": "Dos nodos o recuadros comparten el mismo identificador interno ({id}): duplica uno y elimina el original.",
         "rows_plate_id": "El recuadro de las filas debe tener el identificador rows, no {id}: créalo de nuevo.",
         "rows_reserved": "El identificador rows está reservado al recuadro de las filas: duplica este para darle otro.",
+        "reserved_suffix": "Este nodo o recuadro tiene un identificador interno ({id}) que el programa no puede usar: duplícalo y elimina el original.",
       },
       "name": {
         "empty": "El nombre está vacío: escribe uno o quítalo (un nodo sin nombre se conecta arrastrando una línea hasta él).",

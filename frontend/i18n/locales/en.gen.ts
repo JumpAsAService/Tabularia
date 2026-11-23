@@ -7686,6 +7686,7 @@ export default {
         "duplicate": "Two nodes or boxes share the same internal identifier ({id}): duplicate one of them and delete the original.",
         "rows_plate_id": "The box of the rows must have the identifier rows, not {id}: recreate it.",
         "rows_reserved": "The identifier rows belongs to the box of the rows: duplicate this one to give it another.",
+        "reserved_suffix": "This node or box has an internal identifier ({id}) that the program cannot use: duplicate it and delete the original.",
       },
       "name": {
         "empty": "The name is empty: write one, or remove it (a node without a name is connected by dragging a line to it).",

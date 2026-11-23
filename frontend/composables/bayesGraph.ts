@@ -537,6 +537,11 @@ export function bayesCheckStructure (g: BayesGraph, catalog: BayesCatalog = BAYE
   const lim = (k: string) => bayesLimit(k, catalog)
   const add = (code: string, node: string, slot: string, args?: Record<string, unknown>) => { out.push(finding(code, 'error', node, slot, args)) }
   const functions = new Set(catalog.language.functions.map(f => f.name))
+  // An id equal to a reserved suffix without its underscore (lpdf, cdf...) would end a generated identifier with it.
+  const reservedSuffixIds = new Set(((catalog.stan.reserved_suffixes ?? []) as string[]).map(x => x.replace(/^_/, '')))
+  const idSuffix = (where: string, id: string) => {
+    if (reservedSuffixIds.has(id)) add('graph.id', where, '', { id, reason: 'reserved_suffix' })
+  }
 
   if (g.nodes.length > lim('max_nodes')) out.push(tooBig('nodes', g.nodes.length, lim('max_nodes')))
   if (g.plates.length > lim('max_plates')) out.push(tooBig('plates', g.plates.length, lim('max_plates')))
@@ -547,17 +552,20 @@ export function bayesCheckStructure (g: BayesGraph, catalog: BayesCatalog = BAYE
   for (const p of g.plates) {
     bump(p.id)
     if (!validId(p.id)) add('graph.id', p.id, '', { id: p.id, reason: 'malformed', what: 'plate' })
+    idSuffix(p.id, p.id)
     if (p.kind === 'rows' && p.id !== 'rows') add('graph.id', p.id, '', { id: p.id, reason: 'rows_plate_id' })
     if (p.kind !== 'rows' && p.id === 'rows') add('graph.id', p.id, '', { id: p.id, reason: 'rows_reserved' })
   }
   for (const n of g.nodes) {
     bump(n.id)
     if (!validId(n.id)) add('graph.id', n.id, '', { id: n.id, reason: 'malformed', what: 'node' })
+    idSuffix(n.id, n.id)
     if (n.id === 'rows') add('graph.id', n.id, '', { id: n.id, reason: 'rows_reserved' })
     const cs = new Map<string, number>()
     for (const k of n.components) {
       cs.set(k.id, (cs.get(k.id) ?? 0) + 1)
       if (!validId(k.id)) add('graph.id', `${n.id}.${k.id}`, '', { id: k.id, reason: 'malformed' })
+      idSuffix(`${n.id}.${k.id}`, k.id)
     }
     for (const [id, k] of cs) if (k > 1) add('graph.id', `${n.id}.${id}`, '', { id, reason: 'duplicate' })
   }

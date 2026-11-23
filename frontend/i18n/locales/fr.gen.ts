@@ -7686,6 +7686,7 @@ export default {
         "duplicate": "Deux nœuds ou cadres ont le même identifiant interne ({id}) : dupliquez l'un d'eux et supprimez l'original.",
         "rows_plate_id": "Le cadre des lignes doit avoir l'identifiant rows, pas {id} : recréez-le.",
         "rows_reserved": "L'identifiant rows est réservé au cadre des lignes : dupliquez celui-ci pour lui en donner un autre.",
+        "reserved_suffix": "Ce nœud ou cadre a un identifiant interne ({id}) que le programme ne peut pas utiliser : dupliquez-le et supprimez l'original.",
       },
       "name": {
         "empty": "Le nom est vide : écrivez-en un, ou retirez-le (un nœud sans nom se relie en tirant un trait vers lui).",

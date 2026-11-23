@@ -220,6 +220,9 @@ func corpusCases() []corpusCase {
 	clean("id-well-formed", "graph.id", regression, set("p1", "id", "p1x"))
 	trips("id-duplicate", "graph.id", "", example, set("n2", "id", "n1"))
 	trips("id-rows-on-a-node", "graph.id", "", regression, set("d1", "id", "rows"))
+	trips("id-reserved-suffix-lpdf", "graph.id", "", regression, set("d1", "id", "lpdf"))
+	trips("id-reserved-suffix-lccdf", "graph.id", "", regression, set("d1", "id", "lccdf"))
+	clean("id-near-reserved-suffix", "graph.id", regression, set("d1", "id", "lpdfs"))
 	trips("id-confusable", "graph.id", "", regression, set("d1", "id", "dı"))
 
 	// graph.name, name_taken, name_function

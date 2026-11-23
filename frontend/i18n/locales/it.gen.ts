@@ -7686,6 +7686,7 @@ export default {
         "duplicate": "Due nodi o riquadri hanno lo stesso identificatore interno ({id}): duplicane uno ed elimina l'originale.",
         "rows_plate_id": "Il riquadro delle righe deve avere l'identificatore rows, non {id}: ricrealo.",
         "rows_reserved": "L'identificatore rows è riservato al riquadro delle righe: duplica questo per dargliene un altro.",
+        "reserved_suffix": "Questo nodo o riquadro ha un identificatore interno ({id}) che il programma non può usare: duplicalo ed elimina l'originale.",
       },
       "name": {
         "empty": "Il nome è vuoto: scrivine uno, oppure toglilo (un nodo senza nome si collega trascinandoci una linea).",

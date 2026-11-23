@@ -7686,6 +7686,7 @@ export default {
         "duplicate": "Zwei Knoten oder Kästen haben dieselbe interne Kennung ({id}): Duplizieren Sie einen davon und löschen Sie das Original.",
         "rows_plate_id": "Der Kasten der Zeilen muss die Kennung rows haben, nicht {id}: Legen Sie ihn neu an.",
         "rows_reserved": "Die Kennung rows ist dem Kasten der Zeilen vorbehalten: Duplizieren Sie diesen, damit er eine andere bekommt.",
+        "reserved_suffix": "Dieser Knoten oder Kasten hat eine interne Kennung ({id}), die das Programm nicht verwenden kann: Duplizieren Sie ihn und löschen Sie das Original.",
       },
       "name": {
         "empty": "Der Name ist leer: Schreiben Sie einen oder entfernen Sie ihn (einen Knoten ohne Namen verbinden Sie, indem Sie eine Linie zu ihm ziehen).",

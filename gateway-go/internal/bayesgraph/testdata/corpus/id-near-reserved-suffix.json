@@ -1,0 +1,176 @@
+{
+  "name": "id-near-reserved-suffix",
+  "rule": "graph.id",
+  "expect": "clean",
+  "input": {
+    "format_version": 1,
+    "nodes": [
+      {
+        "id": "lpdfs",
+        "kind": "data",
+        "label": "Price",
+        "name": "price",
+        "plate": "rows",
+        "type": "real"
+      },
+      {
+        "id": "d2",
+        "kind": "data",
+        "label": "Area",
+        "name": "area",
+        "plate": "rows",
+        "standardize": true,
+        "type": "real"
+      },
+      {
+        "id": "d3",
+        "kind": "data",
+        "label": "Rooms",
+        "name": "rooms",
+        "plate": "rows",
+        "support": "nonnegative",
+        "type": "int"
+      },
+      {
+        "id": "m1",
+        "kind": "parameter",
+        "label": "Intercept",
+        "name": "alpha",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "10"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m2",
+        "kind": "parameter",
+        "label": "Area effect",
+        "name": "b_area",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m3",
+        "kind": "parameter",
+        "label": "Rooms effect",
+        "name": "b_rooms",
+        "prior": {
+          "args": {
+            "mu": {
+              "expr": "0"
+            },
+            "sigma": {
+              "expr": "1"
+            }
+          },
+          "dist": "normal"
+        }
+      },
+      {
+        "id": "m4",
+        "kind": "parameter",
+        "label": "Noise",
+        "name": "sigma",
+        "prior": {
+          "args": {
+            "beta": {
+              "expr": "1"
+            }
+          },
+          "dist": "exponential"
+        }
+      },
+      {
+        "id": "p1",
+        "intercept": {
+          "expr": "alpha"
+        },
+        "kind": "linear_predictor",
+        "label": "Expected price",
+        "name": "eta",
+        "plate": "rows",
+        "terms": [
+          {
+            "coef": {
+              "expr": "b_area"
+            },
+            "data": "d2"
+          },
+          {
+            "coef": {
+              "ref": "m3"
+            },
+            "data": "d3"
+          }
+        ]
+      },
+      {
+        "args": {
+          "mu": {
+            "expr": "eta"
+          },
+          "sigma": {
+            "expr": "sigma"
+          }
+        },
+        "dist": "normal",
+        "id": "l1",
+        "kind": "likelihood",
+        "label": "Prices",
+        "observed": "d1"
+      }
+    ],
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Houses"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "expr.wrong_plate",
+      "severity": "error",
+      "node": "l1",
+      "slot": "args.mu",
+      "args": {
+        "len": 3,
+        "name": "eta",
+        "plate": "rows",
+        "pos": 0
+      }
+    },
+    {
+      "code": "graph.likelihood",
+      "severity": "error",
+      "node": "l1",
+      "slot": "observed",
+      "args": {
+        "observed": "d1",
+        "reason": "unknown_node"
+      }
+    },
+    {
+      "code": "graph.unused_data",
+      "severity": "error",
+      "node": "lpdfs"
+    }
+  ]
+}

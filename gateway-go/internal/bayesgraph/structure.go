@@ -82,6 +82,7 @@ func (c *checker) ids(g *Graph) {
 	for _, p := range g.Plates {
 		seen[p.ID]++
 		c.idShape(p.ID, "plate")
+		c.idSuffix(p.ID, p.ID)
 		if p.Kind == kindRows && p.ID != "rows" {
 			c.add("graph.id", p.ID, "", map[string]any{"id": p.ID, "reason": "rows_plate_id"})
 		}
@@ -92,6 +93,7 @@ func (c *checker) ids(g *Graph) {
 	for _, n := range g.Nodes {
 		seen[n.ID]++
 		c.idShape(n.ID, "node")
+		c.idSuffix(n.ID, n.ID)
 		if n.ID == "rows" {
 			c.add("graph.id", n.ID, "", map[string]any{"id": n.ID, "reason": "rows_reserved"})
 		}
@@ -101,6 +103,7 @@ func (c *checker) ids(g *Graph) {
 			if !validID(k.ID) {
 				c.add("graph.id", n.ID+"."+k.ID, "", map[string]any{"id": k.ID, "reason": "malformed"})
 			}
+			c.idSuffix(n.ID+"."+k.ID, k.ID)
 		}
 		for id, k := range cs {
 			if k > 1 {
@@ -118,6 +121,18 @@ func (c *checker) ids(g *Graph) {
 func (c *checker) idShape(id, what string) {
 	if !validID(id) {
 		c.add("graph.id", id, "", map[string]any{"id": id, "reason": "malformed", "what": what})
+	}
+}
+
+// idSuffix refuses an id that is exactly a suffix Stan reserves without its underscore (lpdf,
+// cdf…): the generated identifiers V_<id>, J_<id>… would end with the reserved suffix (correction
+// of 2026-11-24 from lot S0 of stan-codegen). Ids hold no underscore, so equality is the whole rule.
+func (c *checker) idSuffix(where, id string) {
+	for _, suffix := range bayescatalog.StanLists().ReservedSuffixes {
+		if id == strings.TrimPrefix(suffix, "_") {
+			c.add("graph.id", where, "", map[string]any{"id": id, "reason": "reserved_suffix"})
+			return
+		}
 	}
 }
 
