@@ -31,13 +31,15 @@ type EmitEnv interface {
 	// the indexing is lifted (Typed.Lifted, Checked.Lifts).
 	IndexArray(indexID string, context Plate) string
 	// LagArray is the data array of the rows k steps before, one per row the statement runs on
-	// (Lag<k>).
+	// (Lag<k>), or that array taken at some of its positions (Lag<k>[Ppc_o1_rows]: an identifier
+	// indexed by one, see RowsSubset).
 	LagArray(k int) string
 	// RowsSubset is the array of the rows the statement runs on when it is not every row
 	// (Rows_lag for a statement with lag), "" otherwise. Emit asks it once per emission: when it is
 	// not empty, every value over the context (a name, an indexing) is written on those rows,
 	// x[Rows_lag], so every argument of a statement that runs on the lagged rows has their size,
-	// lag or not. An expression with lag needs it.
+	// lag or not. An expression with lag needs it. It may be an identifier indexed by one, the
+	// positions predictive-checks names among a statement's rows (Rows_lag[Ppc_o1_rows]).
 	RowsSubset() string
 }
 
@@ -109,6 +111,23 @@ func lexicalIdentifier(s string) bool {
 	return true
 }
 
+// checkRows refuses a set of rows the caller gives (RowsSubset, LagArray) that is not an identifier,
+// nor an identifier indexed by one (Rows_lag[Ppc_o1_rows]).
+func checkRows(what, s string) error {
+	base, rest, indexed := strings.Cut(s, "[")
+	if !indexed {
+		return checkIdentifier(what, s)
+	}
+	inner, ok := strings.CutSuffix(rest, "]")
+	if !ok {
+		return emitError(what + ": not an identifier nor one indexed by one: " + strconv.Quote(s))
+	}
+	if err := checkIdentifier(what, base); err != nil {
+		return err
+	}
+	return checkIdentifier(what, inner)
+}
+
 // checkIdentifier refuses a string the caller gives that is not an identifier the output may hold.
 func checkIdentifier(what, s string) error {
 	if !lexicalIdentifier(s) {
@@ -146,7 +165,7 @@ func Emit(c *Checked, env EmitEnv) (string, error) {
 	}
 	e := &emitter{env: env, ctx: c.Context, maxLag: int64(catalogLimits.MaxLag), budget: catalogLimits.MaxExpressionNodes}
 	if s := env.RowsSubset(); s != "" {
-		if err := checkIdentifier("RowsSubset", s); err != nil {
+		if err := checkRows("RowsSubset", s); err != nil {
 			return "", err
 		}
 		e.subset = s
@@ -345,7 +364,7 @@ func (e *emitter) lag(t *Typed) error {
 		return err
 	}
 	arr := e.env.LagArray(int(k))
-	if err := checkIdentifier("LagArray("+strconv.FormatInt(k, 10)+")", arr); err != nil {
+	if err := checkRows("LagArray("+strconv.FormatInt(k, 10)+")", arr); err != nil {
 		return err
 	}
 	x += "[" + arr + "]"

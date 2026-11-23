@@ -7,6 +7,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -19,8 +20,9 @@ import (
 // An extension never writes text. Its declarations (Decl) and statements (Stmt) are typed values,
 // and every value in them (Expr) is made by this package: a node's identifier, a slot's or a
 // node's value emitted through bayesexpr.Emit (with the extension's own identifiers in place of
-// some nodes', for the prior's ancestral draws), a call of a name the catalogue lists, a number
-// re-printed from its double, an indexing, the loop's index. Its names have the extension's
+// some nodes', for the prior's ancestral draws; on the rows an array of its data names, lot P1 of
+// predictive-checks), a call of a name the catalogue lists, a number re-printed from its double,
+// an indexing, the loop's index, a sum and a product of two values. Its names have the extension's
 // prefixes (Ppc_, Prior_), which no identifier of the program has. A refused declaration or
 // statement is ErrExtension; the program it would have made is never returned. Everything it adds
 // passes the same checks as the rest of the program.
@@ -49,11 +51,26 @@ type Scope interface {
 	Local(node string) (Expr, error)
 	// ValueWith is a transformed node's value or a linear predictor's sum emitted with ids in
 	// place of the program's identifiers where ids answers (an identifier: a Decl's Ref); on
-	// Rows_lag when the node is lagged.
+	// Rows_lag when the node is lagged. The prior's path never reads the posterior's values: a
+	// value per row it reads that reads a node ids answers (directly or through what it reads)
+	// is rebuilt with ids too, in a local of its own (E_<id>_<k>, written before the statement);
+	// any other node that does (a parameter whose prior reads one, a transformed parameter, a
+	// component) and that ids does not answer is ErrExtension.
 	ValueWith(node string, ids func(node string) (Expr, bool)) (Expr, error)
+	// ValueOn is ValueWith on some of the node's rows: the positions among the rows its value is
+	// computed on (every row, or Rows_lag when it is lagged) that rows, an array of integers of the
+	// extension's data, names. Every value over the node's plate in it is taken at those rows
+	// (x[Ppc_o1_rows], x[Rows_lag[Ppc_o1_rows]], lag(x, 1) as x[Lag1[Ppc_o1_rows]]), and so is a
+	// value per row it rebuilds. The node is over a plate.
+	ValueOn(node string, ids func(node string) (Expr, bool), rows Expr) (Expr, error)
 	// Slot is any slot's value (a likelihood's argument, a prior's) emitted as ValueWith does, on
 	// the rows its statement runs on.
 	Slot(key bayesgraph.SlotKey, ids func(node string) (Expr, bool)) (Expr, error)
+	// SlotOn is Slot on some of its statement's rows: the positions among the rows the statement
+	// runs on (every row, Rows_lag for a lagged likelihood, Rows_first for a state's first values)
+	// that rows, an array of integers of the extension's data, names, as ValueOn takes them. The
+	// slot's context is a plate; a value of it that is a single value stays one.
+	SlotOn(key bayesgraph.SlotKey, ids func(node string) (Expr, bool), rows Expr) (Expr, error)
 	// Call is a call of a name the catalogue lists (a density, a generator, a function, an
 	// internal function); anything else is an error.
 	Call(name string, args ...Expr) (Expr, error)
@@ -219,6 +236,22 @@ func Index(e, i Expr) (Expr, error) {
 
 func join(a, b []string) []string { return append(append([]string(nil), a...), b...) }
 
+// Add is (a + b). With Mul, the only arithmetic an extension writes (a difference is a sum with
+// a product by -1.0, a quotient a product with inv): fully parenthesized, never the person's text.
+func Add(a, b Expr) (Expr, error) { return arithmetic(a, "+", b) }
+
+// Mul is (a * b): Stan's product, of two single values or of a single value and a vector (two
+// vectors are refused by stanc, never written elementwise).
+func Mul(a, b Expr) (Expr, error) { return arithmetic(a, "*", b) }
+
+func arithmetic(a Expr, op string, b Expr) (Expr, error) {
+	if !a.ok() || !b.ok() {
+		return Expr{}, extErr("an operand of %s that is no value", op)
+	}
+	return Expr{text: "(" + a.text + " " + op + " " + b.text + ")", ext: join(a.ext, b.ext), loop: a.loop || b.loop,
+		pre: join(a.pre, b.pre), entries: append(append([]bayescontract.MappingEntry(nil), a.entries...), b.entries...)}, nil
+}
+
 // Stmt is a statement of the extension: an assignment, a for over a size, a local declaration.
 type Stmt struct {
 	kind          stmtKind
@@ -347,14 +380,22 @@ func (d Decl) dims() []bayescontract.Dim {
 	return []bayescontract.Dim{d.Size.dim}
 }
 
+// coreDataKinds are the data kinds of the program itself (bayes-contract): an extension's data has a
+// kind of its own, which the runner never mistakes for one of the program's.
+var coreDataKinds = map[string]bool{
+	bayescontract.DataSize: true, bayescontract.DataReal: true, bayescontract.DataInt: true, bayescontract.DataGroupIndex: true,
+	bayescontract.DataCategory: true, bayescontract.DataLift: true, bayescontract.DataMode: true, bayescontract.DataRowsSubset: true,
+	bayescontract.DataLag: true, bayescontract.DataFirst: true, bayescontract.DataNext: true, bayescontract.DataPrevious: true,
+}
+
 // writeExtensionData declares the extension's data, after Mode.
 func (g *gen) writeExtensionData() error {
 	if g.ext == nil {
 		return nil
 	}
 	for _, d := range g.ext.Data(g.m) {
-		if !lowerWord(d.Kind) || d.Role != "" || d.Check != "" || d.Of != "" || d.Size.prior {
-			return extErr("the data %s: a kind of the data manifest, no role, a size not by the mode", strconv.Quote(d.Name))
+		if !lowerWord(d.Kind) || coreDataKinds[d.Kind] || d.Role != "" || d.Check != "" || d.Of != "" || d.Size.prior {
+			return extErr("the data %s: a kind of its own in the data manifest, no role, a size not by the mode", strconv.Quote(d.Name))
 		}
 		s, err := g.declText(d)
 		if err != nil {
@@ -428,7 +469,7 @@ func (g *gen) writeGenerated() error {
 		return err
 	}
 	for _, s := range stmts {
-		if err := g.writeStmt(s, false); err != nil {
+		if err := g.writeStmt(s, 0); err != nil {
 			return err
 		}
 	}
@@ -450,8 +491,9 @@ func (g *gen) drawable(id string) bool {
 	return n != nil && n.Kind != "data" && n.Kind != "likelihood" && n.Kind != "correlated_effects"
 }
 
-// writeStmt writes one statement of the extension.
-func (g *gen) writeStmt(s Stmt, inLoop bool) error {
+// writeStmt writes one statement of the extension, in the loop numbered loop (0: in none). A local
+// declared in a loop is read only in that loop.
+func (g *gen) writeStmt(s Stmt, loop int) error {
 	switch s.kind {
 	case stmtAssign:
 		if !s.target.ok() || s.target.root == "" || !s.value.ok() {
@@ -461,7 +503,7 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		if !ok || d.Kind != "" {
 			return extErr("an assignment to %s, not a variable the extension writes", strconv.Quote(s.target.root))
 		}
-		if err := g.usable(inLoop, s.target, s.value); err != nil {
+		if err := g.usable(loop, s.target, s.value); err != nil {
 			return err
 		}
 		if err := g.writePre(s.target, s.value); err != nil {
@@ -469,7 +511,7 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		}
 		g.w.line(s.target.text + " = " + s.value.text + ";")
 	case stmtFor:
-		if inLoop {
+		if loop != 0 {
 			return extErr("a loop inside a loop")
 		}
 		if err := g.sizeOK(s.size); err != nil {
@@ -479,8 +521,9 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 			return extErr("a loop without its body")
 		}
 		g.w.open("for (I in 1:" + s.size.bound() + ")")
+		g.extLoops++
 		for _, b := range s.body {
-			if err := g.writeStmt(b, true); err != nil {
+			if err := g.writeStmt(b, g.extLoops); err != nil {
 				return err
 			}
 		}
@@ -495,7 +538,7 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 			return err
 		}
 		if s.value.ok() {
-			if err := g.usable(inLoop, s.value); err != nil {
+			if err := g.usable(loop, s.value); err != nil {
 				return err
 			}
 			if err := g.writePre(s.value); err != nil {
@@ -505,6 +548,9 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		}
 		g.w.line(text + ";")
 		g.extNames[d.Name] = d
+		if loop != 0 {
+			g.extLoop[d.Name] = loop
+		}
 		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: bayescontract.KindExtension})
 	default:
 		return extErr("a statement of no kind")
@@ -530,15 +576,19 @@ func (g *gen) writePre(es ...Expr) error {
 	return nil
 }
 
-// usable checks that values read only what is declared, and the loop's index inside a loop.
-func (g *gen) usable(inLoop bool, es ...Expr) error {
+// usable checks that values read only what is declared, a loop's local only in its loop, and the
+// loop's index inside a loop.
+func (g *gen) usable(loop int, es ...Expr) error {
 	for _, e := range es {
-		if e.loop && !inLoop {
+		if e.loop && loop == 0 {
 			return extErr("the loop's index outside a loop")
 		}
 		for _, n := range e.ext {
 			if _, ok := g.extNames[n]; !ok {
 				return extErr("%s is read before it is declared", n)
+			}
+			if l, ok := g.extLoop[n]; ok && l != loop {
+				return extErr("%s is read outside the loop it is declared in", n)
 			}
 		}
 	}
@@ -633,8 +683,8 @@ func (s *scope) env(ids func(node string) (Expr, bool)) emitEnv {
 }
 
 // valueExpr wraps an emitted value, with the locals it was split into (sink) and the extension's
-// names it reads (from ids), in its text or in its locals.
-func (s *scope) valueExpr(text string, sink *splitSink, ids func(node string) (Expr, bool), err error) (Expr, error) {
+// names it reads (from ids, the rows), in its text or in its locals.
+func (s *scope) valueExpr(text string, sink *splitSink, err error) (Expr, error) {
 	if err != nil {
 		return Expr{}, err
 	}
@@ -642,44 +692,202 @@ func (s *scope) valueExpr(text string, sink *splitSink, ids func(node string) (E
 		return Expr{}, s.err
 	}
 	e := Expr{text: text, pre: sink.lines, entries: sink.entries}
-	if ids != nil {
-		for _, t := range append([]string{text}, sink.lines...) {
-			for _, w := range strings.FieldsFunc(t, func(r rune) bool { return r > 127 || !wordByte(byte(r)) }) {
-				if extensionName(w) {
-					e.ext = append(e.ext, w)
-				}
+	for _, t := range append([]string{text}, sink.lines...) {
+		for _, w := range strings.FieldsFunc(t, func(r rune) bool { return r > 127 || !wordByte(byte(r)) }) {
+			if extensionName(w) {
+				e.ext = append(e.ext, w)
 			}
 		}
 	}
 	return e, nil
 }
 
-// splitEnv is the EmitEnv of a value the extension asks for, with the sink its locals go to: new
-// numbers after the node's others, declared in the extension's nested block.
-func (s *scope) splitEnv(ids func(node string) (Expr, bool)) (emitEnv, *splitSink) {
+// splitEnv is the EmitEnv of a value the extension asks for, on frame's rows (nil: its
+// statement's), with the sink its locals go to: new numbers after the node's others, declared in
+// the extension's nested block. With ids, a value per row that reads a node ids replaces is
+// rebuilt with ids in a local (inliner).
+func (s *scope) splitEnv(ids func(node string) (Expr, bool), frame *rowsFrame) (emitEnv, *splitSink) {
 	sink := &splitSink{block: blockGenerated, fresh: true}
 	env := s.env(ids)
 	env.sink = sink
+	env.frame = frame
+	if ids != nil {
+		in := &inliner{s: s, ids: ids, done: map[string]string{}, reads: map[string]bool{}}
+		env.inline = in.local
+		in.env = env
+	}
 	return env, sink
 }
 
+// inliner rebuilds, for one value the extension asks for with ids, each value per row it reads
+// that reads a node ids answers: in a local E_<id>_<k> on the value's rows, with ids, once. Any
+// other node read that reads a node ids answers, and that ids does not answer, is refused: its
+// identifier would be the posterior's value in a value of the prior's draws.
+type inliner struct {
+	s     *scope
+	ids   func(node string) (Expr, bool)
+	env   emitEnv
+	done  map[string]string // the locals written, by node
+	reads map[string]bool   // whether a node reads one ids answers, by node
+}
+
+// replaced reports whether node reads, directly or through what it reads, a node ids answers.
+func (in *inliner) replaced(node string) bool {
+	if r, ok := in.reads[node]; ok {
+		return r
+	}
+	in.reads[node] = false // a cycle is not a model; never followed twice
+	r := false
+	for _, x := range in.s.g.reads[ownerOf(node)] {
+		if _, ok := in.ids(x); ok || in.replaced(x) {
+			r = true
+			break
+		}
+	}
+	in.reads[node] = r
+	return r
+}
+
+// local answers Identifier for a value per row that reads a node ids replaces: the local holding it
+// rebuilt with ids on the frame's rows (vector[N] E; E[rows] = …; read E[rows] by Emit).
+func (in *inliner) local(id string) (string, bool) {
+	g := in.s.g
+	fail := func(err error) (string, bool) {
+		if in.s.err == nil {
+			in.s.err = err
+		}
+		return "", false
+	}
+	if !in.replaced(id) {
+		return "", false
+	}
+	n := g.node(id)
+	if n == nil || n.Plate == nil {
+		return fail(extErr("%s reads a node ids answers: ids must answer it too", strconv.Quote(id)))
+	}
+	if p, err := g.place(n); err != nil || p != placeLocal {
+		return fail(extErr("%s reads a node ids answers: ids must answer it too", strconv.Quote(id)))
+	}
+	if ident, ok := in.done[id]; ok {
+		return ident, true
+	}
+	text, t, err := g.vectorValue(n, in.env)
+	if err != nil {
+		return fail(err)
+	}
+	size, err := g.vectorSize(bayesexpr.Plate(*n.Plate))
+	if err != nil {
+		return fail(err)
+	}
+	// a single value repeated, an array of integers made a vector, on as many rows as it is
+	// written on
+	if text, err = g.overPlate(text, t, *n.Plate, g.frameCount(in.env.frame, size)); err != nil {
+		return fail(err)
+	}
+	ident, err := g.localName(in.env.sink, id+"\x00#rows", ownerOf(id), 0)
+	if err != nil {
+		return fail(err)
+	}
+	rows := ""
+	if in.env.frame != nil {
+		rows = in.env.frame.rows()
+	}
+	in.env.sink.declareLocal(ident, size, rows, text)
+	in.done[id] = ident
+	return ident, true
+}
+
+// frameCount is the number of rows a frame holds: the size of the extension's array of positions,
+// N_lag or N_first for the statement's subset, all the plate's units (all) otherwise.
+func (g *gen) frameCount(f *rowsFrame, all string) string {
+	switch {
+	case f == nil:
+		return all
+	case f.on != "":
+		return g.extNames[f.on].Size.String()
+	case f.base == identRowsLag:
+		return identNLag
+	case f.base == identRowsFirst:
+		return identNFirst
+	}
+	return all
+}
+
+// rowsArray is the identifier of rows, an array of integers of the extension's data.
+func (s *scope) rowsArray(rows Expr) (string, error) {
+	d, ok := s.g.extNames[rows.ident]
+	if rows.ident == "" || !ok || d.Kind == "" || d.Elem != Int || d.Shape != Array {
+		return "", extErr("the rows %s are not an array of integers of the extension's data", strconv.Quote(rows.text))
+	}
+	return rows.ident, nil
+}
+
 func (s *scope) ValueWith(node string, ids func(node string) (Expr, bool)) (Expr, error) {
+	return s.value(node, ids, Expr{}, false)
+}
+
+func (s *scope) ValueOn(node string, ids func(node string) (Expr, bool), rows Expr) (Expr, error) {
+	return s.value(node, ids, rows, true)
+}
+
+func (s *scope) value(node string, ids func(node string) (Expr, bool), rows Expr, on bool) (Expr, error) {
 	n := s.g.node(node)
 	if n == nil || (n.Kind != "transformed" && n.Kind != "linear_predictor") {
 		return Expr{}, extErr("%s is not a transformed node nor a linear predictor", strconv.Quote(node))
 	}
-	env, sink := s.splitEnv(ids)
+	base := ""
+	if s.g.lagged[node] {
+		base = identRowsLag
+	}
+	var frame *rowsFrame
+	switch {
+	case on:
+		if n.Plate == nil {
+			return Expr{}, extErr("%s is a single value: it has no rows", strconv.Quote(node))
+		}
+		r, err := s.rowsArray(rows)
+		if err != nil {
+			return Expr{}, err
+		}
+		frame = &rowsFrame{base: base, on: r}
+	case ids != nil && n.Plate != nil:
+		frame = &rowsFrame{base: base}
+	}
+	env, sink := s.splitEnv(ids, frame)
 	text, _, err := s.g.vectorValue(n, env)
-	return s.valueExpr(text, sink, ids, err)
+	return s.valueExpr(text, sink, err)
 }
 
 func (s *scope) Slot(key bayesgraph.SlotKey, ids func(node string) (Expr, bool)) (Expr, error) {
-	if _, ok := s.g.m.Slots[key]; !ok {
+	return s.slot(key, ids, Expr{}, false)
+}
+
+func (s *scope) SlotOn(key bayesgraph.SlotKey, ids func(node string) (Expr, bool), rows Expr) (Expr, error) {
+	return s.slot(key, ids, rows, true)
+}
+
+func (s *scope) slot(key bayesgraph.SlotKey, ids func(node string) (Expr, bool), rows Expr, on bool) (Expr, error) {
+	t, ok := s.g.m.Slots[key]
+	if !ok {
 		return Expr{}, extErr("%s.%s is not a slot of the model", key.Node, key.Slot)
 	}
-	env, sink := s.splitEnv(ids)
+	var frame *rowsFrame
+	switch {
+	case on:
+		if t.Context == "" {
+			return Expr{}, extErr("%s.%s is a single value: it has no rows", key.Node, key.Slot)
+		}
+		r, err := s.rowsArray(rows)
+		if err != nil {
+			return Expr{}, err
+		}
+		frame = &rowsFrame{base: s.g.subsetOf(key), on: r}
+	case ids != nil && t.Context != "":
+		frame = &rowsFrame{base: s.g.subsetOf(key)}
+	}
+	env, sink := s.splitEnv(ids, frame)
 	text, _, err := s.g.emitSlot(key, env)
-	return s.valueExpr(text, sink, ids, err)
+	return s.valueExpr(text, sink, err)
 }
 
 func (s *scope) Call(name string, args ...Expr) (Expr, error) {

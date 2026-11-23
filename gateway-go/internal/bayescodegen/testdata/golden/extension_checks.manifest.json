@@ -1,0 +1,253 @@
+{
+  "codegen_version": 2,
+  "semantic_hash": "5c14fc184b4205e0c0ac96ed5c8978de58537d0bf840e108dead07cc84150e0e",
+  "program_sha256": "74134a4289674284d6f240acc3200cf0a23344878c6b66c3d717739089b21574",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_on",
+      "kind": "flag"
+    },
+    {
+      "stan": "Ppc_o1_n",
+      "kind": "number"
+    },
+    {
+      "stan": "Ppc_o1_rows",
+      "kind": "rows"
+    },
+    {
+      "stan": "Prior_o1_n",
+      "kind": "number"
+    },
+    {
+      "stan": "Prior_o1_rows",
+      "kind": "rows"
+    },
+    {
+      "stan": "Ppc_o1_m",
+      "kind": "number"
+    },
+    {
+      "stan": "Ppc_o1_slots",
+      "kind": "number"
+    },
+    {
+      "stan": "Ppc_o1_scale",
+      "kind": "scale"
+    },
+    {
+      "stan": "Ppc_o1_shift",
+      "kind": "shift"
+    },
+    {
+      "stan": "Ppc_o1_units",
+      "kind": "number"
+    },
+    {
+      "stan": "Ppc_o1_slot",
+      "kind": "unit_slot"
+    },
+    {
+      "stan": "Ppc_o1_binned",
+      "kind": "number"
+    },
+    {
+      "stan": "Ppc_o1_rep",
+      "kind": "number"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "mu_a",
+      "role": "quantity",
+      "node": "mua",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    },
+    {
+      "stan": "tau_a",
+      "role": "quantity",
+      "node": "taua",
+      "dims": []
+    },
+    {
+      "stan": "a_g",
+      "role": "quantity",
+      "node": "ag",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "Prior_m_1",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "bx"
+    },
+    {
+      "stan": "Prior_m_3",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "mua"
+    },
+    {
+      "stan": "Prior_m_4",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "sigma"
+    },
+    {
+      "stan": "Prior_m_5",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "taua"
+    },
+    {
+      "stan": "Prior_p_6",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ],
+      "of": "ag"
+    },
+    {
+      "stan": "Ppc_o1_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean"
+    },
+    {
+      "stan": "Ppc_o1_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd"
+    },
+    {
+      "stan": "Ppc_o1_min",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "min"
+    },
+    {
+      "stan": "Ppc_o1_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max"
+    },
+    {
+      "stan": "Ppc_o1_low",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "low_quantile"
+    },
+    {
+      "stan": "Ppc_o1_median",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "median"
+    },
+    {
+      "stan": "Ppc_o1_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_slots"
+        }
+      ],
+      "check": "bin_count"
+    },
+    {
+      "stan": "Ppc_o1_usum",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_units"
+        }
+      ],
+      "check": "unit_sum"
+    },
+    {
+      "stan": "Ppc_o1_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_rep"
+        }
+      ],
+      "check": "replicated"
+    }
+  ]
+}

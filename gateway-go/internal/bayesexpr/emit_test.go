@@ -244,6 +244,24 @@ func TestEmitRefusesIdentifiers(t *testing.T) {
 	if _, err := Emit(c, fixedEmitEnv{id: "x", index: "g", lag: "Lag1"}); !errors.Is(err, ErrEmit) {
 		t.Errorf("a lag without the subset: %v", err)
 	}
+	// The rows (RowsSubset, LagArray) may be an identifier indexed by one, the positions
+	// predictive-checks names among a statement's rows (lot P1), and nothing more.
+	out, err := Emit(c, fixedEmitEnv{id: "x", index: "g", lag: "Lag1[Ppc_rows]", subset: "Rows_lag[Ppc_rows]"})
+	if want := "((x[g[Rows_lag[Ppc_rows]]]) + (x * (x[Lag1[Ppc_rows]])))"; err != nil || out != want {
+		t.Errorf("indexed rows: %q, %v; want %q", out, err, want)
+	}
+	for _, s := range []string{"x[y][z]", "x[y]z", "x[]", "[x]", "x[print]", "print[x]", "x[y", "x[y]]", "x[1]", "x[y z]",
+		"x[y_lpdf]", "x[ y]", "x[(y)]", "x[y[z]]", "x[y;]"} {
+		for i, env := range []fixedEmitEnv{
+			{id: "x", index: "g", lag: s, subset: "Rows_lag"},
+			{id: "x", index: "g", lag: "Lag1", subset: s},
+		} {
+			out, err := Emit(c, env)
+			if err == nil || !errors.Is(err, ErrEmit) || out != "" {
+				t.Errorf("%q as rows %d: %q, %v", s, i, out, err)
+			}
+		}
+	}
 }
 
 // The subset of the rows applies to every value over the context, lag or not, so that every

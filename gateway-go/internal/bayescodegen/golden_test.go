@@ -52,12 +52,20 @@ var goldenCases = []string{
 	"extension_fake",
 	// Lot S5: large vector expressions split into locals, in every block a value is written in.
 	"split_large",
+	// Lot P1 of predictive-checks: the test extension of the checks (checks_ext_test.go), with the
+	// values on the rows it names (SlotOn, ValueOn), its arithmetic (Add, Mul) and the new internal
+	// functions: a hierarchy with a truncated scale (hier_intercepts' graph), three outcomes of each
+	// kind and a fourth left out, a lagged likelihood reading a value without lag.
+	"extension_checks", "extension_checks_counts", "extension_checks_lagged",
 }
 
 // goldenExtension is the extension a case is generated with (nil for none).
 func goldenExtension(name string) Extension {
-	if name == "extension_fake" {
+	switch {
+	case name == "extension_fake":
 		return fakeExtension{}
+	case strings.HasPrefix(name, "extension_checks"):
+		return checksExtension{}
 	}
 	return nil
 }

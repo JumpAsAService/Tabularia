@@ -41,8 +41,11 @@ func FuzzGenerate(f *testing.F) {
 		}
 		m := bayesgraph.BuildModel(g)
 		var ext Extension
-		if c.pick(2) == 0 {
+		switch c.pick(3) {
+		case 0:
 			ext = ppcExtension{}
+		case 1:
+			ext = checksExtension{}
 		}
 		p, err := Generate(m, ext)
 		if !m.Valid() {

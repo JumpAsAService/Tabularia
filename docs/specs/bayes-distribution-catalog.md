@@ -491,6 +491,10 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
    program (normal: `inv_Phi`; lognormal: `exp` of it; Cauchy: `tan`; Student-t and beta: `inv_inc_beta`; exponential:
    `log1m`; uniform: linear), and **none for `gamma` and `inv_gamma`** (Stan 2.40 has no quantile for them, assumed): such a
    prior truncated inside its support has no ancestral draw in Stan (`bayes-predictive-checks.md`, «Truncated priors»).
+   Built by lot P1 of `bayes-predictive-checks.md` (its «As built — lot P1»): `stan.quantile` is `inv_Phi`, `exp_inv_Phi`,
+   `tan`, `inv_inc_beta_t`, `inv_inc_beta`, `log1m`, `linear`; Stan 2.40 writes a `_cdf` only with a vertical bar, outside
+   the program's alphabet, so the cumulative distributions are written with `Phi`, `atan`, `inc_beta`, `step`, `expm1` and
+   `inv` (in `internal_functions`), never a `_cdf` name.
 2. **`finite_variance`** per distribution, for its constant arguments: normal, exponential, gamma, lognormal, beta,
    uniform always; Cauchy never; Student-t only with ν > 2; inverse-gamma only with α > 2; a truncation to a bounded range
    always. `bayes-diagnostics` leaves the contraction NULL when a node's marginal, or a node its arguments read, has none

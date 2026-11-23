@@ -106,7 +106,8 @@ func TestGoldenStanc(t *testing.T) {
 }
 
 // TestGeneratedStanc runs stanc on the programs of the generator's graphs (the same ones the
-// properties use), with the replicated-outcome extension where the outcome is normal.
+// properties use), with the replicated-outcome extension where the outcome is normal, and with the
+// test extension of the checks (lot P1).
 func TestGeneratedStanc(t *testing.T) {
 	stanc := stancPath(t)
 	dir := t.TempDir()
@@ -121,7 +122,7 @@ func TestGeneratedStanc(t *testing.T) {
 		if !ok {
 			continue
 		}
-		for _, ext := range []Extension{nil, ppcExtension{}} {
+		for _, ext := range []Extension{nil, ppcExtension{}, checksExtension{}} {
 			p, err := Generate(m, ext)
 			if err != nil {
 				t.Fatalf("seed %d: %v\n%s", seed, err, data)

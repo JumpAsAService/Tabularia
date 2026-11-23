@@ -431,6 +431,67 @@ lands:
 |---|---|---|
 | Where the posterior predictive checks are computed | **(b) a `generate_quantities` run after sampling on 1,000 thinned draws** (`bayes_ppc_draws`), the same mechanism as the `replicated` output, **if lot P0 confirms that CmdStan 2.40 reads the follower's thinned CSV**; **otherwise (a) inline**, in the sampling run on every draw. P0 records which in «As built» | Owner, 2026-11-24 |
 
+## As built — lot P1 (the codegen's additions)
+
+`gateway-go/internal/bayescodegen` (`generated.go`, `model.go`, `codegen.go`), `internal/bayesexpr/emit.go`,
+`internal/bayescatalog` (`catalog.go`, `declare.go`, the snapshot and the interface's copy), with their tests.
+
+- **`Scope.SlotOn(key, ids, rows)` and `Scope.ValueOn(node, ids, rows)`.** `rows` is an `Expr`: the `Ref` of an array of
+  integers of the extension's **data** (anything else is `ErrExtension`: a written or local array, a program's identifier,
+  an indexing, reals). Every value over the statement's plate is taken at those positions among the rows the statement
+  runs on: `x[Ppc_o1_rows]` on every row, `x[Rows_lag[Ppc_o1_rows]]` on a lagged statement, `lag(x, k)` as
+  `x[Lag<k>[Ppc_o1_rows]]`, an index and its lift at the same positions, a split value's locals (`E_<id>_<k>`) assigned
+  and read there; a single value stays one (the extension repeats it with `rep_vector` when it needs one a row). A slot of
+  a single value (no plate) and a node without a plate are refused. `bayesexpr.Emit` accepts as `RowsSubset` and
+  `LagArray` an identifier indexed by one, and nothing more (`checkRows`).
+- **Values of the prior's draws never read the posterior's** (a choice of this lot, in the spirit of «Truncated priors»):
+  with `ids`, a value per row that reads a node `ids` answers (directly or through what it reads) is rebuilt with `ids` on
+  the same rows in a local of its own (`vector[N] E_<id>_<k>; E_<id>_<k>[rows] = …;`, in the mapping table as
+  `internal`, once per value asked for); any other node that reads one (a parameter whose prior reads it, a transformed
+  parameter, a component, a state) and that `ids` does not answer is `ErrExtension` («ids must answer it too»). So the
+  prior's path of a lagged likelihood reading a value without lag (`eta` read by `m = eta + phi * lag(y, 1)`) is written
+  `E_eta_1[Rows_lag[Prior_o1_rows]] = …; E_m_1[Rows_lag[Prior_o1_rows]] = (E_eta_1[…] + (Prior_phi * (y[Lag1[Prior_o1_rows]])));`.
+  A draw standing for a parameter over a plate must be a `vector` (`vector[Mode == 1 ? J_grp : 0]`), as the parameter is:
+  an array does not add to a vector (stanc refuses it).
+- **`Add(a, b)` and `Mul(a, b)`** return `(Expr, error)` as `Index` does (the sketch of «Code style» passes `Mul`'s result
+  directly: P2 wraps it): `(a + b)`, `(a * b)`, refused when an operand is no value; their result is no variable (not
+  indexed, not assigned). A difference is `Add(a, Mul(Num(-1), b))` (`((-1.0) * b)`), a quotient a product with `inv`.
+- **The extension's statements**: a local declared in a loop is read only in that loop (`ErrExtension` otherwise, before
+  stanc); an extension's data may not take a kind of the program's own (`size`, `real`, `mode`, `lag`…: the contract's
+  check refuses them, now the codegen first).
+- **The functions.** stanc 2.40.0 refuses `normal_cdf(x, mu, sigma)`: «Probability functions with suffixes _lpdf, …, _cdf,
+  _lcdf and _lccdf, require a vertical bar (|) between the first two arguments» (measured), and `|` is outside the
+  program's alphabet («Ask first»: not admitted). **No `_cdf` name is in `internal_functions`**; the cumulative
+  distributions of «Truncated priors» are written with functions without a bar: `Phi` (normal, lognormal), `atan` (Cauchy),
+  `inc_beta` (beta; Student-t with `step` for the sign), `expm1` (exponential, a function of the language), and `inv` for
+  a division. `internal_functions` gains, after `std_normal`: `mean`, `sd`, `min`, `max`, `quantile`, `floor`, `fmin`,
+  `fmax`, `to_int`, `append_array`, `rep_array`, `inv_Phi`, `inv_inc_beta`, `tan`, `log1m`, `uniform_rng`, `Phi`, `atan`,
+  `inc_beta`, `step`, `fabs`, `inv`. They are names a person's node no longer takes (renamed as every callable name is).
+  stanc 2.40.0 types `quantile`, `to_int(fmin(fmax(floor(…), 1.0), n))`, `append_array` with an empty array and
+  multi-indexing on parameter-dependent values in the generated quantities (measured on the golden programs below).
+- **`stan.quantile`** (the catalogue's correction 1): `inv_Phi` (normal), `exp_inv_Phi` (lognormal), `tan` (Cauchy),
+  `inv_inc_beta_t` (Student-t), `inv_inc_beta` (beta), `log1m` (exponential), `linear` (uniform); none for `gamma` and
+  `inv_gamma`. The F and Q of each form, in the functions above, are written beside the type `bayescatalog.Quantile`;
+  `QuantileFunctions` lists them and a test checks that a program may call each. `finite_variance` is not added here
+  (`bayes-diagnostics`' lot X4 reads it).
+- **`CodegenVersion` = 2.** The golden programs without an extension, and `extension_fake`, are unchanged byte for byte;
+  every golden manifest records `codegen_version` 2. The store's programs (`save.go`, still `Generate(m, nil)`) are the
+  same bytes until P2. The example tasks of `bayescontract/testdata/tasks` keep `codegen_version` 1 (the runner's tests read
+  them as they are; P3 moves them).
+- **Golden cases** (with `checksExtension`, the test extension of `checks_ext_test.go`, the shape of «What the program
+  holds» written with the primitives only; P2's `checks_*` replace it): `extension_checks` (the graph of
+  `hier_intercepts`: a group's levels drawn in a loop into a vector sized by the mode, a half-normal by inversion with
+  `Phi`, `inv` and `inv_Phi`, `eta` rebuilt on the prior's rows), `extension_checks_counts` (a binary outcome with a single
+  argument repeated, a negative binomial, a binomial through `inv_logit`; a fourth likelihood left out),
+  `extension_checks_lagged` (the lagged likelihood above). The test extension loops the bins over a data size of their
+  own (`Ppc_o<k>_binned`), not over `Ppc_o<k>_m`: in the `replicated` run of «The runs» (`Ppc_on` 0, the slots 0, the rows
+  replicated) a loop over the replicated rows would index `Ppc_o<k>_count[0]`; P2 decides.
+- **Checked**: stanc 2.40.0 (`--info`, `CrossCheck`, `--o`) on the 26 golden programs and on 900 generated ones (300 seeds,
+  without an extension, with `ppcExtension`, with `checksExtension`); the properties' 500 graphs with `checksExtension`
+  reach a prior's path (135), a value rebuilt on the rows named (63), a lagged statement's positions (134), a lag at the
+  positions (75), a split value on the rows named (115); `FuzzGenerate` 2 minutes (`-parallel 2 -fuzzminimizetime=2s`,
+  the three extensions): 18,043 executions, no failure.
+
 ## Open questions
 
 None.

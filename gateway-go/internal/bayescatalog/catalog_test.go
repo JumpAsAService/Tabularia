@@ -237,6 +237,50 @@ func TestLanguage(t *testing.T) {
 	}
 }
 
+// Every truncatable prior has its quantile's form, except gamma and inv_gamma (Stan 2.40 has no
+// quantile for them); nothing else has one; and every function a form writes is one a program may
+// call: an internal function, a function of the language, a generator (lot P1).
+func TestQuantileForms(t *testing.T) {
+	c := Declared()
+	callable := map[string]bool{}
+	for _, f := range c.InternalFunctions {
+		if callable[f] {
+			t.Errorf("internal function %q twice", f)
+		}
+		callable[f] = true
+		if !stanName.MatchString(strings.ToLower(f)) || strings.HasSuffix(f, "_cdf") {
+			t.Errorf("internal function %q: a Stan name, never a _cdf (Stan writes it with a vertical bar)", f)
+		}
+	}
+	for _, f := range c.Language.Functions {
+		callable[f.Stan] = f.Stan != "" || callable[f.Stan]
+	}
+	for _, d := range c.Distributions {
+		callable[d.Stan.RNG] = d.Stan.RNG != "" || callable[d.Stan.RNG]
+	}
+	for _, d := range c.Distributions {
+		want := d.HasUse(Prior) && d.Truncatable() && d.ID != "gamma" && d.ID != "inv_gamma" && d.ID != "std_normal"
+		if (d.Stan.Quantile != "") != want {
+			t.Errorf("%s: quantile %q", d.ID, d.Stan.Quantile)
+		}
+		if d.Stan.Quantile == "" {
+			continue
+		}
+		fs, ok := QuantileFunctions[d.Stan.Quantile]
+		if !ok {
+			t.Errorf("%s: the form %q has no functions", d.ID, d.Stan.Quantile)
+		}
+		for _, f := range fs {
+			if !callable[f] {
+				t.Errorf("%s: the form %q writes %q, which a program may not call", d.ID, d.Stan.Quantile, f)
+			}
+		}
+	}
+	if len(QuantileFunctions) != 7 {
+		t.Errorf("%d forms", len(QuantileFunctions))
+	}
+}
+
 func TestLimitsArePositiveAndAsDocumented(t *testing.T) {
 	l := GetLimits()
 	if !l.positive() {

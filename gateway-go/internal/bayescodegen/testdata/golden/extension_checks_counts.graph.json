@@ -1,0 +1,212 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "cnt",
+      "kind": "data",
+      "name": "visits",
+      "label": "Visits",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "bin",
+      "kind": "data",
+      "name": "bought",
+      "label": "Bought (yes or no)",
+      "plate": "rows",
+      "type": "int",
+      "support": "binary"
+    },
+    {
+      "id": "k",
+      "kind": "data",
+      "name": "k",
+      "label": "Successes",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "n",
+      "kind": "data",
+      "name": "trials",
+      "label": "Trials",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Intercept",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread (half-normal)",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "phi",
+      "kind": "parameter",
+      "name": "phi",
+      "label": "Extra variation of the count",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "alpha"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "l1",
+      "kind": "likelihood",
+      "label": "Outcome",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    },
+    {
+      "id": "l2",
+      "kind": "likelihood",
+      "label": "Visits",
+      "observed": "cnt",
+      "dist": "neg_binomial_2_log",
+      "args": {
+        "eta": {
+          "expr": "eta"
+        },
+        "phi": {
+          "expr": "phi"
+        }
+      }
+    },
+    {
+      "id": "l3",
+      "kind": "likelihood",
+      "label": "Bought",
+      "observed": "bin",
+      "dist": "bernoulli_logit",
+      "args": {
+        "alpha": {
+          "expr": "alpha"
+        }
+      }
+    },
+    {
+      "id": "l4",
+      "kind": "likelihood",
+      "label": "Successes (not checked: the fourth)",
+      "observed": "k",
+      "dist": "binomial_logit",
+      "args": {
+        "N": {
+          "expr": "trials"
+        },
+        "alpha": {
+          "expr": "eta"
+        }
+      }
+    }
+  ]
+}

@@ -105,6 +105,49 @@ type StanNames struct {
 	RNGInverseLink string `json:"rng_inverse_link,omitempty"`
 	LCDF           string `json:"lcdf,omitempty"`
 	LCCDF          string `json:"lccdf,omitempty"`
+	// Quantile is the form of the prior's quantile in Stan, with which predictive-checks draws a
+	// truncated prior by inversion; empty when Stan has none (gamma, inv_gamma).
+	Quantile Quantile `json:"quantile,omitempty"`
+}
+
+// Quantile is the form in which a truncated prior's ancestral draw is written in the program, by
+// inversion (docs/specs/bayes-predictive-checks.md, «Truncated priors»): u drawn uniform between
+// F(L) and F(U), the cumulative distribution at the bounds, then x = Q(u). Stan 2.40 writes a
+// _cdf only with a vertical bar between its first two arguments (measured, lot P1), a byte the
+// program's alphabet refuses, so F is written with functions of the catalogue as well: z is
+// (x - mu) * inv(sigma), every name below is a function of the language or an internal function.
+type Quantile string
+
+const (
+	// QuantileInvPhi (normal): F = Phi(z); Q = mu + sigma * inv_Phi(u).
+	QuantileInvPhi Quantile = "inv_Phi"
+	// QuantileExpInvPhi (lognormal): F = Phi((log(x) - mu) * inv(sigma)); Q = exp(mu + sigma * inv_Phi(u)).
+	QuantileExpInvPhi Quantile = "exp_inv_Phi"
+	// QuantileTan (Cauchy): F = 0.5 + atan(z) / pi; Q = mu + sigma * tan(pi * (u - 0.5)).
+	QuantileTan Quantile = "tan"
+	// QuantileIncBetaT (Student-t): with w = square(z) * inv(nu + square(z)),
+	// F = 0.5 + (step(z) - 0.5) * inc_beta(0.5, 0.5 * nu, w); Q = mu + sigma * s * sqrt(nu * v * inv(1 - v))
+	// with v = inv_inc_beta(0.5, 0.5 * nu, |2u - 1|) and s = 2 * step(u - 0.5) - 1.
+	QuantileIncBetaT Quantile = "inv_inc_beta_t"
+	// QuantileIncBeta (beta): F = inc_beta(alpha, beta, x); Q = inv_inc_beta(alpha, beta, u).
+	QuantileIncBeta Quantile = "inv_inc_beta"
+	// QuantileLog1m (exponential, rate beta): F = -expm1(-beta * x); Q = -log1m(u) * inv(beta).
+	QuantileLog1m Quantile = "log1m"
+	// QuantileLinear (uniform, constant bounds): Q = L + (U - L) * u, L and U the bounds within
+	// its support.
+	QuantileLinear Quantile = "linear"
+)
+
+// QuantileFunctions are the Stan functions each form writes, F and Q (a test checks that the
+// program may call each).
+var QuantileFunctions = map[Quantile][]string{
+	QuantileInvPhi:    {"Phi", "inv", "inv_Phi", "uniform_rng"},
+	QuantileExpInvPhi: {"Phi", "inv", "log", "exp", "inv_Phi", "uniform_rng"},
+	QuantileTan:       {"atan", "inv", "tan", "uniform_rng"},
+	QuantileIncBetaT:  {"step", "square", "inv", "inc_beta", "inv_inc_beta", "sqrt", "fabs", "uniform_rng"},
+	QuantileIncBeta:   {"inc_beta", "inv_inc_beta", "uniform_rng"},
+	QuantileLog1m:     {"expm1", "log1m", "inv", "uniform_rng"},
+	QuantileLinear:    {"uniform_rng"},
 }
 
 // LocScale names the location and the scale parameters (the non-centred form).

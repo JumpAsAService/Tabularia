@@ -279,9 +279,13 @@ func exampleTasks(t *testing.T) map[string]modelgroups.Task {
 			RowsFrom: "trial", Limits: limits, InputRows: 600, IDs: modelgroups.IDs{FlowID: 42, NodeID: "n7", RunID: 9811, StepRunID: 9812},
 			RecipeHash: hash("recipe"), RunnerHash: hash("runner")}
 	}
+	// The examples' codegen_version stays 1 (the generator before predictive-checks' lot P1, whose
+	// programs of these two cases are the same bytes): the runner's tests read these files as they
+	// are (test_card.py). The runner's lot P3 of predictive-checks moves them to the current one.
+	const exampleCodegenVersion = 1
 	ref := func(mf manifestFile, binary bool) bayescontract.ModelRef {
 		r := bayescontract.ModelRef{ID: 17, Version: 4, SemanticHash: mf.SemanticHash, ProgramSHA256: mf.ProgramSHA256,
-			CodegenVersion: bayescodegen.CodegenVersion, CmdStan: "2.40.0"}
+			CodegenVersion: exampleCodegenVersion, CmdStan: "2.40.0"}
 		if binary {
 			r.BinarySHA256 = hash("the binary")
 		}

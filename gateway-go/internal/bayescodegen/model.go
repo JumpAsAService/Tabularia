@@ -40,6 +40,11 @@ import (
 // where the locals of a split expression go (lot S5; nil where no local can be written: a single
 // value, the parameters block), rootLocal makes a split slot's whole value a local (a part of the
 // generator's own forms), and locals are the names of the parts already written, by localKey.
+// frame, when set, is the rows an extension's value is written on (Scope.SlotOn, ValueOn, or a
+// value asked for with ids): every slot emitted in env, the value's own and those of the per-row
+// values it rebuilds, is taken on frame's rows. inline, when set, answers for a per-row value that
+// reads a node ids replaces: the name of a local holding that value rebuilt with ids on frame's
+// rows (so a value of the prior's draws never reads the posterior's per-row values).
 type emitEnv struct {
 	g         *gen
 	ctx       bayesexpr.Plate
@@ -49,6 +54,29 @@ type emitEnv struct {
 	sink      *splitSink
 	rootLocal bool
 	locals    map[string]string
+	frame     *rowsFrame
+	inline    func(node string) (string, bool)
+}
+
+// rowsFrame is the rows an extension's value is written on: the rows its statement runs on (base:
+// every row "", Rows_lag, Rows_first) taken at the positions an array of the extension's data
+// names among them (on: "" for all of them).
+type rowsFrame struct{ base, on string }
+
+// rows is the frame's rows as an index: Rows_lag[Ppc_o1_rows], Ppc_o1_rows, Rows_lag, or "" for
+// every row.
+func (f *rowsFrame) rows() string { return onRows(f.base, f.on) }
+
+// onRows is base taken at the positions on: base[on], on alone over every row, base alone when on
+// is "".
+func onRows(base, on string) string {
+	switch {
+	case on == "":
+		return base
+	case base == "":
+		return on
+	}
+	return base + "[" + on + "]"
 }
 
 func (e emitEnv) Identifier(id string) string {
@@ -57,6 +85,11 @@ func (e emitEnv) Identifier(id string) string {
 	}
 	if e.ids != nil {
 		if s, ok := e.ids(id); ok {
+			return s
+		}
+	}
+	if e.inline != nil {
+		if s, ok := e.inline(id); ok {
 			return s
 		}
 	}
@@ -85,15 +118,22 @@ func (e emitEnv) IndexArray(id string, context bayesexpr.Plate) string {
 	return e.g.lift[liftKey(id, context)]
 }
 
-// LagArray is Lag<k> on the rows that have every lag, for a lag the model declares; "" otherwise
-// (Emit refuses it).
+// LagArray is Lag<k> on the rows that have every lag, for a lag the model declares (taken at the
+// frame's positions among those rows: Lag<k>[Ppc_o1_rows]); "" otherwise (Emit refuses it).
 func (e emitEnv) LagArray(k int) string {
-	if e.subset != identRowsLag {
+	on := ""
+	switch {
+	case e.frame != nil:
+		if e.frame.base != identRowsLag {
+			return ""
+		}
+		on = e.frame.on
+	case e.subset != identRowsLag:
 		return ""
 	}
 	for _, l := range e.g.m.Lags {
 		if l == k {
-			return identLagPrefix + strconv.Itoa(k)
+			return onRows(identLagPrefix+strconv.Itoa(k), on)
 		}
 	}
 	return ""
@@ -127,6 +167,14 @@ func (g *gen) emitSlot(key bayesgraph.SlotKey, env emitEnv) (string, bayesexpr.T
 		return "", bayesexpr.Type{}, bug("the slot %s.%s did not type in a valid model", key.Node, key.Slot)
 	}
 	env.ctx, env.subset = t.Context, g.subsetOf(key)
+	if env.frame != nil {
+		// A value on the rows that have every lag is never read on other rows (the lag rule of
+		// indexLags): a frame of every row cannot hold it.
+		if env.subset == identRowsLag && env.frame.base != identRowsLag || env.subset == identRowsFirst && env.frame.base != identRowsFirst {
+			return "", t.Type, bug("the slot %s.%s on %s taken on the rows %q", key.Node, key.Slot, env.subset, env.frame.rows())
+		}
+		env.subset = env.frame.rows()
+	}
 	if t.Expr != nil {
 		s, err := g.emitSplit(key, t.Expr, env)
 		if err != nil {
@@ -496,9 +544,19 @@ func (g *gen) linearPredictor(n *bayesgraph.Node, env emitEnv) (string, bayesexp
 	plate := *n.Plate
 	over := bayesexpr.Plate(plate)
 	sum, typ := "", bayesexpr.Type{Elem: bayesexpr.ElemReal}
-	subset, rows := "", ""
-	if g.lagged[n.ID] {
-		subset, rows = "["+identRowsLag+"]", identRowsLag
+	rows := ""
+	switch {
+	case env.frame != nil:
+		if g.lagged[n.ID] && env.frame.base != identRowsLag {
+			return "", typ, bug("the lagged linear predictor %q taken on the rows %q", n.ID, env.frame.rows())
+		}
+		rows = env.frame.rows()
+	case g.lagged[n.ID]:
+		rows = identRowsLag
+	}
+	subset := ""
+	if rows != "" {
+		subset = "[" + rows + "]"
 	}
 	resid, locals := 0, 0
 	if n.Intercept != nil {

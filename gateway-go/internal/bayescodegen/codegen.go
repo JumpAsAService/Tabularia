@@ -14,7 +14,8 @@
 // reference at 0, and the truncation loop over a plate. Lot S2 adds the correlated effects (LKJ),
 // the latent states, lag on a series (the statements on the rows that have every lag), transformed
 // data, and the extension point of predictive-checks. Lot S5 splits a large vector expression into
-// a chain of locals (split.go).
+// a chain of locals (split.go). Lot P1 of predictive-checks gives the extension values on the rows
+// it names (SlotOn, ValueOn) and its arithmetic (Add, Mul).
 package bayescodegen
 
 import (
@@ -32,7 +33,12 @@ import (
 // raised with every change of the output: a golden program that changes while it does not fails
 // the suite. A saved version always runs with its stored program; a new CodegenVersion never
 // rewrites one.
-const CodegenVersion = 1
+//
+// 2 (lot P1 of predictive-checks): the extension point gains SlotOn, ValueOn, Add and Mul, the
+// catalogue's internal functions grow (so a person's name such as mean, sd, min or max is now
+// renamed), and the programs a save writes hold predictive-checks' extension (lot P2). The programs
+// of the golden corpus without an extension are unchanged.
+const CodegenVersion = 2
 
 var (
 	// ErrInvalidModel: the model has an error finding (or is nil); no program is written from it.
@@ -160,6 +166,10 @@ type gen struct {
 	extNames map[string]Decl
 	// extPre are the locals of the extension's split values already written.
 	extPre map[string]bool
+	// extLoops counts the extension's loops; extLoop is the loop each local declared in one is
+	// declared in.
+	extLoops int
+	extLoop  map[string]int
 
 	w          *writer
 	mapping    []bayescontract.MappingEntry
@@ -174,7 +184,7 @@ func newGen(m *bayesgraph.Model) (*gen, error) {
 		full: map[string]string{}, explicit: map[string]string{}, tdata: map[string]bool{}, lagged: map[string]bool{},
 		effects: map[string]*effect{}, states: map[string]*state{}, comps: map[string]*bayesgraph.Component{},
 		splitNames: map[string][]string{}, splitCount: map[string]int{},
-		extNames: map[string]Decl{}, extPre: map[string]bool{}, w: &writer{}}
+		extNames: map[string]Decl{}, extPre: map[string]bool{}, extLoop: map[string]int{}, w: &writer{}}
 	for i := range m.Graph.Nodes {
 		n := &m.Graph.Nodes[i]
 		if _, dup := g.nodes[n.ID]; dup {

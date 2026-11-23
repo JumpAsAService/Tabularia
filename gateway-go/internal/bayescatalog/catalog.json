@@ -235,7 +235,8 @@
         "density": "normal_lpdf",
         "rng": "normal_rng",
         "lcdf": "normal_lcdf",
-        "lccdf": "normal_lccdf"
+        "lccdf": "normal_lccdf",
+        "quantile": "inv_Phi"
       },
       "location_scale": {
         "location": "mu",
@@ -268,7 +269,8 @@
         "density": "student_t_lpdf",
         "rng": "student_t_rng",
         "lcdf": "student_t_lcdf",
-        "lccdf": "student_t_lccdf"
+        "lccdf": "student_t_lccdf",
+        "quantile": "inv_inc_beta_t"
       },
       "location_scale": {
         "location": "mu",
@@ -297,7 +299,8 @@
         "density": "cauchy_lpdf",
         "rng": "cauchy_rng",
         "lcdf": "cauchy_lcdf",
-        "lccdf": "cauchy_lccdf"
+        "lccdf": "cauchy_lccdf",
+        "quantile": "tan"
       },
       "location_scale": {
         "location": "mu",
@@ -322,7 +325,8 @@
         "density": "exponential_lpdf",
         "rng": "exponential_rng",
         "lcdf": "exponential_lcdf",
-        "lccdf": "exponential_lccdf"
+        "lccdf": "exponential_lccdf",
+        "quantile": "log1m"
       },
       "browser": "exact"
     },
@@ -397,7 +401,8 @@
         "density": "lognormal_lpdf",
         "rng": "lognormal_rng",
         "lcdf": "lognormal_lcdf",
-        "lccdf": "lognormal_lccdf"
+        "lccdf": "lognormal_lccdf",
+        "quantile": "exp_inv_Phi"
       },
       "browser": "exact"
     },
@@ -422,7 +427,8 @@
         "density": "beta_lpdf",
         "rng": "beta_rng",
         "lcdf": "beta_lcdf",
-        "lccdf": "beta_lccdf"
+        "lccdf": "beta_lccdf",
+        "quantile": "inv_inc_beta"
       },
       "browser": "exact"
     },
@@ -449,7 +455,8 @@
         "density": "uniform_lpdf",
         "rng": "uniform_rng",
         "lcdf": "uniform_lcdf",
-        "lccdf": "uniform_lccdf"
+        "lccdf": "uniform_lccdf",
+        "quantile": "linear"
       },
       "browser": "exact"
     },
@@ -1064,7 +1071,29 @@
     "diag_pre_multiply",
     "multiply_lower_tri_self_transpose",
     "inv_logit",
-    "std_normal"
+    "std_normal",
+    "mean",
+    "sd",
+    "min",
+    "max",
+    "quantile",
+    "floor",
+    "fmin",
+    "fmax",
+    "to_int",
+    "append_array",
+    "rep_array",
+    "inv_Phi",
+    "inv_inc_beta",
+    "tan",
+    "log1m",
+    "uniform_rng",
+    "Phi",
+    "atan",
+    "inc_beta",
+    "step",
+    "fabs",
+    "inv"
   ],
   "limits": {
     "max_name_bytes": 40,

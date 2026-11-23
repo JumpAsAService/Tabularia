@@ -404,7 +404,9 @@ type Scope interface {
 - A program generated **without** an extension and **with** a test extension are both golden files: the point is
   pinned before `predictive-checks` exists.
 - (Correction of 2026-11-24 from the step-4 specs) `Scope` gains `SlotOn` and `ValueOn` (a value on the rows an extension's index array names), `Expr` gains
-  `Add` and `Mul`, and `internal_functions` grows (`bayes-predictive-checks.md`, «What the codegen gains»).
+  `Add` and `Mul`, and `internal_functions` grows (`bayes-predictive-checks.md`, «What the codegen gains»). Built by lot P1
+  of predictive-checks (its «As built — lot P1»): no `_cdf` name (stanc writes it only with `|`), and with `ids` a value per
+  row reading a replaced node is rebuilt with the draws, any other such node not answered is `ErrExtension`.
 
 ## Safety checks on the output
 

@@ -191,6 +191,7 @@ func TestPropertyGeneratedPrograms(t *testing.T) {
 	valid := 0
 	places := reached{}
 	extPlaces := reached{}
+	checkPlaces := checksReached{}
 	for seed := 0; seed < n; seed++ {
 		data := seededGraph(seed)
 		m, ok := validModel(data)
@@ -246,6 +247,26 @@ func TestPropertyGeneratedPrograms(t *testing.T) {
 			t.Fatalf("seed %d: with the extension: %v", seed, err)
 		}
 		extPlaces.add(string(e.Text))
+		// the test extension of the checks (lot P1): the same checks, the same bytes twice and
+		// when the JSON is shuffled
+		c, err := Generate(m4, checksExtension{})
+		if err != nil {
+			t.Fatalf("seed %d: with the checks: %v\n%s", seed, err, data)
+		}
+		if err := CheckProgram(string(c.Text)); err != nil {
+			t.Fatalf("seed %d: with the checks: %v", seed, err)
+		}
+		if err := CheckIdentifiers(c.Mapping); err != nil {
+			t.Fatalf("seed %d: with the checks: %v", seed, err)
+		}
+		m5, _ := validModel(data)
+		if seed%4 == 1 {
+			m5, _ = validModel(shuffled(t, data, uint64(seed)+7))
+		}
+		if again, err := Generate(m5, checksExtension{}); err != nil || !bytes.Equal(c.Text, again.Text) {
+			t.Fatalf("seed %d: with the checks, two generations differ (%v)", seed, err)
+		}
+		checkPlaces.add(string(c.Text))
 	}
 	if valid < n*9/10 {
 		t.Errorf("only %d of the %d generated graphs are valid", valid, n)
@@ -258,7 +279,31 @@ func TestPropertyGeneratedPrograms(t *testing.T) {
 	if extPlaces["generated quantities"] == 0 {
 		t.Errorf("no generated program writes locals in the generated quantities: %v", extPlaces)
 	}
-	t.Logf("%d of %d graphs valid; places reached: %v; with the extension: %v", valid, n, places, extPlaces)
+	for _, place := range []string{"prior path", "rebuilt on the rows", "lagged positions", "lag at positions", "split on the rows"} {
+		if checkPlaces[place] == 0 {
+			t.Errorf("no generated program with the checks reaches %q: %v", place, checkPlaces)
+		}
+	}
+	t.Logf("%d of %d graphs valid; places reached: %v; with the extension: %v; with the checks: %v", valid, n, places, extPlaces, checkPlaces)
+}
+
+// checksReached counts what the programs with the test extension of the checks reach: a prior's
+// path, a value per row rebuilt with the draws on the rows named, a lagged statement's positions,
+// a lag at the positions, a split value on the rows named.
+type checksReached map[string]int
+
+func (r checksReached) add(text string) {
+	for place, re := range map[string]*regexp.Regexp{
+		"prior path":          regexp.MustCompile(`Prior_o1_draw = `),
+		"rebuilt on the rows": regexp.MustCompile(`\[Prior_o[0-9]_rows\] = `),
+		"lagged positions":    regexp.MustCompile(`Rows_lag\[(Ppc|Prior)_o[0-9]_rows\]`),
+		"lag at positions":    regexp.MustCompile(`Lag[0-9]+\[(Ppc|Prior)_o[0-9]_rows\]`),
+		"split on the rows":   regexp.MustCompile(`E_[a-z0-9]+_[0-9]+\[(Rows_lag\[)?(Ppc|Prior)_o[0-9]_rows`),
+	} {
+		if re.MatchString(text) {
+			r[place]++
+		}
+	}
 }
 
 // jsonWalk applies f to every JSON object of a document.

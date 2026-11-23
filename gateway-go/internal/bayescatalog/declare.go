@@ -91,7 +91,7 @@ var declared = Catalog{
 			Params:  params(Param{Name: "mu", Constraint: Real}, Param{Name: "sigma", Constraint: Positive}),
 			Support: RealLine, Outcome: RealLine,
 			Stan: StanNames{Statement: "normal", Density: "normal_lpdf", RNG: "normal_rng",
-				LCDF: "normal_lcdf", LCCDF: "normal_lccdf"},
+				LCDF: "normal_lcdf", LCCDF: "normal_lccdf", Quantile: QuantileInvPhi},
 			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
 			Browser:       Exact},
 
@@ -102,7 +102,7 @@ var declared = Catalog{
 				Param{Name: "sigma", Constraint: Positive}),
 			Support: RealLine,
 			Stan: StanNames{Statement: "student_t", Density: "student_t_lpdf", RNG: "student_t_rng",
-				LCDF: "student_t_lcdf", LCCDF: "student_t_lccdf"},
+				LCDF: "student_t_lcdf", LCCDF: "student_t_lccdf", Quantile: QuantileIncBetaT},
 			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
 			Browser:       Exact},
 
@@ -110,7 +110,7 @@ var declared = Catalog{
 			Params:  params(Param{Name: "mu", Constraint: Real}, Param{Name: "sigma", Constraint: Positive}),
 			Support: RealLine,
 			Stan: StanNames{Statement: "cauchy", Density: "cauchy_lpdf", RNG: "cauchy_rng",
-				LCDF: "cauchy_lcdf", LCCDF: "cauchy_lccdf"},
+				LCDF: "cauchy_lcdf", LCCDF: "cauchy_lccdf", Quantile: QuantileTan},
 			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
 			Browser:       Exact},
 
@@ -119,7 +119,7 @@ var declared = Catalog{
 			Params:  params(Param{Name: "beta", Constraint: Positive}),
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "exponential", Density: "exponential_lpdf", RNG: "exponential_rng",
-				LCDF: "exponential_lcdf", LCCDF: "exponential_lccdf"},
+				LCDF: "exponential_lcdf", LCCDF: "exponential_lccdf", Quantile: QuantileLog1m},
 			Browser: Exact},
 
 		// Shape and rate.
@@ -142,14 +142,14 @@ var declared = Catalog{
 			Params:  params(Param{Name: "mu", Constraint: Real}, Param{Name: "sigma", Constraint: Positive}),
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "lognormal", Density: "lognormal_lpdf", RNG: "lognormal_rng",
-				LCDF: "lognormal_lcdf", LCCDF: "lognormal_lccdf"},
+				LCDF: "lognormal_lcdf", LCCDF: "lognormal_lccdf", Quantile: QuantileExpInvPhi},
 			Browser: Exact},
 
 		{ID: "beta", Uses: uses(Prior),
 			Params:  params(Param{Name: "alpha", Constraint: Positive}, Param{Name: "beta", Constraint: Positive}),
 			Support: UnitRange,
 			Stan: StanNames{Statement: "beta", Density: "beta_lpdf", RNG: "beta_rng",
-				LCDF: "beta_lcdf", LCCDF: "beta_lccdf"},
+				LCDF: "beta_lcdf", LCCDF: "beta_lccdf", Quantile: QuantileIncBeta},
 			Browser: Exact},
 
 		// Both bounds are constants in the first release; the parameter is declared with them.
@@ -158,7 +158,7 @@ var declared = Catalog{
 				Param{Name: "beta", Constraint: Real, Constant: true}),
 			Support: Bounded,
 			Stan: StanNames{Statement: "uniform", Density: "uniform_lpdf", RNG: "uniform_rng",
-				LCDF: "uniform_lcdf", LCCDF: "uniform_lccdf"},
+				LCDF: "uniform_lcdf", LCCDF: "uniform_lccdf", Quantile: QuantileLinear},
 			Browser: Exact},
 
 		// The browser draws one correlation: (r + 1) / 2 ~ Beta(eta - 1 + K/2, eta - 1 + K/2).
@@ -321,10 +321,17 @@ var declared = Catalog{
 		},
 	},
 
-	// What stan-codegen may emit beyond the language; it extends this list.
+	// What stan-codegen may emit beyond the language; it extends this list. After std_normal,
+	// what predictive-checks writes in the generated quantities (lot P1): the statistics of the
+	// replicated data, the bins without a branch, the arrays, and the truncated priors' draws by
+	// inversion (Quantile: Stan's _cdf needs a vertical bar, so the cumulative distributions are
+	// written with Phi, atan, inc_beta and step, and a division with inv).
 	InternalFunctions: []string{
 		"to_vector", "rep_vector", "append_row", "diag_pre_multiply",
 		"multiply_lower_tri_self_transpose", "inv_logit", "std_normal",
+		"mean", "sd", "min", "max", "quantile", "floor", "fmin", "fmax", "to_int",
+		"append_array", "rep_array", "inv_Phi", "inv_inc_beta", "tan", "log1m", "uniform_rng",
+		"Phi", "atan", "inc_beta", "step", "fabs", "inv",
 	},
 
 	Limits: Limits{
