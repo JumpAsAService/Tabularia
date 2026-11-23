@@ -7726,6 +7726,38 @@ export default {
       "too_deep": "Klammern und Zeichen sind zu tief verschachtelt: vereinfachen Sie den Ausdruck.",
       "too_big": "Der Ausdruck hat zu viele Teile: teilen Sie ihn auf mehrere Knoten auf.",
       "lag_argument": "lag braucht den Namen einer Reihe und eine ganze Zahl in Ziffern, zum Beispiel lag(y, 1).",
+      "unknown_name": "Es gibt keinen Knoten namens {name}: schreibe den Namen eines Knotens des Graphen.",
+      "time_value": "{name} ist die Reihenfolge einer Reihe, keine Zahl: sie wird nur mit lag verwendet.",
+      "not_number": "{name} ist eine Korrelationsmatrix, keine Zahl.",
+      "index_alone": "{name} ist ein Gruppenindex: schreibe ihn in eckigen Klammern hinter einen Wert, zum Beispiel alpha[{name}].",
+      "needs_index": {
+        "named": "{name} hat einen Wert für jede Einheit von {plate}: schreibe {name}[{index}], um ihn hierher zu bringen.",
+        "plain": "{name} hat einen Wert für jede Einheit von {plate}, und kein Gruppenindex führt hierher: füge den Daten einen hinzu.",
+      },
+      "wrong_plate": {
+        "context": "{name} liegt über {plate}, das {context} nicht enthält: hier ist es nicht verwendbar.",
+        "plain": "{name} liegt über {plate}: hier ist es nicht verwendbar.",
+      },
+      "not_index": "{name} ist kein Gruppenindex: schreibe in den eckigen Klammern den Namen eines Index.",
+      "index_scalar": "{name} ist ein einzelner Wert: es gibt nichts, was {by} auswählen könnte.",
+      "index_target": "{name} liegt über {plate}, aber {by} wählt Einheiten von {target}: verwende einen Wert über {target}.",
+      "index_context": {
+        "context": "{by} führt von {rows} nach {target}, was nicht zu {context} passt: {name}[{by}] ist hier nicht verwendbar.",
+        "plain": "{by} führt von {rows} nach {target}: {name}[{by}] ist hier nicht verwendbar.",
+      },
+      "unknown_function": "Es gibt keine Funktion namens {name}.",
+      "not_function": "{name} ist ein Knoten, keine Funktion: schreibe ihn ohne Klammern.",
+      "arity": "{name} braucht {want} Argumente, nicht {got}.",
+      "lag_not_series": {
+        "context": "lag funktioniert nur auf den Zeilen einer Reihe, und {context} ist keine.",
+        "plain": "lag funktioniert nur auf den Zeilen einer Reihe, und dieser Wert liegt nicht über einer Reihe.",
+      },
+      "lag_reason": {
+        "index": "lag nimmt keinen Gruppenindex: verwende einen Wert über der Reihe.",
+        "kind": "lag nimmt Daten, Parameter, transformierte Werte und Zustände, nicht diesen Knoten.",
+        "plate": "lag braucht einen Wert über den Zeilen der Reihe, und {name} liegt über einer anderen Ebene.",
+      },
+      "lag_k": "Die Schritte zurück gehen von 1 bis {max}.",
     },
   },
 }

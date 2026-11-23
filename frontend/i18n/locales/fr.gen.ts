@@ -7726,6 +7726,38 @@ export default {
       "too_deep": "Les parenthèses et les signes sont imbriqués trop profondément : simplifiez l’expression.",
       "too_big": "L’expression a trop de parties : répartissez-la sur plusieurs nœuds.",
       "lag_argument": "lag attend le nom d’une série et un nombre entier écrit en chiffres, par exemple lag(y, 1).",
+      "unknown_name": "Aucun nœud ne s’appelle {name} : écris le nom d’un nœud du graphe.",
+      "time_value": "{name} est l’ordre d’une série, pas un nombre : il ne s’utilise qu’avec lag.",
+      "not_number": "{name} est une matrice de corrélation, pas un nombre.",
+      "index_alone": "{name} est un indice de groupe : écris-le entre crochets après une valeur, par exemple alpha[{name}].",
+      "needs_index": {
+        "named": "{name} a une valeur pour chaque unité de {plate} : écris {name}[{index}] pour l’amener ici.",
+        "plain": "{name} a une valeur pour chaque unité de {plate}, et aucun indice de groupe ne mène jusqu’ici : ajoute-en un aux données.",
+      },
+      "wrong_plate": {
+        "context": "{name} porte sur {plate}, qui ne contient pas {context} : on ne peut pas l’utiliser ici.",
+        "plain": "{name} porte sur {plate} : on ne peut pas l’utiliser ici.",
+      },
+      "not_index": "{name} n’est pas un indice de groupe : entre les crochets, écris le nom d’un indice.",
+      "index_scalar": "{name} est une valeur unique : il n’y a rien à choisir avec {by}.",
+      "index_target": "{name} porte sur {plate}, mais {by} choisit des unités de {target} : utilise une valeur sur {target}.",
+      "index_context": {
+        "context": "{by} va de {rows} à {target}, ce qui ne convient pas à {context} : ici {name}[{by}] est inutilisable.",
+        "plain": "{by} va de {rows} à {target} : ici {name}[{by}] est inutilisable.",
+      },
+      "unknown_function": "Aucune fonction ne s’appelle {name}.",
+      "not_function": "{name} est un nœud, pas une fonction : écris-le sans parenthèses.",
+      "arity": "{name} attend {want} arguments, pas {got}.",
+      "lag_not_series": {
+        "context": "lag ne marche que sur les lignes d’une série, et {context} n’en est pas une.",
+        "plain": "lag ne marche que sur les lignes d’une série, et cette valeur ne porte pas sur une série.",
+      },
+      "lag_reason": {
+        "index": "lag n’accepte pas un indice de groupe : utilise une valeur sur la série.",
+        "kind": "lag accepte des données, des paramètres, des valeurs transformées et des états, pas ce nœud.",
+        "plate": "lag attend une valeur sur les lignes de la série, et {name} porte sur une autre table.",
+      },
+      "lag_k": "Les pas en arrière vont de 1 à {max}.",
     },
   },
 }

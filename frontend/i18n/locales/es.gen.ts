@@ -7726,6 +7726,38 @@ export default {
       "too_deep": "Los paréntesis y los signos están anidados demasiado hondo: simplifica la expresión.",
       "too_big": "La expresión tiene demasiadas partes: divídela en varios nodos.",
       "lag_argument": "lag necesita el nombre de una serie y un número entero escrito en cifras, por ejemplo lag(y, 1).",
+      "unknown_name": "No hay ningún nodo llamado {name}: escribe el nombre de un nodo del grafo.",
+      "time_value": "{name} es el orden de una serie, no un número: solo se usa con lag.",
+      "not_number": "{name} es una matriz de correlación, no un número.",
+      "index_alone": "{name} es un índice de grupo: escríbelo entre corchetes después de un valor, por ejemplo alpha[{name}].",
+      "needs_index": {
+        "named": "{name} tiene un valor por cada unidad de {plate}: escribe {name}[{index}] para traerlo aquí.",
+        "plain": "{name} tiene un valor por cada unidad de {plate}, y ningún índice de grupo llega hasta aquí: añade uno a los datos.",
+      },
+      "wrong_plate": {
+        "context": "{name} está sobre {plate}, que no contiene {context}: aquí no se puede usar.",
+        "plain": "{name} está sobre {plate}: aquí no se puede usar.",
+      },
+      "not_index": "{name} no es un índice de grupo: entre los corchetes escribe el nombre de un índice.",
+      "index_scalar": "{name} es un valor único: no hay nada que elegir con {by}.",
+      "index_target": "{name} está sobre {plate}, pero {by} elige unidades de {target}: usa un valor sobre {target}.",
+      "index_context": {
+        "context": "{by} va de {rows} a {target}, que no encaja con {context}: aquí {name}[{by}] no se puede usar.",
+        "plain": "{by} va de {rows} a {target}: aquí {name}[{by}] no se puede usar.",
+      },
+      "unknown_function": "No hay ninguna función llamada {name}.",
+      "not_function": "{name} es un nodo, no una función: escríbelo sin paréntesis.",
+      "arity": "{name} necesita {want} argumentos, no {got}.",
+      "lag_not_series": {
+        "context": "lag solo funciona sobre las filas de una serie, y {context} no lo es.",
+        "plain": "lag solo funciona sobre las filas de una serie, y este valor no está sobre una serie.",
+      },
+      "lag_reason": {
+        "index": "lag no acepta un índice de grupo: usa un valor sobre la serie.",
+        "kind": "lag acepta datos, parámetros, valores transformados y estados, no este nodo.",
+        "plate": "lag necesita un valor sobre las filas de la serie, y {name} está sobre otra tabla.",
+      },
+      "lag_k": "Los pasos hacia atrás van de 1 a {max}.",
     },
   },
 }

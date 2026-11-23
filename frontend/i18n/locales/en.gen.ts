@@ -7726,6 +7726,38 @@ export default {
       "too_deep": "The parentheses and signs are nested too deeply: simplify the expression.",
       "too_big": "The expression has too many parts: split it into several nodes.",
       "lag_argument": "lag takes the name of a series and a whole number written in digits, for example lag(y, 1).",
+      "unknown_name": "There is no node named {name}: write the name of a node of the graph.",
+      "time_value": "{name} is the order of a series, not a number: use it only through lag.",
+      "not_number": "{name} is a correlation matrix, not a number.",
+      "index_alone": "{name} is a group index: write it between brackets after a value, for example alpha[{name}].",
+      "needs_index": {
+        "named": "{name} has one value for each unit of {plate}: write {name}[{index}] to bring it here.",
+        "plain": "{name} has one value for each unit of {plate}, and no group index leads here: add one to the data.",
+      },
+      "wrong_plate": {
+        "context": "{name} is over {plate}, which does not contain {context}: it cannot be used here.",
+        "plain": "{name} is over {plate}: it cannot be used here.",
+      },
+      "not_index": "{name} is not a group index: inside the brackets write the name of an index.",
+      "index_scalar": "{name} is a single value: it has nothing to pick with {by}.",
+      "index_target": "{name} is over {plate}, but {by} picks units of {target}: use a value over {target}.",
+      "index_context": {
+        "context": "{by} goes from {rows} to {target}, which does not fit {context}: {name}[{by}] cannot be used here.",
+        "plain": "{by} goes from {rows} to {target}: {name}[{by}] cannot be used here.",
+      },
+      "unknown_function": "There is no function named {name}.",
+      "not_function": "{name} is a node, not a function: write it without parentheses.",
+      "arity": "{name} takes {want} arguments, not {got}.",
+      "lag_not_series": {
+        "context": "lag works only on the rows of a series, and {context} is not one.",
+        "plain": "lag works only on the rows of a series, and this value is not over one.",
+      },
+      "lag_reason": {
+        "index": "lag cannot take a group index: use a value over the series.",
+        "kind": "lag takes data, parameters, transformed values and states, not this node.",
+        "plate": "lag takes a value over the rows of the series, and {name} is over another plate.",
+      },
+      "lag_k": "The number of steps back is from 1 to {max}.",
     },
   },
 }

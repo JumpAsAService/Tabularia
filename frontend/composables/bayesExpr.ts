@@ -22,6 +22,10 @@ export type BayesExprCode =
   | 'expr.hint' | 'expr.symbol'
   | 'expr.empty' | 'expr.unexpected' | 'expr.unclosed' | 'expr.call_empty' | 'expr.too_deep'
   | 'expr.too_big' | 'expr.lag_argument'
+  // The type checker's (bayesExprCheck.ts).
+  | 'expr.unknown_name' | 'expr.time_value' | 'expr.not_number' | 'expr.index_alone' | 'expr.needs_index'
+  | 'expr.wrong_plate' | 'expr.not_index' | 'expr.index_scalar' | 'expr.index_target' | 'expr.index_context'
+  | 'expr.unknown_function' | 'expr.not_function' | 'expr.arity' | 'expr.lag_not_series' | 'expr.lag_k'
 
 /** The first error of an expression; pos and len count code points (here, ASCII: code units). */
 export interface BayesExprError {
@@ -31,7 +35,15 @@ export interface BayesExprError {
   args?: Record<string, string>
 }
 
-export type BayesExprNode = { pos: number, len: number } & (
+/** A stretch of the input, in code points. */
+export interface BayesExprSpan { pos: number, len: number }
+
+/**
+ * pos and len take in the parentheses around the node; `at` is its own span without them (set
+ * only when it had some); `sub` are the spans of an indexing's two names (x, g) and of a lag's
+ * name and number, for the type checker's errors. None of them is part of the JSON form.
+ */
+export type BayesExprNode = { pos: number, len: number, at?: BayesExprSpan, sub?: [BayesExprSpan, BayesExprSpan] } & (
   | { kind: 'num', num: number, digits: boolean }
   | { kind: 'name', name: string }
   | { kind: 'index', name: string, by: string }
@@ -396,7 +408,8 @@ class Parser {
         const closing = this.tok
         this.advance()
         this.depth--
-        // The node's span takes in its parentheses.
+        // The node's span takes in its parentheses; its own span stays the first one.
+        if (!inner.at) inner.at = { pos: inner.pos, len: inner.len }
         inner.pos = t.pos
         inner.len = closing.end - t.pos
         return inner
@@ -445,6 +458,7 @@ class Parser {
     return {
       kind: 'index', name: this.src.slice(name.pos, name.end), by: this.src.slice(by.pos, by.end),
       pos: name.pos, len: closing.end - name.pos,
+      sub: [{ pos: name.pos, len: name.end - name.pos }, { pos: by.pos, len: by.end - by.pos }],
     }
   }
 }
@@ -456,7 +470,10 @@ function lag (call: Extract<BayesExprNode, { kind: 'call' }>): BayesExprNode {
   const [x, k] = call.args
   if (x.kind !== 'name') span(x)
   if (k.kind !== 'num' || !k.digits) span(k)
-  return { kind: 'lag', name: (x as { name: string }).name, k: (k as { num: number }).num, pos: call.pos, len: call.len }
+  return {
+    kind: 'lag', name: (x as { name: string }).name, k: (k as { num: number }).num, pos: call.pos, len: call.len,
+    sub: [x.at ?? { pos: x.pos, len: x.len }, k.at ?? { pos: k.pos, len: k.len }],
+  }
 }
 
 /** Reads one expression; the error, when there is one, is the first from the left. */
