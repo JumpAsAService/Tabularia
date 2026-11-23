@@ -7,6 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { keyNames, platformIsMac, visibleSections, type NavSection } from '~/composables/appKeys'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
+import { useModelGroups } from '~/composables/useModelGroups'
+import { bayesUsable } from '~/composables/modelCatalog'
 
 export interface KeyGroup { title: string; keys: [string, string][]; note?: string }
 
@@ -31,8 +33,11 @@ export function useGoToSections(): ComputedRef<NavSection[]> {
   const { user } = useAuth()
   const scripting = useScriptingEditor()
   const registries = useRegistriesEditor()
+  const groups = useModelGroups()
   return computed(() => visibleSections({
     scripting: scripting.available.value || registries.available.value,
+    // the Bayesian models: whoever may use the group, never on Compose (as the Scripting tab)
+    bayes: bayesUsable(groups.state.value),
     observe: !!user.value?.is_superuser || !!user.value?.is_observer,
   }))
 }

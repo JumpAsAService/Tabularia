@@ -39,7 +39,7 @@ test('Explore offers the flow and the other objects wherever New has a folder to
   assert.match(vue, /<div v-if="!treeLoaded \|\| target !== null \|\| isSuper" class="newwrap">/)
   assert.match(vue, /<template v-if="target !== null">\s*<div v-if="isSuper \|\| canManage" class="menu-sep" \/>\s*<div v-if="currentId === null" class="menu-note">/)
   // every «create» goes where target says, none to the open folder alone
-  for (const page of ['flow-group', 'script', 'notebook', 'sql-script']) {
+  for (const page of ['flow-group', 'script', 'notebook', 'sql-script', 'bayes-model']) {
     assert.ok(vue.includes(`navigateTo(\`/${page}?project=\${target.value}\`)`), page)
   }
   assert.equal((vue.match(/const folder = target\.value/g) ?? []).length, 2) // report, dashboard

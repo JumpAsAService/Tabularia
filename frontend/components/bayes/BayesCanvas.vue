@@ -21,7 +21,7 @@ import { AudioWaveform, Cable, ChartScatter, CircleDot, Clock, Copy, Database, H
 import BayesNode from '~/components/bayes/BayesNode.vue'
 import BayesPlate from '~/components/bayes/BayesPlate.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
-import { bayesBoxes, bayesCanvasEdges, bayesCanvasNodes, bayesDropPlate, bayesNearestNode, BAYES_NODE_H, BAYES_NODE_W, type BayesRect } from '~/composables/bayesCanvasModel'
+import { bayesBoxes, bayesCanvasEdges, bayesCanvasNodes, bayesDropPlate, bayesFitViewport, bayesNearestNode, BAYES_NODE_H, BAYES_NODE_W, type BayesRect } from '~/composables/bayesCanvasModel'
 import { BAYES_CANVAS_VIEW, type BayesNodeView, type BayesPlateView, type BayesResizeParams } from '~/composables/bayesCanvasView'
 import { bayesBoundsText, bayesPriorText } from '~/composables/bayesEditorText'
 import { bayesEdgeChoices, bayesDropTarget, bayesIsBox, type BayesEdgeChoice, type BayesPaletteKind } from '~/composables/bayesGraphEdits'
@@ -39,6 +39,8 @@ const props = defineProps<{
   selected: string | null
   /** Bumped when the whole document is replaced (opened, undone, redone): the canvas draws it anew. */
   restored: number
+  /** A version looked at: nothing is dragged, linked, added or removed; the view still moves. */
+  readonly?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'select', id: string | null): void
@@ -197,6 +199,7 @@ function resized (id: string, p: BayesResizeParams) {
 }
 
 provide(BAYES_CANVAS_VIEW, {
+  readonly: () => !!props.readonly,
   node: id => nodeViews.value.get(id),
   plate: id => plateViews.value.get(id),
   setForm: (plate, nonCentred) => emit('form', plate, nonCentred),
@@ -240,13 +243,25 @@ const edges = computed(() => {
   })
 })
 
-// The model is fitted whole when it opens, never above 1. While the view stays as fitted, a change
+// The model is fitted whole when it opens, never above 1 and never under a zoom whose words can be
+// read (bayesFitViewport: a larger model shows its left column and the rest scrolls). While the view stays as fitted, a change
 // of the canvas' size (the panel widening for a chart, the panel's handle) fits it again, so nothing
 // stays under the panel; once the person has panned or zoomed, the view keeps its centre and brings
 // the selected node back into sight.
 let fittedAt: { x: number, y: number, zoom: number } | null = null
 const fit = async () => {
-  await fitView({ padding: 0.08, maxZoom: 1 })
+  const all = getNodes.value.filter(n => !n.hidden)
+  const w = root.value?.clientWidth ?? 0
+  const h = root.value?.clientHeight ?? 0
+  if (!all.length || !w || !h) { await fitView({ padding: 0.08, maxZoom: 1 }); fittedAt = { ...viewport.value }; return }
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  for (const n of all) {
+    const nw = n.dimensions.width || BAYES_NODE_W
+    const nh = n.dimensions.height || BAYES_NODE_H
+    x0 = Math.min(x0, n.computedPosition.x); y0 = Math.min(y0, n.computedPosition.y)
+    x1 = Math.max(x1, n.computedPosition.x + nw); y1 = Math.max(y1, n.computedPosition.y + nh)
+  }
+  await setViewport(bayesFitViewport({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, w, h, { padding: 0.08, maxZoom: 1 }))
   fittedAt = { ...viewport.value }
 }
 const stillFitted = () => !!fittedAt && Math.abs(fittedAt.x - viewport.value.x) < 1 && Math.abs(fittedAt.y - viewport.value.y) < 1 && Math.abs(fittedAt.zoom - viewport.value.zoom) < 1e-3
@@ -359,7 +374,7 @@ onNodeDragStop(({ node }) => {
 const PALETTE_TYPE = 'application/x-bayes-kind'
 function paletteDrag (e: DragEvent): boolean { return !!e.dataTransfer?.types.includes(PALETTE_TYPE) }
 function onDragOver (e: DragEvent) {
-  if (!paletteDrag(e)) return
+  if (!paletteDrag(e) || props.readonly) return
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
   const p = screenToFlowCoordinate({ x: e.clientX, y: e.clientY })
@@ -369,7 +384,7 @@ function onDragLeave (e: DragEvent) {
   if (!root.value?.contains(e.relatedTarget as Node | null)) dropHint.value = null
 }
 function onDrop (e: DragEvent) {
-  if (!paletteDrag(e)) return
+  if (!paletteDrag(e) || props.readonly) return
   e.preventDefault()
   dropHint.value = null
   const kind = e.dataTransfer!.getData(PALETTE_TYPE) as BayesPaletteKind
@@ -512,6 +527,7 @@ onConnectEnd((e) => {
 onNodeContextMenu(({ event, node }) => {
   const e = event as MouseEvent
   e.preventDefault()
+  if (props.readonly) return
   emit('select', node.id)
   openNodeMenu(node.id, false, { x: e.clientX, y: e.clientY })
 })
@@ -560,6 +576,8 @@ function onKeys (e: KeyboardEvent) {
 function doKey (e: KeyboardEvent) {
   const act = bayesKeyAction(e, platformIsMac())
   if (!act || bayesKeyScope(act.kind) !== 'canvas') return
+  // a version looked at: the view moves and the nodes are walked, nothing changes
+  if (props.readonly && (act.kind === 'move' || act.kind === 'remove' || act.kind === 'menu' || act.kind === 'add')) return
   if (act.kind === 'walk') {
     // Alt with an arrow walks to the nearest node in that direction, from the one selected
     const from = props.selected ?? props.doc.nodes[0]?.id
@@ -612,8 +630,8 @@ const miniClass = (n: { type?: string }) => (n.type === 'plate' ? 'mm-plate' : '
       :id="FLOW_ID"
       v-model:nodes="nodes"
       :edges="edges"
-      :nodes-draggable="true"
-      :nodes-connectable="true"
+      :nodes-draggable="!readonly"
+      :nodes-connectable="!readonly"
       :elements-selectable="true"
       :elevate-nodes-on-select="false"
       :delete-key-code="null"

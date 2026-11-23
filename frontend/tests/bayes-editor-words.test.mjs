@@ -30,7 +30,8 @@ const placeholders = (s) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map(m => m
 const VERDICTS = /\b(wide|narrow|vague|informative|reasonable|weak|strong|significant|plausible|good|bad|large|small|better|worse)\b|\b(ampio|ampia|stretto|vago|informativo|ragionevole|debole|forte|significativo|plausibile|peggio|meglio)\b|\b(breit|schmal|vage|informativ|vernünftig|schwach|stark|signifikant|plausibel|schlechter|besser)\b|\b(amplio|amplia|estrecho|vago|informativo|razonable|débil|fuerte|significativo|plausible|peor|mejor)\b|\b(large|étroit|vague|informatif|raisonnable|faible|fort|significatif|plausible)\b|less well|moins bien|meno bene/i
 
 function editorAndTemplates (tree) {
-  const out = leaf(tree.bayes.editor, 'bayes.editor.')
+  // the editor's words, and the list of the models' (lot G3: pages/bayes-models.vue)
+  const out = [...leaf(tree.bayes.editor, 'bayes.editor.'), ...leaf(tree.bayesModels, 'bayesModels.')]
   for (const t of bayesTemplates()) {
     out.push([`bayes.templates.${t.id}.title`, at(tree, `bayes.templates.${t.id}.title`)])
     out.push([`bayes.templates.${t.id}.what`, at(tree, `bayes.templates.${t.id}.what`)])

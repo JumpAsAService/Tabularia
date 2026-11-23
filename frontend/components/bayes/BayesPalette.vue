@@ -7,10 +7,12 @@
 // focus on the first item (focusFirst); ↑ and ↓ walk the items.
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AudioWaveform, Boxes, ChartScatter, CircleDot, Clock, Database, GripVertical, Hash, List, Search, Sigma, SquareFunction, Users, Variable, X } from 'lucide-vue-next'
+import { AudioWaveform, Boxes, ChartScatter, CircleDot, Clock, Database, GripVertical, Hash, LayoutTemplate, List, Search, Sigma, SquareFunction, Users, Variable, X } from 'lucide-vue-next'
 import { BAYES_PALETTE, type BayesPaletteKind } from '~/composables/bayesGraphEdits'
 
-const emit = defineEmits<{ (e: 'add', kind: BayesPaletteKind): void }>()
+// `templates`: the gallery of the templates (lot G3), from the palette's foot; hidden for a version looked at
+defineProps<{ templates?: boolean }>()
+const emit = defineEmits<{ (e: 'add', kind: BayesPaletteKind): void, (e: 'templates'): void }>()
 const { t } = useI18n()
 
 const ICONS: Record<BayesPaletteKind, unknown> = {
@@ -101,6 +103,9 @@ defineExpose({ focusFirst })
         <GripVertical :size="13" class="grip" aria-hidden="true" />
       </div>
     </section>
+    <button v-if="templates" type="button" class="tpl" :title="t('bayes.editor.gallery.fromPalette')" @click="emit('templates')">
+      <LayoutTemplate :size="14" aria-hidden="true" /><span class="tpn">{{ t('bayes.editor.gallery.fromPalette') }}</span>
+    </button>
   </aside>
 </template>
 
@@ -133,13 +138,15 @@ defineExpose({ focusFirst })
 .tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .nm { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3; }
 .wh { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.tpl { margin: 12px 0 0; justify-content: flex-start; gap: 8px; font-size: 12.5px; }
 .grip { flex: none; margin-top: 3px; color: var(--border); transition: color var(--dur-tint); }
 @media (hover: hover) and (pointer: fine) { .item:hover .grip { color: var(--muted); } }
 /* at 1280 px the palette is 168 px: the sentence stays, the grip gives way */
 @media (max-width: 1399px) { .grip { display: none; } .item { gap: 7px; } }
 /* below 1100 px (not a target of the first release) the palette folds to its icons, named by their title */
 @media (max-width: 1099px) {
-  .searchbar input, .gt, .tx, .none { display: none; }
+  .searchbar input, .gt, .tx, .none, .tpn { display: none; }
+  .tpl { justify-content: center; padding: 6px 0; }
   .searchbar { justify-content: center; }
   .item { justify-content: center; padding: 8px 0; }
   .ic { margin: 0; }

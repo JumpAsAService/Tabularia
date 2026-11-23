@@ -15,6 +15,7 @@ export default {
     assistant: 'Assistent',
     connections: 'Verbindungen',
     scripting: 'Skripte',
+    bayesModels: 'Bayes-Modelle',
     runs: 'Ausführungen',
     queue: 'Warteschlange',
     monitoring: 'Überwachung',

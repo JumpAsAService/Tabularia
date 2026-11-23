@@ -48,7 +48,7 @@ import {
   Lock,
   FileCode2,
   DatabaseSearch,
-  Sigma,
+  Dices,
   NotebookPen,
   Braces,
   FileChartColumn,
@@ -92,6 +92,8 @@ import ExploreStart from '~/components/ui/ExploreStart.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
+import { bayesUsable } from '~/composables/modelCatalog'
+import { useModelGroups } from '~/composables/useModelGroups'
 import {
   useProjects,
   CAPABILITIES,
@@ -120,7 +122,10 @@ const dashboardsApi = useDashboards()
 const appInfo = useAppInfo()
 // «New → Script» only for whoever may use a scripting environment (Kubernetes)
 const scriptingEditor = useScriptingEditor()
-onMounted(() => { scriptingEditor.load() })
+// «New → Bayesian model» for whoever may use the group `bayes` (never on Compose)
+const modelGroups = useModelGroups()
+const bayesAvailable = computed(() => bayesUsable(modelGroups.state.value))
+onMounted(() => { scriptingEditor.load(); modelGroups.load() })
 // «New → Notebook» the same, with a Python environment among them (marimo is Python)
 const notebooksAvailable = computed(() => scriptingEditor.available.value
   && !!scriptingEditor.state.value?.environments.some((e) => e.language === 'python'))
@@ -265,7 +270,7 @@ const KIND_ICON: Record<Kind, any> = {
   view: Bookmark,
   script: FileCode2,
   sql: DatabaseSearch,
-  bayes: Sigma,
+  bayes: Dices,
   notebook: NotebookPen,
   report: FileChartColumn,
   dashboard: LayoutDashboard,
@@ -1151,6 +1156,11 @@ function createScript() {
   if (target.value != null) navigateTo(`/script?project=${target.value}`)
 }
 
+function createBayesModel() {
+  closeNew()
+  if (target.value != null) navigateTo(`/bayes-model?project=${target.value}`)
+}
+
 function createNotebook() {
   closeNew()
   if (target.value != null) navigateTo(`/notebook?project=${target.value}`)
@@ -1776,6 +1786,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                       aria-disabled="true" :title="$t('scripting.kubernetesOnly')" @click.prevent>
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
                 <span class="sr-only">{{ $t('scripting.kubernetesOnly') }}</span>
+              </button>
+              <button v-if="bayesAvailable" class="menu-item" @click="createBayesModel">
+                <span class="mi-top"><Dices :size="14" /> {{ $t('projectBrowser.newBayesModelButton') }}</span>
               </button>
               <button v-if="notebooksAvailable" class="menu-item" @click="createNotebook">
                 <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>

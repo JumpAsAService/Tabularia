@@ -29,7 +29,7 @@ const params = (e: { params: BayesResizeParams }) => ({ x: e.params.x, y: e.para
   <div v-if="v" class="plate" :class="{ selected: v.selected, inner: v.nested, err: v.errors > 0, target: v.target }">
     <NodeResizer
       :node-id="id"
-      :is-visible="v.selected"
+      :is-visible="v.selected && !canvas.readonly()"
       :min-width="200"
       :min-height="80"
       line-class-name="bp-line"
@@ -45,7 +45,7 @@ const params = (e: { params: BayesResizeParams }) => ({ x: e.params.x, y: e.para
       </span>
       <span v-else-if="v.kind === 'rows'" class="key">· {{ t('bayes.editor.plate.rows') }}</span>
       <label class="sw nodrag nopan" :for="switchId" @mousedown.stop @click.stop>
-        <input :id="switchId" type="checkbox" role="switch" :checked="v.kind === 'group' ? v.nonCentred : v.series" @change="toggle">
+        <input :id="switchId" type="checkbox" role="switch" :disabled="canvas.readonly()" :checked="v.kind === 'group' ? v.nonCentred : v.series" @change="toggle">
         {{ t(v.kind === 'group' ? 'bayes.editor.plate.nonCentred' : 'bayes.editor.plate.series') }}
       </label>
     </div>

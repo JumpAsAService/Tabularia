@@ -9,7 +9,7 @@ import { register } from 'node:module'
 register('./alias-hooks.mjs', import.meta.url)
 const K = await import('~/composables/bayesEditorKeys.ts')
 
-const kinds = ['walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'zoomIn', 'zoomOut', 'fit']
+const kinds = ['walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'save', 'zoomIn', 'zoomOut', 'fit']
 
 test('the table lists every action of the spec, each with a way on both keyboards', () => {
   assert.deepEqual(K.BAYES_KEY_TABLE.map(r => r.id), ['into', 'walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'save', 'zoomIn', 'zoomOut', 'fit', 'tabs', 'escape', 'help'])
@@ -88,4 +88,17 @@ test('the checks catch what they are meant to', () => {
   assert.ok(!K.bayesKeyMissingOnLaptops({ key: 'm' }))
   assert.ok(K.bayesKeyForbidden({ key: 'n', alt: true }) && K.bayesKeyForbidden({ key: 'ArrowUp', alt: true, shift: true, mod: true }))
   assert.ok(!K.bayesKeyForbidden({ key: 'ArrowUp', alt: true }))
+})
+
+test('save: Ctrl+S on a PC, ⌘S on a Mac, from the page; never Shift, Alt or a bare s', () => {
+  assert.deepEqual(K.bayesKeyAction({ key: 's', ctrlKey: true }, false), { kind: 'save' })
+  assert.deepEqual(K.bayesKeyAction({ key: 's', metaKey: true }, true), { kind: 'save' })
+  assert.deepEqual(K.bayesKeyAction({ key: 'S', ctrlKey: true }, false), { kind: 'save' }) // caps lock
+  assert.equal(K.bayesKeyAction({ key: 's', ctrlKey: true, shiftKey: true }, false), null)
+  assert.equal(K.bayesKeyAction({ key: 's', metaKey: true, altKey: true }, true), null)
+  assert.equal(K.bayesKeyAction({ key: 's' }, false), null)
+  assert.equal(K.bayesKeyScope('save'), 'page')
+  const row = K.BAYES_KEY_TABLE.find(r => r.id === 'save')
+  assert.equal(row.action, 'save')
+  assert.deepEqual(row.mac, [{ key: 's', mod: true }])
 })

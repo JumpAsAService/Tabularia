@@ -864,6 +864,12 @@ export interface ModelGroupsState {
   groups: ModelGroupState[]
 }
 
+/** Whether this person may use the Bayesian models (the top bar's place, Explore's «New»): the group
+ *  `bayes` usable by them, and never on Compose, as the Scripting tab. */
+export function bayesUsable(state: Pick<ModelGroupsState, 'disabled_reason' | 'groups'> | null | undefined): boolean {
+  return !!state && !state.disabled_reason && state.groups.some((g) => g.id === 'bayes' && !!g.usable)
+}
+
 /** Why a model's node cannot run for this person, or '' when it can. 'unknown' while the route has
  *  not answered. */
 export type ModelOff = '' | 'kubernetes' | 'not_configured' | 'not_enabled' | 'not_allowed' | 'unknown'

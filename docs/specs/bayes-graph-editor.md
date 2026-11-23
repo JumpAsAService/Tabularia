@@ -801,3 +801,80 @@ plus one: boxes get their depth, nodes 1000, and `elevate-nodes-on-select` is of
 - Left for G5 after G3 and G4: Ctrl+S and the leave warning (G3), the code tab's keys (G4), the keyboard check of
   those, the screenshots at 1280 px and of the Stan tab, the other three languages checked for overflow, and the
   fresh-context review of the whole module.
+
+### Lot G3 (2026-11-24)
+
+- **The list** (`pages/bayes-models.vue`), as the approved mockup: the headline with its count and one sentence for a
+  reader new to Bayes, then the card of the models this person sees — name (link) and description, folder, family
+  (the gateway's `family`, «opened from «…»» under it, or «opened from an empty model»), version, «used by N flows»
+  (a link that lists the flows the reader may open, the pinned version of each, and the count of the others), the
+  compile state (compiled; compiling or queued with when it started; «to compile» with «compiled the first time it
+  runs»; failed in danger with its detail), the last save (how long ago, and who: «you» or the email) and three mini
+  buttons (duplicate; versions, which opens the editor on its Versions tab; more: rename, move, delete — delete
+  disabled with the count while a flow uses the model); a filter past five rows (name, description, folder path,
+  template); «New model» asks for the folder (a Select in its place) and opens `/bayes-model?project=<id>`; a foot
+  line says how the family is derived. The empty state: one sentence, the families with their counts of templates,
+  «New model» and «What a Bayesian model is» (the glossary unfolded in place: the docs' page does not exist yet). A
+  person without the group's use, or on Compose, reads why instead. The list's cells are pure functions
+  (`composables/bayesModelsList.ts`).
+- **The top bar**: Scripting is a menu (`appKeys.ts`: `menu: 'scripting'`; the place `bayes`, `/bayes-models`, `g y`,
+  `needs: 'bayes'`); `AppShell.vue` turns any menu with a single visible place into that plain link, and every menu
+  item writes its keys at its right in `kbd`. `bayes` is `bayesUsable` (`modelCatalog.ts`): the group's `usable` and no
+  `disabled_reason`, so never on Compose; the shell loads `useModelGroups()` with the scripting state. **Measured** (an
+  administrator, 1440 px, Chromium, the memory gauge shown): the navigation is wider than its room by 129 px in Italian
+  (99 English, 158 French, 165 German, 143 Spanish); the caret of the new menu takes 20 px of it, so the bar did not fit
+  before this lot either (109 px over in Italian). It scrolls, as designed for a crowded bar (Firefox measures the same
+  within 4 px); making an administrator's bar fit again is an open question for the owner (below).
+- **Explore**: «New → Bayesian model» for whoever may use the group (`/bayes-model?project=<folder>`), and the kind's
+  icon is `Dices`, as the mockup draws it (it was `Sigma`, the linear predictor's).
+- **The editor's addresses**: `?id=` (the current version), `?id=&version=` (read only: nothing dragged, linked, added or
+  removed, the inspector's fields in a disabled fieldset, the palette replaced by a sentence, a notice on the canvas'
+  top edge «Version 2, read only. A newer version exists: v4» — «…which only moves the drawing» when the semantic hash
+  is the same — with «Open the current version», and «Restore v2» in the bar's primary place), `?project=` (a new
+  model: «New model», the folder chosen, «never saved», the gallery), and `?template=` (lot G0's local preview, kept for
+  the browser checks that run with no gateway; `?template=empty` and the start list are gone).
+- **The top bar of the editor**: the mark (a link home), «← Bayesian models», the name (an input), the folder (a
+  `Select`), the version in words («v4 · saved 22 hours ago by …», «never saved», «v2 of 4 · read only»), «unsaved
+  changes» (the graph against the version opened, or the name or the folder changed) or, after a refused save, «Not
+  saved: 1 error» in danger, a button to the Problems tab; Undo, Redo, Save (the primary, «Save a new version (Ctrl+S)»).
+- **Saving** (`composables/bayesModelSave.ts`, pure but for the client handed in; `useBayesEditor.ts` gains the saved
+  snapshot, `dirty`, `adopt`, `markSaved`, `answer` and `readonly`): Ctrl+S or ⌘S from anywhere but a dialog, a field
+  included (`bayesEditorKeys.ts`: the `save` action, page scope; its row in `BAYES_KEY_TABLE`); a new model is created
+  with the template it was opened from (`template_id`, `template_version`) and the address becomes `?id=` without asking
+  to leave; a saved one sends `base_version` and only the name or folder that changed. The answer's findings (warnings
+  of the version, or the 422's errors) **replace the mirror's** on the nodes, in the inspector and in Problems while
+  the graph is the one sent; the first change gives the word back to the mirror. A 422: the Problems tab opens with
+  «The model has 1 error to fix before it can be saved. These are the gateway's findings: nothing was saved. Warnings
+  never stop a save.» and a toast. A 409 with `current_version`: a dialog «Someone saved meanwhile» with Reload (the
+  version saved meanwhile adopted as ONE step: Undo brings the person's graph back) and Cancel. A 409 without it: the
+  name is taken in that folder. An unchanged graph: «nothing changed since the last version».
+- **Versions** (`BayesVersions.vue`, a tab of the panel for a saved model): newest first, «current» and «on the canvas»
+  tags, the note in words (created, graph changed, only the drawing moved, restored from vN, copy of «…» vN), when and
+  by whom, «Open» and «Restore»; the restore asks first («It becomes version N + 1, with the graph and the Stan program
+  of version 2 copied as they are stored; the versions in between stay»; «the unsaved changes are lost» when there are
+  some) and opens the new current version.
+- **Leaving with unsaved changes**: as `FlowEditor.vue`: `onBeforeRouteLeave`, `onBeforeRouteUpdate` (another model or
+  version of this page), a dialog Stay · Leave without saving · Save and leave (a refused save keeps the person on the
+  page, the findings in sight), `beforeunload`, and no question for a sign-out the account wanted (`useLeaving`).
+- **The gallery** (`BayesTemplateGallery.vue`) over the canvas of a model with no node (and from the palette's foot,
+  «Templates», asking before it replaces a canvas that holds nodes): «Where do you start?», «Empty model» dashed at the
+  heading's right, the intro, the three families with their sentences, a card per template with its layout drawn as an
+  SVG (boxes, nodes by kind, the mirror's edges), its title, its sentences and what opening it asks; choosing one opens
+  the template's dialog of lot G0, and the template comes onto the canvas as one step of the history; the side panel
+  shows the glossary meanwhile.
+- **The fitted view's floor**: `bayesFitViewport` (`bayesCanvasModel.ts`, tested) never fits under
+  `BAYES_FIT_MIN_ZOOM` = 0.75 (at 0.51, the G5 measure, the words in the nodes were under 7 px); a model larger than
+  the view at that zoom shows its left column (the hyperparameters, where a reader starts) at the padding and scrolls.
+  Measured: the nested template at 1440 px with the panel at 600 px opens at 75 % on Chromium and Firefox.
+- **Words**: `bayes.editor.store.*`, `.versions.*`, `.gallery.*`, `.keys.save`, `bayesModels.list.*`,
+  `projectBrowser.newBayesModelButton`, `nav.bayesModels`, in the five languages; the words test covers `bayesModels.*`
+  too; `bayes.editor.start.{title,unknown,emptyTitle,emptyWhat}` removed.
+- **Tests**: `tests/bayes-model-store.test.mjs` (the save with a fake client and the real editor: base version, what
+  changed, the template on create, the 422's findings in place of the mirror's until a change, the stale save and Undo,
+  read only, the notes and the newer version, the list's filter and compile cell), the fit's floor in
+  `bayes-canvas.test.mjs`, Ctrl+S in `bayes-editor-keys.test.mjs`, the menu and `g y` in `app-keys.test.mjs`.
+- **Checked in the browser** with a fake gateway (Playwright answering the store's routes with D2's shapes, the 422's
+  findings computed by the TypeScript mirror on the graph actually sent; no Go gateway): Chromium and Firefox, 1440 and
+  1280 px, dark and light.
+- **Open question for the owner**: the administrator's top bar at 1440 px in Italian is 129 px wider than its room (109
+  before this lot); a shorter label, or the Assistant or Lineage into a menu, would make it fit again.

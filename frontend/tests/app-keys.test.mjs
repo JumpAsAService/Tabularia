@@ -36,6 +36,27 @@ test('«g» leads only where this person has a link', () => {
   assert.deepEqual(K.appKey({ key: 'm' }, t0, t0 + 100, all), { act: 'goto', to: '/admin', pending: false })
 })
 
+test('the Bayesian models: in the Scripting menu, shown by their own right, «g y»', async () => {
+  const bayes = K.NAV_SECTIONS.find((s) => s.id === 'bayes')
+  assert.deepEqual([bayes.to, bayes.key, bayes.menu, bayes.needs], ['/bayes-models', 'y', 'scripting', 'bayes'])
+  assert.equal(K.NAV_SECTIONS.find((s) => s.id === 'scripting').menu, 'scripting')
+  // each by its own right: one, the other, both, none
+  const ids = (can) => K.visibleSections(can).map((s) => s.id).filter((id) => id === 'scripting' || id === 'bayes')
+  assert.deepEqual(ids({ scripting: true, observe: false, bayes: false }), ['scripting'])
+  assert.deepEqual(ids({ scripting: false, observe: false, bayes: true }), ['bayes'])
+  assert.deepEqual(ids({ scripting: true, observe: false, bayes: true }), ['scripting', 'bayes'])
+  assert.deepEqual(ids({ scripting: false, observe: false }), [])
+  const t0 = 1000
+  assert.deepEqual(K.appKey({ key: 'y' }, t0, t0 + 100, K.visibleSections({ scripting: false, observe: false, bayes: true })), { act: 'goto', to: '/bayes-models', pending: false })
+  assert.deepEqual(K.appKey({ key: 'y' }, t0, t0 + 100, all), { act: 'swallow', pending: false })
+  // the group usable, and not on Compose
+  const { bayesUsable } = await import('../composables/modelCatalog.ts')
+  assert.equal(bayesUsable({ disabled_reason: null, groups: [{ id: 'bayes', usable: true }] }), true)
+  assert.equal(bayesUsable({ disabled_reason: 'kubernetes', groups: [{ id: 'bayes', usable: true }] }), false)
+  assert.equal(bayesUsable({ disabled_reason: null, groups: [{ id: 'bayes', usable: false }, { id: 'regression', usable: true }] }), false)
+  assert.equal(bayesUsable(null), false)
+})
+
 test('«g» then a letter, within its time; anything else lets go', () => {
   const t0 = 5000
   assert.deepEqual(K.appKey({ key: 'g' }, null, t0, all), { act: 'pending', pending: true })

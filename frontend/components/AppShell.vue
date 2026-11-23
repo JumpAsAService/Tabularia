@@ -8,6 +8,7 @@ import { useKeyHelp } from '~/composables/useKeyHelp'
 import { useAppInfo } from '~/composables/useAppInfo'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
+import { useModelGroups } from '~/composables/useModelGroups'
 // The app's shell: navbar with brand, sections and user. The pages use it as a wrapper
 // (<AppShell>…content…</AppShell>); the editor stays full screen.
 import { computed, onMounted, ref, nextTick, type Component } from 'vue'
@@ -38,6 +39,7 @@ import {
   LayoutDashboard,
   ChartNoAxesCombined,
   Code2,
+  Dices,
 } from 'lucide-vue-next'
 
 // fluid = full-width content (no centred max-width): for pages like the Viewer that use
@@ -95,10 +97,12 @@ const tokensOpen = ref(false)
 const passwordOpen = ref(false)
 const canChangePassword = computed(() => !!user.value && !(user.value.is_observer && !user.value.is_superuser))
 
-// the Scripting tab (pages/scripting.vue): shown when there is something to show in it
+// the Scripting tab (pages/scripting.vue): shown when there is something to show in it; the
+// Bayesian models (pages/bayes-models.vue) when the group `bayes` is this person's to use
 const scriptingEditor = useScriptingEditor()
 const registriesEditor = useRegistriesEditor()
-onMounted(() => { scriptingEditor.load(); registriesEditor.load() })
+const modelGroups = useModelGroups()
+onMounted(() => { scriptingEditor.load(); registriesEditor.load(); modelGroups.load() })
 
 // The list of keys (the keyboard button beside the gear, and «?»): the keys of everywhere
 // and whatever the page on screen declared. This bar's button is where the list opens.
@@ -107,14 +111,14 @@ const appKeysBtn = ref<InstanceType<typeof GridKeys> | null>(null)
 keyHelp.host(() => appKeysBtn.value?.toggle())
 
 type NavLink = { to: string; label: string; icon: Component; keys: string }
-type NavMenu = { menu: 'analysis' | 'admin'; label: string; icon: Component; links: NavLink[] }
+type NavMenu = { menu: 'analysis' | 'scripting' | 'admin'; label: string; icon: Component; links: NavLink[] }
 
 // The places are one table (composables/appKeys.ts, NAV_SECTIONS), shared with the keys
 // that lead to them: «g» then a place's letter goes only where this bar has a link.
 const ICONS: Record<string, Component> = {
   explore: FolderTree, flows: Workflow, datasources: Database, lineage: Share2,
   viewer: PieChart, reports: FileChartColumn, dashboards: LayoutDashboard,
-  assistant: Sparkles, connections: Plug, scripting: Terminal, runs: History,
+  assistant: Sparkles, connections: Plug, scripting: Terminal, bayes: Dices, runs: History,
   admin: Shield, queue: Cpu, monitoring: Activity, performance: Gauge, cluster: Server, audit: ScrollText,
 }
 /* Analysis: the places where data is read rather than prepared, the Viewer, the Reports
@@ -123,9 +127,12 @@ const ICONS: Record<string, Component> = {
    by language), so the Viewer's place became a menu with both, as Administration.
    Administration: destinations that in the product are ONE place, and in the bar were
    items at the same level as Flows or Datasources. Gathered under one item with its menu,
-   like the settings gear: the bar tells a structure that exists already. */
+   like the settings gear: the bar tells a structure that exists already.
+   Scripting: the scripts and the Bayesian models, two spaces where a person writes a model of
+   their own; each shows by its own right, and when only one does the menu is that plain link. */
 const MENUS: Record<NavMenu['menu'], { label: string; icon: Component }> = {
   analysis: { label: 'nav.analysis', icon: ChartNoAxesCombined },
+  scripting: { label: 'nav.scripting', icon: Terminal },
   admin: { label: 'nav.administration', icon: Shield },
 }
 
@@ -140,7 +147,9 @@ const items = computed<(NavLink | NavMenu)[]>(() => {
     if (!menu) out.push(menu = { menu: which, label: t(MENUS[which].label), icon: MENUS[which].icon, links: [] })
     menu.links.push(link)
   }
-  return out
+  // a menu with a single place left is that place's plain link: a menu that opens on one item
+  // is a click for nothing
+  return out.map((i) => ('menu' in i && i.links.length === 1 ? i.links[0] : i))
 })
 const isMenu = (i: NavLink | NavMenu): i is NavMenu => 'menu' in i
 
@@ -253,6 +262,7 @@ onMounted(async () => {
               @click="closeNavMenu()"
             >
               <component :is="l.icon" :size="14" /> {{ l.label }}
+              <span class="mkeys" aria-hidden="true"><kbd v-for="k in l.keys.split(' ')" :key="k">{{ k }}</kbd></span>
             </NuxtLink>
           </div>
         </Teleport>
@@ -576,6 +586,13 @@ onMounted(async () => {
 }
 .menu-item:hover { background: var(--panel-2); }
 .menu-item.on { background: var(--tint-accent); color: var(--accent-hi); }
+/* the keys that lead to the place, at the item's right (as the list of keys writes them) */
+.mkeys { margin-left: auto; padding-left: 14px; display: inline-flex; gap: 3px; }
+.mkeys kbd {
+  min-width: 17px; padding: 0 4px; font: 500 10.5px/16px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center;
+  color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px;
+}
+.menu-item.on .mkeys kbd { color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 
 /* The navigation takes precedence: first the spaces shrink, then the brand's name leaves
    only the mark (it stays for the screen readers). The search and the memory indicator

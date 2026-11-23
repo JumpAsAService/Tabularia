@@ -226,3 +226,37 @@ export function bayesNearestNode (from: BayesRect, others: ReadonlyArray<{ id: s
   }
   return best?.id ?? null
 }
+
+/**
+ * The fitted view never goes under this zoom: below it the words in the nodes (12 to 13 px) fall
+ * under 9 px on screen. A model larger than the view at this zoom is shown from its top left corner
+ * (the hyperparameters' column, where a reader starts) and the rest is reached by scrolling the view.
+ */
+export const BAYES_FIT_MIN_ZOOM = 0.75
+
+/** A Vue Flow viewport: the canvas point (0, 0) at (x, y) on screen, scaled by `zoom`. */
+export interface BayesViewport { x: number, y: number, zoom: number }
+
+/**
+ * The view that shows `bounds` (canvas coordinates) in a view of `width` × `height` pixels: the whole
+ * of it, centred, with `padding` (a share of the view) around it, never above `maxZoom` — and never
+ * under `minZoom`: then, along an axis that does not fit, the content starts at the padding.
+ */
+export function bayesFitViewport (
+  bounds: BayesRect, width: number, height: number,
+  opts: { padding?: number, minZoom?: number, maxZoom?: number } = {},
+): BayesViewport {
+  const padding = opts.padding ?? 0.08
+  const minZoom = opts.minZoom ?? BAYES_FIT_MIN_ZOOM
+  const maxZoom = opts.maxZoom ?? 1
+  const w = Math.max(1, bounds.w)
+  const h = Math.max(1, bounds.h)
+  const whole = Math.min(width / (w * (1 + 2 * padding)), height / (h * (1 + 2 * padding)))
+  const zoom = Math.max(minZoom, Math.min(maxZoom, whole))
+  const place = (start: number, size: number, room: number) => {
+    const drawn = size * zoom
+    // centred when it fits with its padding, otherwise from its start
+    return drawn * (1 + 2 * padding) <= room + 0.5 ? (room - drawn) / 2 - start * zoom : room * padding / (1 + 2 * padding) - start * zoom
+  }
+  return { x: place(bounds.x, w, width), y: place(bounds.y, h, height), zoom }
+}

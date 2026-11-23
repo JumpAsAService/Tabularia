@@ -125,3 +125,29 @@ test('Alt with an arrow: the nearest node in that direction, none where there is
   assert.equal(bayesNearestNode(r(300, 0), [{ id: 'below', rect: r(250, 300) }], 'left'), null, 'the cone leaves out what is mostly below')
   assert.equal(bayesNearestNode(r(300, 0), [{ id: 'below', rect: r(250, 300) }], 'down'), 'below')
 })
+
+test('the fitted view: whole and centred when it fits, never above 1, never under the readable zoom', async () => {
+  const { bayesFitViewport, BAYES_FIT_MIN_ZOOM } = await import('~/composables/bayesCanvasModel.ts')
+  assert.equal(BAYES_FIT_MIN_ZOOM, 0.75)
+  // a small model stays at its natural size, centred
+  const small = bayesFitViewport({ x: 100, y: 50, w: 400, h: 200 }, 1000, 600)
+  assert.equal(small.zoom, 1)
+  assert.equal(small.x, (1000 - 400) / 2 - 100)
+  assert.equal(small.y, (600 - 200) / 2 - 50)
+  // a model a little larger than the view: zoomed out to fit, still above the floor
+  const mid = bayesFitViewport({ x: 0, y: 0, w: 1100, h: 400 }, 1000, 600)
+  assert.ok(mid.zoom < 1 && mid.zoom >= BAYES_FIT_MIN_ZOOM, String(mid.zoom))
+  assert.ok(Math.abs(mid.x + 1100 * mid.zoom / 2 - 500) < 1e-9)
+  // the case of lot G5: the nested template at 1440 px with the panel open fitted at 51 %; now 75 %,
+  // its left column at the view's left edge (with the padding), the rest scrolls
+  const big = bayesFitViewport({ x: 0, y: 0, w: 1180, h: 650 }, 572, 820)
+  assert.equal(big.zoom, BAYES_FIT_MIN_ZOOM)
+  assert.ok(big.x > 0 && big.x < 572 * 0.08, String(big.x))
+  assert.ok(Math.abs(big.y + 650 * big.zoom / 2 - 410) < 1e-9) // it fits vertically: centred
+  // a node at the bounds' left edge is on screen, its words at 75 % of their size
+  assert.ok(0 * big.zoom + big.x >= 0)
+  // the floor and the ceiling can be given
+  assert.equal(bayesFitViewport({ x: 0, y: 0, w: 4000, h: 4000 }, 500, 500, { minZoom: 0.05 }).zoom, 500 / (4000 * 1.16))
+  assert.equal(bayesFitViewport({ x: 0, y: 0, w: 4000, h: 4000 }, 500, 500, { minZoom: 0.2 }).zoom, 0.2)
+  assert.equal(bayesFitViewport({ x: 0, y: 0, w: 10, h: 10 }, 500, 500, { maxZoom: 2 }).zoom, 2)
+})

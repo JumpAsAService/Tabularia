@@ -20,6 +20,7 @@ export type BayesKeyAction =
   | { kind: 'duplicate' }
   | { kind: 'undo' }
   | { kind: 'redo' }
+  | { kind: 'save' }
   | { kind: 'zoomIn' }
   | { kind: 'zoomOut' }
   | { kind: 'fit' }
@@ -50,7 +51,8 @@ export function bayesMoveStep (dir: BayesDirection): [number, number] {
 /**
  * The action of a key, or null when the key is none of the editor's. Control or Command alone make
  * the page's keys (undo, redo, duplicate); without them, the canvas' keys. ⌘Y is the browser's history
- * on a Mac, so redo is ⌘⇧Z there and Ctrl+Y only elsewhere. Alt takes an arrow to walk and takes nothing else.
+ * on a Mac, so redo is ⌘⇧Z there and Ctrl+Y only elsewhere. Ctrl or ⌘ with S saves (the browser's
+ * «save the page» never wanted in an editor). Alt takes an arrow to walk and takes nothing else.
  */
 export function bayesKeyAction (e: BayesKeyEvent, mac: boolean): BayesKeyAction | null {
   const shift = !!e.shiftKey
@@ -60,6 +62,7 @@ export function bayesKeyAction (e: BayesKeyEvent, mac: boolean): BayesKeyAction 
     if (key === 'z') return { kind: shift ? 'redo' : 'undo' }
     if (key === 'y' && !shift && !mac) return { kind: 'redo' }
     if (key === 'd' && !shift) return { kind: 'duplicate' }
+    if (key === 's' && !shift) return { kind: 'save' }
     return null
   }
   const dir = DIRS[e.key]
@@ -79,7 +82,7 @@ export function bayesKeyAction (e: BayesKeyEvent, mac: boolean): BayesKeyAction 
 
 /** Whether an action is the page's (it works from anywhere but a field) or the canvas'. */
 export function bayesKeyScope (kind: BayesKeyKind): 'page' | 'canvas' {
-  return kind === 'undo' || kind === 'redo' || kind === 'duplicate' ? 'page' : 'canvas'
+  return kind === 'undo' || kind === 'redo' || kind === 'duplicate' || kind === 'save' ? 'page' : 'canvas'
 }
 
 /** One way to press an action: the key and its modifiers (Control and Command are both «mod»). */
@@ -93,7 +96,7 @@ export interface BayesKeyWay {
 /** A row of the spec's table: the ways on a PC and on a Mac, and the action each asks for. */
 export interface BayesKeyRow {
   id: string
-  /** Absent for the rows other code carries (Vue Flow's Tab, the app's `,` `.`, `?`, Esc, the save). */
+  /** Absent for the rows other code carries (Vue Flow's Tab, the app's `,` `.`, `?`, Esc). */
   action?: BayesKeyKind | 'walk' | 'move'
   pc: BayesKeyWay[]
   mac: BayesKeyWay[]
@@ -114,7 +117,7 @@ export const BAYES_KEY_TABLE: readonly BayesKeyRow[] = [
   { id: 'duplicate', action: 'duplicate', ...same({ key: 'd', mod: true }) },
   { id: 'undo', action: 'undo', ...same({ key: 'z', mod: true }) },
   { id: 'redo', action: 'redo', pc: [{ key: 'y', mod: true }, { key: 'z', mod: true, shift: true }], mac: [{ key: 'z', mod: true, shift: true }] },
-  { id: 'save', ...same({ key: 's', mod: true }), elsewhere: 'the page, with the store (lot G3)' },
+  { id: 'save', action: 'save', ...same({ key: 's', mod: true }) },
   { id: 'zoomIn', action: 'zoomIn', ...same({ key: '+' }) },
   { id: 'zoomOut', action: 'zoomOut', ...same({ key: '-' }) },
   { id: 'fit', action: 'fit', ...same({ key: '0' }) },

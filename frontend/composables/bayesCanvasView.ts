@@ -43,6 +43,8 @@ export interface BayesPlateView {
 export interface BayesResizeParams { x: number, y: number, width: number, height: number }
 
 export interface BayesCanvasView {
+  /** A version looked at: the boxes' switches and handles do nothing. */
+  readonly: () => boolean
   node: (id: string) => BayesNodeView | undefined
   plate: (id: string) => BayesPlateView | undefined
   /** The box's switch: the non-centred form on or off (one change of the graph). */

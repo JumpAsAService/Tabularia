@@ -14,11 +14,11 @@ export interface NavSection {
   /** the letter after «g»: taken from the ENGLISH name, the same in every language */
   key: string
   /** the item of the bar that holds it, when it sits in a menu */
-  menu?: 'analysis' | 'admin'
+  menu?: 'analysis' | 'scripting' | 'admin'
   /** false: reached by its key and by the brand, with no item of its own in the bar */
   bar?: boolean
   /** what its person must have to see it */
-  needs?: 'scripting' | 'observe'
+  needs?: 'scripting' | 'bayes' | 'observe'
 }
 
 /** In the bar's order. A menu stands where its first place stands. */
@@ -33,8 +33,11 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   { id: 'dashboards', to: '/dashboards', label: 'nav.dashboards', key: 'b', menu: 'analysis' },
   { id: 'assistant', to: '/chat', label: 'nav.assistant', key: 'a' },
   { id: 'connections', to: '/connections', label: 'nav.connections', key: 'c' },
-  // only to whoever may use a scripting environment or a container registry
-  { id: 'scripting', to: '/scripting', label: 'nav.scripting', key: 's', needs: 'scripting' },
+  // Scripting is a menu with the Bayesian models, each shown by its own right: Scripting to whoever
+  // may use a scripting environment or a container registry, the models to whoever may use the group
+  // `bayes`; a menu with one place left is a plain link (AppShell.vue)
+  { id: 'scripting', to: '/scripting', label: 'nav.scripting', key: 's', menu: 'scripting', needs: 'scripting' },
+  { id: 'bayes', to: '/bayes-models', label: 'nav.bayesModels', key: 'y', menu: 'scripting', needs: 'bayes' },
   { id: 'runs', to: '/runs', label: 'nav.runs', key: 'r' },
   // Administration: for an administrator or an observer
   { id: 'admin', to: '/admin', label: 'nav.admin', key: 'm', menu: 'admin', needs: 'observe' },
@@ -46,8 +49,8 @@ export const NAV_SECTIONS: readonly NavSection[] = [
 ]
 
 /** The places this person sees in the bar: the only ones «g» leads to. */
-export function visibleSections(can: { scripting: boolean; observe: boolean }): NavSection[] {
-  return NAV_SECTIONS.filter((s) => !s.needs || can[s.needs])
+export function visibleSections(can: { scripting: boolean; observe: boolean; bayes?: boolean }): NavSection[] {
+  return NAV_SECTIONS.filter((s) => !s.needs || !!can[s.needs])
 }
 
 // ── A key outside the text fields ────────────────────────────────────────────
