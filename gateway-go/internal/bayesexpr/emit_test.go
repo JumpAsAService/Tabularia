@@ -217,7 +217,8 @@ func TestEmitRefusesIdentifiers(t *testing.T) {
 	}
 	bad := []string{"", "target", "print", "lower", "for", "vector", "model", "functions", "include", "x__", "lp__",
 		"_x", "1x", "x y", "x;y", "x}", "x//", "x/*", "x.y", "x[1]", "x(", "a\nb", "\u00e9", "x_lpdf", "x_lupmf",
-		"and", "STAN_MAJOR", "jacobian", "profile", "exp", "to_vector", "inv_logit"}
+		"and", "STAN_MAJOR", "jacobian", "profile", "exp", "to_vector", "inv_logit",
+		"return", "void", "tuple", "break", "continue", "complex_vector"}
 	for _, s := range bad {
 		for i, env := range []fixedEmitEnv{
 			{id: s, index: "g", lag: "Lag1", subset: "Rows_lag"},

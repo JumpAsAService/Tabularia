@@ -25,7 +25,12 @@
       "lower",
       "upper",
       "offset",
-      "multiplier"
+      "multiplier",
+      "return",
+      "void",
+      "tuple",
+      "break",
+      "continue"
     ],
     "type_names": [
       "int",
@@ -46,7 +51,10 @@
       "cholesky_factor_cov",
       "corr_matrix",
       "cov_matrix",
-      "array"
+      "array",
+      "complex_vector",
+      "complex_row_vector",
+      "complex_matrix"
     ],
     "reserved_functions": [
       "print",

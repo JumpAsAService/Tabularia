@@ -2,6 +2,7 @@
   "version": "2.40.0",
   "source": "https://mc-stan.org/docs/reference-manual/expressions.html",
   "retrieved": "2026-11-23",
+  "stanc_additions": "return, void, tuple, break, continue (reserved_words) and complex_vector, complex_row_vector, complex_matrix (type_names) are not in the manual's lists but stanc 2.40.0 refuses them as names (checked 2026-11-24); they are the last entries of their lists",
   "reserved_words": [
     "for",
     "in",
@@ -24,7 +25,12 @@
     "lower",
     "upper",
     "offset",
-    "multiplier"
+    "multiplier",
+    "return",
+    "void",
+    "tuple",
+    "break",
+    "continue"
   ],
   "type_names": [
     "int",
@@ -45,7 +51,10 @@
     "cholesky_factor_cov",
     "corr_matrix",
     "cov_matrix",
-    "array"
+    "array",
+    "complex_vector",
+    "complex_row_vector",
+    "complex_matrix"
   ],
   "reserved_functions": [
     "print",

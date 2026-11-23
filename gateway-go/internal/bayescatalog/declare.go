@@ -25,6 +25,8 @@ var declared = Catalog{
 			"true", "false", "target", "struct", "typedef", "export",
 			"auto", "extern", "var", "static", "lower", "upper", "offset",
 			"multiplier",
+			// Not in the manual's list, refused as names by stanc 2.40.0 (lot S0, 2026-11-24).
+			"return", "void", "tuple", "break", "continue",
 		},
 		TypeNames: []string{
 			"int", "real", "complex", "vector", "simplex", "unit_vector",
@@ -32,6 +34,8 @@ var declared = Catalog{
 			"row_vector", "matrix", "cholesky_factor_corr",
 			"column_stochastic_matrix", "row_stochastic_matrix",
 			"cholesky_factor_cov", "corr_matrix", "cov_matrix", "array",
+			// Not in the manual's list, refused as names by stanc 2.40.0 (lot S0, 2026-11-24).
+			"complex_vector", "complex_row_vector", "complex_matrix",
 		},
 		ReservedFunctions: []string{"print", "reject", "profile", "fatal_error", "target", "jacobian"},
 		BlockNames: []string{

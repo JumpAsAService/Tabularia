@@ -25,6 +25,11 @@ func TestNodeIdentifier(t *testing.T) {
 		{"n1", name("vector"), "V_n1", RenamedReserved, "vector"},
 		{"n1", name("model"), "V_n1", RenamedReserved, "model"},
 		{"n1", name("jacobian"), "V_n1", RenamedReserved, "jacobian"},
+		{"n1", name("return"), "V_n1", RenamedReserved, "return"},
+		{"n1", name("tuple"), "V_n1", RenamedReserved, "tuple"},
+		{"n1", name("void"), "V_n1", RenamedReserved, "void"},
+		{"n1", name("break"), "V_n1", RenamedReserved, "break"},
+		{"n1", name("continue"), "V_n1", RenamedReserved, "continue"},
 		{"n1", name("class"), "V_n1", RenamedReserved, "class"},
 		// the words the output refuses
 		{"n1", name("print"), "V_n1", RenamedReserved, "print"},
