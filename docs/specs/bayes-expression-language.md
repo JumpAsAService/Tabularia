@@ -509,8 +509,59 @@ Stan's terms but not in C++'s: **reserved names** (finding 2: a valid model that
 boundary «a model too big to compile» (finding 1: the graph's limits allow, by a wide margin, programs that the
 default compile limits cannot build). Neither is an injection.
 
+### Measured on 2026-11-24, finding 1
+
+Full CmdStan builds (`make` of the executable) in the image `tabularia-bayes-b0:local` under the compile Job's
+limits (`--cpus 1 --memory 3g`, no network, read-only root, `timeout 330`), one at a time. The programs are written
+by `Generate` from valid graphs (data `x`, `y` on the rows, parameters `a`, `b`, `s`); the per-row mean is the
+review's form `a * x / (x + b) - a * x / (x + b) - … + 1` (8 nodes a term). «Split» programs are the same programs
+edited by hand: the vector expression written as a chain of locals of the model block (`vector[N] e1 = …; vector[N]
+e2 = (e1 - …); …`), each local holding 1 term (about 8 nodes) or 8 terms (about 63 nodes).
+
+| Program | Nodes of the expressions | As written today | Split, 8 terms a local | Split, 1 term a local |
+|---|---|---|---|---|
+| GLM baseline (`a * x`) | 1 | 13.1 s, 1.53 GB | — | — |
+| One per-row mean | 49 | 15.8 s, 1.44 GB | — | — |
+| One per-row mean | 97 | 20.7 s, 1.00 GB | — | — |
+| One per-row mean | 153 | 35.6 s, 1.02 GB | — | — |
+| One per-row mean | 201 | 66.2 s, 1.33 GB | — | — |
+| One per-row mean | 249 | **106.0 s**, 1.38 GB | **23.0 s**, 1.02 GB | 22.4 s, 1.04 GB |
+| Two transformed nodes on rows of 249 | 498 | **300.8 s**, 1.55 GB | — | — |
+| Three transformed nodes on rows of 249 | 747 | **> 330 s** (killed), 1.39 GB | **62.2 s**, 1.50 GB | 62.7 s, 1.36 GB |
+| Six transformed nodes of 249 | 1,494 | — | 132.5 s, 1.65 GB | — |
+| Ten transformed nodes of 249 | 2,490 | — | 292.5 s, 2.01 GB | — |
+| Sixteen transformed nodes of 249 | 3,984 | — | **> 330 s** (killed), 2.08 GB | — |
+
+(GB: the container's peak memory, `memory.peak`.) What the numbers say:
+
+- **(a) Splitting works.** Written as locals, the 249-node mean compiles in 23 s instead of 106 s, and the 747-node
+  program in 62 s instead of more than 330 s. The size of a local barely matters (1 term or 8 terms: the same time
+  within a second): the cost is one C++ expression template nesting all the vector operations, and any split that
+  bounds it removes it.
+- **(b) As written today the time grows faster than the nodes**: 16, 21, 36, 66, 106 s for 49, 97, 153, 201, 249
+  nodes of one expression; two such expressions already reach the default deadline (301 s).
+- **Split, the time is about linear up to ~1,500 nodes and steeper after**: 23 s (249), 62 s (747), 133 s (1,494),
+  293 s (2,490); 3,984 nodes (the catalogue allows 4,096) do not finish in 330 s with 1 CPU and 3 GiB. Splitting
+  alone does not bring every graph the limits allow under the default deadline.
+
+**Decision (Owner, 2026-11-24).** (1) The catalogue's limits do not change (`max_expression_nodes` 256,
+`max_total_expression_nodes` 4,096). (2) `stan-codegen` splits large vector expressions into locals (the rule, its
+threshold and its lot: the codegen spec's «Correction of 2026-11-24 from E4»). (3) In `stan-compile`: one compile per
+person at a time, and a program whose sha256 already passed the deadline is not compiled again (the map's
+`stan-compile`, «Correction of 2026-11-24 from E4»).
+
+**Still open, for the owner** (the extreme split case does not fit): a graph near `max_total_expression_nodes`
+still exceeds the default 300 s even split (3,984 nodes: > 330 s). Options, measured above: a **per-program budget
+of vector-expression nodes** of **1,500** (133 s split, less than half the deadline: the margin for a slower node or
+a busier cluster) or 2,000 (between 133 s and 293 s; about 200 s by the trend, not measured), checked by the graph
+validator before any compile (a finding, not a failed Job), the 4,096 limit kept for the scalar expressions, which
+cost little; or a longer deadline (600 s) or 2 CPUs for the compile Job of a large program. Recommendation: the
+1,500-node budget of vector nodes, with the deadline unchanged.
+
 ### Corrections of 2026-11-24 (from E4)
 
+- **Finding 1**: measured above, decided by the owner (the decision under «Measured on 2026-11-24, finding 1»); the
+  splitting is lot S5 of `stan-codegen`, the compile rules belong to `stan-compile`; the per-program budget is open.
 - **Finding 2**: the catalogue has two new lists, `stan.backend_member_words` (21 words) and
   `stan.backend_member_patterns` (`get_*_sizedtypes`, `*_impl`), and the identifier rule of `stan-codegen`
   (`reservedNames`, `reservedWordFor`, `CheckIdentifiers`) and `Emit`'s identifier check treat them as reserved: such

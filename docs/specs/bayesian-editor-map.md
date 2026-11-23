@@ -351,6 +351,12 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   therefore never executed.
 - **Risks.** Compile time and memory (assumed: tens of seconds to a minute, one to a few GB; to measure).
 - **Measure first.** As `bayes-image`; and the binary's size (tens of MB, assumed).
+- **Correction of 2026-11-24 from E4** (the expression language's security review, finding 1; Owner, 2026-11-24).
+  **One compile per person at a time** (a second save while one compiles waits its turn; it does
+  not start a second Job), and **a program whose sha256 already passed the compile deadline is not compiled again**
+  (the save says so, with the deadline; a new program, or new limits, compiles anew). Measured: the GLM baseline
+  13 s and 1.5 GB with 1 CPU and 3 GiB; a valid graph with three per-row expressions of 249 nodes ran past 330 s,
+  whence the splitting of `stan-codegen` (lot S5) and these two rules.
 
 ### `bayes-diagnostics`
 

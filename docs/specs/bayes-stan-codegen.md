@@ -591,9 +591,11 @@ All inputs are small graphs (at most `max_nodes`); no data, no sampling in the G
 | **S2** | Correlated effects, latent states, `lag`, `transformed data`, the extension point | `effects.go`, `generated.go`, golden `hier_slopes*`, `ts_*`, `extension_fake` | golden green | sonnet |
 | **S3** | The stanc check in CI, `CrossCheck`, properties, `FuzzGenerate` | `stanc_test.go`, `property_test.go`, `fuzz_test.go`, the workflow | CI green with stanc; 10 minutes of fuzzing | sonnet |
 | **S4** | Simulation-based calibration on the image | a script under `testdata/sbc/`, «As built» | recorded | sonnet (by hand, alone) |
+| **S5** | The splitting of large vector expressions into locals (correction of 2026-11-24 from E4, finding 1) | `model.go`, `params.go`, `bayesexpr`'s `Emit` (a sub-tree emitted as a local), golden `split_large` | golden green; the 747-node program of the E4 measurements, generated, compiles in the image with 1 CPU and 3 GiB in less than 90 s (62 s measured by hand) | **opus** (the safety of the output) |
 
 S0 needs `expression-language` E2 (`Emit`) and its security review (E4: «before `stan-codegen` calls `Emit`»), and
-`model-graph` M2; S1 and S2 after S0, in parallel; S3 after S2; S4 after `bayes-image` B0 and `bayes-contract` K3.
+`model-graph` M2; S1 and S2 after S0, in parallel; S3 after S2; S4 after `bayes-image` B0 and `bayes-contract` K3;
+S5 after S2 (it writes the locals S1 and S2 write), before `stan-compile` compiles a person's programs.
 
 ## Decisions of 2026-11-23 (the answers to this spec's questions)
 
@@ -606,6 +608,12 @@ S0 needs `expression-language` E2 (`Emit`) and its security review (E4: «before
 | Question | Decision | By |
 |---|---|---|
 | The example's coefficient named `beta` | Aligned with «The rule»: a name equal to a distribution's gets a generated identifier (`V_n7`), as the templates avoid with `b_x` | Technical, 2026-11-24 |
+
+## Correction of 2026-11-24 from E4
+
+| Question | Decision | By |
+|---|---|---|
+| A valid graph whose program does not compile in the compile Job's 300 s (the expression language's E4, finding 1: one per-row expression of 249 nodes 106 s, three of them more than 330 s, with 1 CPU and 3 GiB) | **The generator splits large vector expressions into locals** (lot S5). The rule: an expression over a plate (a vector) of more than **64 nodes** is written bottom-up as a chain of locals of the block it belongs to, each holding at most 64 nodes of the tree (`vector[N] E_<node id>_<k> = …;`, generated identifiers, in the mapping table as `internal`), the statement then using the last; a scalar expression is never split. Measured by hand: the 249-node mean 23 s split instead of 106 s, the 747-node program 62 s instead of more than 330 s; a local of 8 nodes or of 63 compiles in the same time, so 64 bounds the expression templates without multiplying the locals. Accepted by the golden `split_large` and the measure of S5. The catalogue's limits do not change; a per-program budget (split, 3,984 nodes still pass 330 s) is the owner's open question, in the expression language's «Measured on 2026-11-24, finding 1» | Owner, 2026-11-24 (the splitting); the threshold and the form: spec, from the measures |
 
 ## Open questions
 
