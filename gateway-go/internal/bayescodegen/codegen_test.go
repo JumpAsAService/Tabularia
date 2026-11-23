@@ -62,19 +62,13 @@ func TestGenerateRefusesAnExtensionUntilS2(t *testing.T) {
 
 func TestGenerateRefusesLaterLots(t *testing.T) {
 	cases := map[string][]byte{
-		"group plate": []byte(`{"format_version":1,"plates":[{"id":"rows","kind":"rows","label":"R"},
-			{"id":"p1","kind":"group","label":"G","key":"g"}],"nodes":[` + dataY + `,
-			{"id":"g","kind":"data","name":"g","label":"G","plate":"rows","type":"group_index","target":"p1"},
-			{"id":"a","kind":"parameter","name":"a","label":"A","plate":"p1","prior":{"dist":"normal","args":{"mu":{"expr":"0"},"sigma":{"expr":"1"}}}},` +
-			paramS + `,{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a[g]"},"sigma":{"expr":"s"}}}]}`),
-		"category": graphJSON(dataY, paramA, paramS,
-			`{"id":"c","kind":"data","name":"c","label":"C","plate":"rows","type":"category"}`,
-			`{"id":"b","kind":"parameter","name":"b","label":"B","plate":"levels:c","prior":{"dist":"normal","args":{"mu":{"expr":"0"},"sigma":{"expr":"1"}}}}`,
-			`{"id":"eta","kind":"linear_predictor","name":"eta","label":"E","plate":"rows","intercept":{"expr":"a"},"terms":[{"data":"c","coef":{"expr":"b"}}]}`,
-			`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"eta"},"sigma":{"expr":"s"}}}`),
 		"transformed data": graphJSON(dataY, paramA, paramS, dataX,
 			`{"id":"lx","kind":"transformed","name":"lx","label":"LX","plate":"rows","value":{"expr":"exp(x)"}}`,
 			`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lx"},"sigma":{"expr":"s"}}}`),
+		"a series": []byte(`{"format_version":1,"plates":[{"id":"rows","kind":"rows","label":"R","series":{"by":null,"time":"tm"}}],"nodes":[` +
+			dataY + `,` + paramA + `,` + paramS + `,
+			{"id":"tm","kind":"data","name":"tm","label":"T","plate":"rows","type":"time"},
+			{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lag(y, 1)"},"sigma":{"expr":"s"}}}]}`),
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -220,14 +214,30 @@ func TestExpressionTextNeverRead(t *testing.T) {
 	}
 }
 
-// emitEnvOf answers only the identifiers the program has; S0 has no index, lag or subset.
+// The EmitEnv answers the program's identifiers, a category's Full_ off its levels, an index on its
+// own plate and its lift elsewhere; no lag and no subset until S2.
 func TestEmitEnv(t *testing.T) {
-	g := &gen{ident: map[string]string{"a": "alpha"}}
-	e := emitEnv{g}
-	if e.Identifier("a") != "alpha" || e.Identifier("nope") != "" {
+	levels, grp := "levels:c", "grp"
+	g := &gen{ident: map[string]string{"a": "alpha", "b": "b", "g": "g"},
+		nodes: map[string]*bayesgraph.Node{
+			"b": {ID: "b", Kind: "parameter", Plate: &levels},
+			"g": {ID: "g", Kind: "data", Type: "group_index", Plate: strp("rows"), Target: grp},
+		},
+		plates: map[string]bayesgraph.ModelPlate{levels: {ID: levels, Kind: bayesgraph.PlateLevels}},
+		full:   map[string]string{"b": "Full_b"},
+		lift:   map[string]string{liftKey("g", "sub"): "Up_g_sub"},
+	}
+	rows := emitEnv{g, "rows"}
+	if rows.Identifier("a") != "alpha" || rows.Identifier("nope") != "" {
 		t.Error("Identifier")
 	}
-	if e.IndexArray("g", bayesexpr.Plate("rows")) != "" || e.LagArray(1) != "" || e.RowsSubset() != "" {
-		t.Error("S0 answers no index, lag or subset")
+	if rows.Identifier("b") != "Full_b" || (emitEnv{g, bayesexpr.Plate(levels)}).Identifier("b") != "b" {
+		t.Error("a category's coefficients: Full_ per row, themselves on their levels")
+	}
+	if rows.IndexArray("g", "rows") != "g" || rows.IndexArray("g", "sub") != "Up_g_sub" || rows.IndexArray("g", "other") != "" {
+		t.Error("IndexArray")
+	}
+	if rows.LagArray(1) != "" || rows.RowsSubset() != "" {
+		t.Error("no lag or subset before S2")
 	}
 }

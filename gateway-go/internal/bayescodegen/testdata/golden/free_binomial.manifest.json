@@ -1,0 +1,51 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "cac30fff6c8ddc3b72850ffc9ab6d3ec9c6ff6778f9fa5615b1b1708b6d26ba1",
+  "program_sha256": "fd8423450db321fe83a585fc63dfc4f0dd99e98cb89c39fc178974bf708fc102",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "trials",
+      "kind": "int",
+      "plate": "rows",
+      "node": "n",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "int",
+      "plate": "rows",
+      "node": "y",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "alpha",
+      "role": "quantity",
+      "node": "alpha",
+      "dims": []
+    },
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Count",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "k",
+      "kind": "data",
+      "name": "k",
+      "label": "Number of visits",
+      "plate": "rows",
+      "type": "int",
+      "support": "any"
+    },
+    {
+      "id": "w",
+      "kind": "data",
+      "name": "w",
+      "label": "Weekend",
+      "plate": "rows",
+      "type": "int",
+      "support": "binary"
+    },
+    {
+      "id": "alpha",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Log of the typical count",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bk",
+      "kind": "parameter",
+      "name": "b_k",
+      "label": "Effect of one more visit",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "bw",
+      "kind": "parameter",
+      "name": "b_w",
+      "label": "Effect of the weekend",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Log of the expected count",
+      "plate": "rows",
+      "intercept": {
+        "expr": "alpha"
+      },
+      "terms": [
+        {
+          "data": "k",
+          "coef": {
+            "expr": "b_k"
+          }
+        },
+        {
+          "data": "w",
+          "coef": {
+            "expr": "b_w"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Count",
+      "observed": "y",
+      "dist": "poisson_log",
+      "args": {
+        "alpha": {
+          "expr": "eta"
+        }
+      }
+    }
+  ]
+}

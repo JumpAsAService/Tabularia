@@ -1,0 +1,110 @@
+[
+  {
+    "stan": "N",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "k",
+    "block": "data",
+    "node_id": "k",
+    "component": null,
+    "name": "k",
+    "label": "Number of visits",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "w",
+    "block": "data",
+    "node_id": "w",
+    "component": null,
+    "name": "w",
+    "label": "Weekend",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "y",
+    "block": "data",
+    "node_id": "y",
+    "component": null,
+    "name": "y",
+    "label": "Count",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "Mode",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "mode",
+    "plate": null,
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "alpha",
+    "block": "parameters",
+    "node_id": "alpha",
+    "component": null,
+    "name": "alpha",
+    "label": "Log of the typical count",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "b_k",
+    "block": "parameters",
+    "node_id": "bk",
+    "component": null,
+    "name": "b_k",
+    "label": "Effect of one more visit",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "b_w",
+    "block": "parameters",
+    "node_id": "bw",
+    "component": null,
+    "name": "b_w",
+    "label": "Effect of the weekend",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "eta",
+    "block": "model",
+    "node_id": "eta",
+    "component": null,
+    "name": "eta",
+    "label": "Log of the expected count",
+    "kind": "linear_predictor",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  }
+]

@@ -30,12 +30,16 @@ import (
 
 const goldenDir = "testdata/golden"
 
-// goldenCases are lot S0's cases; S1 and S2 add theirs.
+// goldenCases are lots S0's and S1's cases; S2 adds its own.
 var goldenCases = []string{
 	"glm_linear", "glm_logistic", "glm_poisson", "glm_negbin",
 	"names_reserved", "names_unnamed",
 	// E4, finding 2: every name of the model's C++ class, as data; the program compiles with g++.
 	"names_backend",
+	// Lot S1: the plates. The two hier_* graphs are the templates opened with example numbers
+	// (centre 1200, spread 300: bayestemplates/testdata/opened/*.c1200-s300.json, byte for byte).
+	"hier_intercepts", "hier_nested",
+	"free_truncated_hyper", "free_category", "free_explicit_noncentred", "free_binomial", "free_int_predictor",
 }
 
 // goldenManifest is a case's <case>.manifest.json: the two manifests, with the version of the
@@ -354,14 +358,16 @@ func TestRenameOneNode(t *testing.T) {
 	}
 }
 
-// TestGoldenGLMQuantitiesDoNotGrowWithRows: the written quantities of every GLM are its parameters
-// and single transformed values, none over the rows (success criterion 4).
-func TestGoldenGLMQuantitiesDoNotGrowWithRows(t *testing.T) {
+// TestGoldenQuantitiesDoNotGrowWithRows: the written quantities of every case are its parameters,
+// its transformed values and the units of its group plates and categories, none over the rows
+// (success criterion 4).
+func TestGoldenQuantitiesDoNotGrowWithRows(t *testing.T) {
 	for _, name := range goldenCases {
+		_, m := modelOf(t, readGraph(t, name))
 		_, p := generateBytes(t, readGraph(t, name))
 		for _, q := range p.Quantities {
 			for _, d := range q.Dims {
-				if d.Plate != "" || d.Size != "" {
+				if d.Plate == m.Plates[0].ID || d.Size == identRows {
 					t.Errorf("%s: %s is written over %+v", name, q.Stan, d)
 				}
 			}

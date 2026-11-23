@@ -1,0 +1,108 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Successes",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "n",
+      "kind": "data",
+      "name": "trials",
+      "label": "Trials",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "alpha",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Log-odds at the mean predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Log-odds",
+      "plate": "rows",
+      "intercept": {
+        "expr": "alpha"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Successes out of the trials",
+      "observed": "y",
+      "dist": "binomial_logit",
+      "args": {
+        "N": {
+          "expr": "trials"
+        },
+        "alpha": {
+          "expr": "eta"
+        }
+      }
+    }
+  ]
+}

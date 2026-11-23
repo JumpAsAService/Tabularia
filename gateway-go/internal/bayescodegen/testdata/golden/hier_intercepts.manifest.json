@@ -1,0 +1,77 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "5c14fc184b4205e0c0ac96ed5c8978de58537d0bf840e108dead07cc84150e0e",
+  "program_sha256": "b3652288045b2089506b6cf57b579b72758ff7ebd932310c86518627418c6404",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "mu_a",
+      "role": "quantity",
+      "node": "mua",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    },
+    {
+      "stan": "tau_a",
+      "role": "quantity",
+      "node": "taua",
+      "dims": []
+    },
+    {
+      "stan": "a_g",
+      "role": "quantity",
+      "node": "ag",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    }
+  ]
+}

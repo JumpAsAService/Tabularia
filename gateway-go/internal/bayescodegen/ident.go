@@ -174,10 +174,16 @@ type MappingEntry struct {
 	Word string `json:"word,omitempty"`
 }
 
-// Kinds of a mapping entry beyond the node kinds (parameter, transformed, linear_predictor, data).
+// Kinds of a mapping entry beyond the node kinds (parameter, transformed, linear_predictor, data):
+// a size (N, J_<plate>, K_<category>), the mode flag, a lifted index (Up_<index>_<plate>), and an
+// identifier the program declares for a node of its own (Z_<id> the standard normals of the
+// explicit non-centred form, Full_<id> a category's coefficients with the reference's 0,
+// Arg<k>_<id> an argument of a truncated prior over a plate).
 const (
-	KindSize = "size"
-	KindMode = "mode"
+	KindSize     = "size"
+	KindMode     = "mode"
+	KindLift     = "lift"
+	KindInternal = "internal"
 )
 
 // Roles of a written variable (the quantity manifest's, bayes-contract).

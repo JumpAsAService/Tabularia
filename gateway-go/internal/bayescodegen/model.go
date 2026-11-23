@@ -11,19 +11,45 @@ import (
 )
 
 // This file is the values and the statements (docs/specs/bayes-stan-codegen.md, «Linear predictors
-// and transformed nodes», «Likelihoods»): the EmitEnv every slot is emitted with, the transformed
-// parameters (single values computed from parameters: written), the model block's per-row locals
-// (linear predictors and transformed nodes on the rows: never written), the priors and the
+// and transformed nodes», «Categories», «Likelihoods»): the EmitEnv every slot is emitted with, the
+// transformed parameters (values computed from parameters, single or over a group plate, and the
+// explicit non-centred parameters: written), the model block's locals (the categories' Full_, the
+// linear predictors and transformed nodes on the rows: never written), the priors and the
 // likelihoods in Order.
 
-// emitEnv is the program's EmitEnv. Lot S0 has no index, no lag and no subset of the rows: those
-// answer "", which Emit refuses (a model that needs them is refused before, ErrUnsupported).
-type emitEnv struct{ g *gen }
+// emitEnv is the program's EmitEnv for one slot, whose context plate is ctx. A parameter on a
+// category's levels read from another plate (per row, through the category) is its Full_<id>, the
+// coefficients with the reference's 0; an index is its own array on its plate, its lift
+// (Up_<index>_<plate>) on a plate it is lifted to. Lot S2 answers lags and subsets of the rows:
+// until then they answer "", which Emit refuses (a model that needs them is refused before,
+// ErrUnsupported).
+type emitEnv struct {
+	g   *gen
+	ctx bayesexpr.Plate
+}
 
-func (e emitEnv) Identifier(id string) string                   { return e.g.ident[id] }
-func (e emitEnv) IndexArray(_ string, _ bayesexpr.Plate) string { return "" }
-func (e emitEnv) LagArray(_ int) string                         { return "" }
-func (e emitEnv) RowsSubset() string                            { return "" }
+func (e emitEnv) Identifier(id string) string {
+	if f, ok := e.g.full[id]; ok {
+		if p, _ := e.g.levelsOf(id); bayesexpr.Plate(p.ID) != e.ctx {
+			return f
+		}
+	}
+	return e.g.ident[id]
+}
+
+func (e emitEnv) IndexArray(id string, context bayesexpr.Plate) string {
+	n := e.g.node(id)
+	if n == nil || n.Plate == nil {
+		return ""
+	}
+	if bayesexpr.Plate(*n.Plate) == context {
+		return e.g.ident[id]
+	}
+	return e.g.lift[liftKey(id, context)]
+}
+
+func (e emitEnv) LagArray(_ int) string { return "" }
+func (e emitEnv) RowsSubset() string    { return "" }
 
 // slotValue is a slot's text: its expression through Emit, or the identifier of the node it refers
 // to; with the value's type.
@@ -33,7 +59,7 @@ func (g *gen) slotValue(key bayesgraph.SlotKey) (string, bayesexpr.Type, error) 
 		return "", bayesexpr.Type{}, bug("the slot %s.%s did not type in a valid model", key.Node, key.Slot)
 	}
 	if t.Expr != nil {
-		s, err := bayesexpr.Emit(t.Expr, emitEnv{g})
+		s, err := bayesexpr.Emit(t.Expr, emitEnv{g, t.Context})
 		if err != nil {
 			return "", t.Type, fmt.Errorf("slot %s.%s: %w", key.Node, key.Slot, err)
 		}
@@ -46,18 +72,18 @@ func (g *gen) slotValue(key bayesgraph.SlotKey) (string, bayesexpr.Type, error) 
 	return x, t.Type, nil
 }
 
-// overRows is a value made a vector over the rows: a vector as it is, an integer array through
-// to_vector, a single real repeated N times.
-func (g *gen) overRows(text string, t bayesexpr.Type) (string, error) {
+// overPlate is a value made a vector over a plate (the rows or a group plate): a vector as it is,
+// an integer array through to_vector, a single real repeated over the units.
+func (g *gen) overPlate(text string, t bayesexpr.Type, plate string) (string, error) {
 	switch {
 	case t.Plate == "" && t.Elem == bayesexpr.ElemReal:
-		return call("rep_vector", text, identRows)
-	case t.Plate == bayesexpr.Plate(g.rows.ID) && t.Elem == bayesexpr.ElemReal:
+		return call("rep_vector", text, g.size[plate])
+	case t.Plate == bayesexpr.Plate(plate) && t.Elem == bayesexpr.ElemReal:
 		return text, nil
-	case t.Plate == bayesexpr.Plate(g.rows.ID) && t.Elem == bayesexpr.ElemInt:
+	case t.Plate == bayesexpr.Plate(plate) && t.Elem == bayesexpr.ElemInt:
 		return call("to_vector", text)
 	}
-	return "", bug("a value of type %s where a vector over the rows is needed", t)
+	return "", bug("a value of type %s where a vector over %q is needed", t, plate)
 }
 
 // readsParameter reports whether a node's value depends on a parameter: a slot of it reads a
@@ -121,21 +147,30 @@ const (
 func (g *gen) place(n *bayesgraph.Node) (placement, error) {
 	switch n.Kind {
 	case "transformed", "linear_predictor":
+	case "parameter":
+		if _, ok := g.explicit[n.ID]; ok {
+			return placeTransformed, nil // the explicit non-centred form
+		}
+		return placeNone, nil
 	default:
 		return placeNone, nil
 	}
 	if n.Kind == "transformed" && !g.readsParameter(n.ID, map[string]bool{}) {
 		return placeNone, unsupported("the transformed node %q depends on no parameter: transformed data (lot S2)", n.ID)
 	}
-	switch {
-	case n.Plate == nil && n.Kind == "transformed":
-		return placeTransformed, nil
-	case n.Plate != nil && *n.Plate == g.rows.ID:
-		return placeLocal, nil
-	case n.Plate != nil:
-		return placeNone, unsupported("the %s %q on the plate %q (lot S1)", n.Kind, n.ID, *n.Plate)
+	if n.Plate == nil {
+		if n.Kind == "transformed" {
+			return placeTransformed, nil
+		}
+		return placeNone, bug("the %s %q on no plate", n.Kind, n.ID)
 	}
-	return placeNone, bug("the %s %q on no plate", n.Kind, n.ID)
+	switch g.plates[*n.Plate].Kind {
+	case bayesgraph.PlateRows:
+		return placeLocal, nil
+	case bayesgraph.PlateGroup:
+		return placeTransformed, nil
+	}
+	return placeNone, unsupported("the %s %q on the plate %q (no lot writes it yet)", n.Kind, n.ID, *n.Plate)
 }
 
 func (g *gen) writeTransformedParameters() error {
@@ -149,17 +184,33 @@ func (g *gen) writeTransformedParameters() error {
 		if p != placeTransformed {
 			continue
 		}
-		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: id, Slot: "value"})
-		if err != nil {
-			return err
-		}
-		if t.Plate != "" || t.Elem != bayesexpr.ElemReal {
-			return bug("the single transformed node %q has a value of type %s", id, t)
-		}
 		x := g.ident[id]
-		lines = append(lines, "real "+x+" = "+v+";")
+		var line string
+		var dims []Dim
+		switch {
+		case n.Kind == "parameter":
+			if line, err = g.explicitValue(n); err != nil {
+				return err
+			}
+			dims = []Dim{{Plate: *n.Plate}}
+		case n.Plate == nil:
+			v, t, err := g.slotValue(bayesgraph.SlotKey{Node: id, Slot: "value"})
+			if err != nil {
+				return err
+			}
+			if t.Plate != "" || t.Elem != bayesexpr.ElemReal {
+				return bug("the single transformed node %q has a value of type %s", id, t)
+			}
+			line, dims = "real "+x+" = "+v+";", []Dim{}
+		default:
+			if line, err = g.vectorValue(n); err != nil {
+				return err
+			}
+			dims = []Dim{{Plate: *n.Plate}}
+		}
+		lines = append(lines, line)
 		g.mapping = append(g.mapping, g.entry(n, blockTransformed, RoleQuantity))
-		g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: id, Dims: []Dim{}})
+		g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: id, Dims: dims})
 	}
 	if len(lines) == 0 {
 		return nil
@@ -172,9 +223,11 @@ func (g *gen) writeTransformedParameters() error {
 	return nil
 }
 
-// local is the declaration of a per-row local: a transformed node's value, or a linear predictor's
-// sum, intercept first, then each term (coef × data) in the node's order, left-associated.
-func (g *gen) local(n *bayesgraph.Node) (string, error) {
+// vectorValue is the declaration of a value over a plate (the rows or a group plate): a
+// transformed node's value, or a linear predictor's sum, intercept first, then each term in the
+// node's order, left-associated: a coefficient times a real data vector, an integer data through
+// to_vector, a category's coefficients by its level (Full_<b>[c]).
+func (g *gen) vectorValue(n *bayesgraph.Node) (string, error) {
 	var v string
 	var t bayesexpr.Type
 	var err error
@@ -185,14 +238,15 @@ func (g *gen) local(n *bayesgraph.Node) (string, error) {
 	} else if v, t, err = g.linearPredictor(n); err != nil {
 		return "", err
 	}
-	if v, err = g.overRows(v, t); err != nil {
+	if v, err = g.overPlate(v, t, *n.Plate); err != nil {
 		return "", err
 	}
-	return "vector[N] " + g.ident[n.ID] + " = " + v + ";", nil
+	return "vector[" + g.size[*n.Plate] + "] " + g.ident[n.ID] + " = " + v + ";", nil
 }
 
 func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error) {
-	rows := bayesexpr.Plate(g.rows.ID)
+	plate := *n.Plate
+	over := bayesexpr.Plate(plate)
 	sum, typ := "", bayesexpr.Type{Elem: bayesexpr.ElemReal}
 	if n.Intercept != nil {
 		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "intercept"})
@@ -200,44 +254,55 @@ func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error
 			return "", typ, err
 		}
 		if t.Plate != "" {
-			if v, err = g.overRows(v, t); err != nil {
+			if v, err = g.overPlate(v, t, plate); err != nil {
 				return "", typ, err
 			}
-			typ.Plate = rows
+			typ.Plate = over
 		}
 		sum = v
 	}
 	for i, term := range n.Terms {
-		coef, ct, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: fmt.Sprintf("terms[%d].coef", i)})
-		if err != nil {
-			return "", typ, err
-		}
-		if ct.Plate != "" || ct.Elem != bayesexpr.ElemReal {
-			return "", typ, bug("the coefficient of term %d of %q has the type %s", i, n.ID, ct)
-		}
+		key := bayesgraph.SlotKey{Node: n.ID, Slot: fmt.Sprintf("terms[%d].coef", i)}
 		d := g.node(term.Data)
-		if d == nil || d.Kind != "data" || d.Plate == nil || *d.Plate != g.rows.ID {
-			return "", typ, bug("term %d of %q is not a data node on the rows", i, n.ID)
+		if d == nil || d.Kind != "data" || d.Plate == nil || *d.Plate != plate {
+			return "", typ, bug("term %d of %q is not a data node on its plate", i, n.ID)
 		}
 		x := g.ident[d.ID]
+		var product string
 		switch d.Type {
-		case "real":
-		case "int":
-			if x, err = call("to_vector", x); err != nil {
+		case "real", "int":
+			coef, ct, err := g.slotValue(key)
+			if err != nil {
 				return "", typ, err
 			}
+			if ct.Plate != "" || ct.Elem != bayesexpr.ElemReal {
+				return "", typ, bug("the coefficient of term %d of %q has the type %s", i, n.ID, ct)
+			}
+			if d.Type == "int" {
+				if x, err = call("to_vector", x); err != nil {
+					return "", typ, err
+				}
+			}
+			product = "(" + coef + " * " + x + ")"
 		case "category":
-			return "", typ, unsupported("the category term %q of %q (lot S1)", d.ID, n.ID)
+			b, err := g.coefficient(key)
+			if err != nil {
+				return "", typ, err
+			}
+			full, ok := g.full[b]
+			if !ok {
+				return "", typ, bug("the category term %d of %q reads %q, which has no Full_", i, n.ID, b)
+			}
+			product = "(" + full + "[" + x + "])"
 		default:
 			return "", typ, bug("term %d of %q reads a %s data node", i, n.ID, d.Type)
 		}
-		product := "(" + coef + " * " + x + ")"
 		if sum == "" {
 			sum = product
 		} else {
 			sum = "(" + sum + " + " + product + ")"
 		}
-		typ.Plate = rows
+		typ.Plate = over
 	}
 	if sum == "" {
 		return "", typ, bug("the linear predictor %q has neither an intercept nor a term", n.ID)
@@ -245,7 +310,7 @@ func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error
 	return sum, typ, nil
 }
 
-// likelihood is "y ~ dist(args)", vectorized over the observed node's rows, the arguments in
+// likelihood is "y ~ dist(args)", vectorized over the observed node's plate, the arguments in
 // Stan's order.
 func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 	d, ok := bayescatalog.LookupDistribution(n.Dist)
@@ -253,8 +318,8 @@ func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 		return "", bug("the likelihood %q has the distribution %q", n.ID, n.Dist)
 	}
 	obs := g.node(n.Observed)
-	if obs == nil || obs.Kind != "data" || obs.Plate == nil || *obs.Plate != g.rows.ID {
-		return "", bug("the likelihood %q observes %q, not a data node on the rows", n.ID, n.Observed)
+	if obs == nil || obs.Kind != "data" || obs.Plate == nil || g.plates[*obs.Plate].Kind == bayesgraph.PlateLevels {
+		return "", bug("the likelihood %q observes %q, not a data node on the rows or a group plate", n.ID, n.Observed)
 	}
 	args := make([]string, 0, len(d.Params))
 	for _, a := range d.Params {
@@ -267,9 +332,24 @@ func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 	return sampling(g.ident[obs.ID], d, args, "")
 }
 
+// writeModel writes the model block: the categories' Full_ (the coefficients with the reference
+// level's 0 in front), the per-row locals, the priors and the likelihoods, each in Order.
 func (g *gen) writeModel() error {
 	w := &g.w
 	w.open(blockModel)
+	for _, id := range g.m.Order {
+		f, ok := g.full[id]
+		if !ok {
+			continue
+		}
+		p, _ := g.levelsOf(id)
+		v, err := call("append_row", "0.0", g.ident[id])
+		if err != nil {
+			return err
+		}
+		w.line("vector[" + g.size[p.ID] + "] " + f + " = " + v + ";")
+		g.mapping = append(g.mapping, g.internal(g.node(id), f, blockModel, ""))
+	}
 	for _, id := range g.m.Order {
 		n := g.node(id)
 		p, err := g.place(n)
@@ -279,7 +359,7 @@ func (g *gen) writeModel() error {
 		if p != placeLocal {
 			continue
 		}
-		l, err := g.local(n)
+		l, err := g.vectorValue(n)
 		if err != nil {
 			return err
 		}
@@ -288,11 +368,9 @@ func (g *gen) writeModel() error {
 	}
 	for _, id := range g.m.Order {
 		if n := g.node(id); n.Kind == "parameter" {
-			s, err := g.prior(n)
-			if err != nil {
+			if err := g.writePrior(n); err != nil {
 				return err
 			}
-			w.line(s + ";")
 		}
 	}
 	for _, id := range g.m.Order {

@@ -9,8 +9,11 @@
 //
 // Lot S0 writes the generalized linear models: the rows plate, scalar parameters with their bounds,
 // priors and truncation, transformed nodes and linear predictors on the rows or single, the five
-// likelihoods. Plates (S1), correlated effects, states, lags, transformed data and the extension
-// point (S2) are refused with ErrUnsupported until their lots are built.
+// likelihoods. Lot S1 adds the plates: group plates and their sizes, the indices and their lifts,
+// the non-centred forms (affine and explicit) and the centred one, the categories' levels with the
+// reference at 0, and the truncation loop over a plate. Correlated effects, states, lags,
+// transformed data and the extension point (S2) are refused with ErrUnsupported until their lot is
+// built.
 package bayescodegen
 
 import (
@@ -119,6 +122,18 @@ type gen struct {
 	bindings map[string]bayesgraph.Binding
 	// reads is what each node's slots read (ids), for whether a value depends on a parameter.
 	reads map[string][]string
+	// plates are the model's plates by id; size is the identifier of each plate's number of units
+	// (N, J_<plate>, K_<category>).
+	plates map[string]bayesgraph.ModelPlate
+	size   map[string]string
+	// lift is the identifier of each lifted index (Up_<index>_<plate>), by liftKey.
+	lift map[string]string
+	// full is the identifier Full_<id> of each parameter on a category's levels that is read per
+	// row: its coefficients with the reference level's 0 in front.
+	full map[string]string
+	// explicit is the parameters written in the explicit non-centred form: their identifier is a
+	// transformed parameter, their standard normals Z_<id> the parameter.
+	explicit map[string]string
 
 	w          writer
 	mapping    []MappingEntry
@@ -128,7 +143,9 @@ type gen struct {
 
 func newGen(m *bayesgraph.Model) (*gen, error) {
 	g := &gen{m: m, nodes: map[string]*bayesgraph.Node{}, ident: map[string]string{},
-		renamed: map[string][2]string{}, bindings: map[string]bayesgraph.Binding{}}
+		renamed: map[string][2]string{}, bindings: map[string]bayesgraph.Binding{},
+		plates: map[string]bayesgraph.ModelPlate{}, size: map[string]string{}, lift: map[string]string{},
+		full: map[string]string{}, explicit: map[string]string{}}
 	for i := range m.Graph.Nodes {
 		n := &m.Graph.Nodes[i]
 		if _, dup := g.nodes[n.ID]; dup {
@@ -164,26 +181,26 @@ func newGen(m *bayesgraph.Model) (*gen, error) {
 			g.renamed[n.ID] = [2]string{renamed, word}
 		}
 	}
+	if err := g.indexPlates(); err != nil {
+		return nil, err
+	}
+	if err := g.indexForms(); err != nil {
+		return nil, err
+	}
 	return g, nil
 }
 
-// supported refuses what lot S0 does not write, naming the lot that will.
+// supported refuses what lots S0 and S1 do not write, naming the lot that will.
 func (g *gen) supported() error {
 	for _, p := range g.m.Plates[1:] {
 		switch p.Kind {
-		case bayesgraph.PlateGroup:
-			return unsupported("the group plate %q (lot S1)", p.ID)
-		case bayesgraph.PlateLevels:
-			return unsupported("the category %q (lot S1)", p.Category)
+		case bayesgraph.PlateGroup, bayesgraph.PlateLevels:
 		default:
 			return bug("the plate %q of kind %q", p.ID, p.Kind)
 		}
 	}
 	if g.rows.Series != nil {
 		return unsupported("a series on the rows (lot S2)")
-	}
-	if len(g.m.Lifts) > 0 {
-		return unsupported("a lifted index (lot S1)")
 	}
 	if len(g.m.Lags) > 0 {
 		return unsupported("lag (lot S2)")
@@ -198,11 +215,6 @@ func (g *gen) supported() error {
 			return unsupported("the latent state %q (lot S2)", id)
 		case "correlated_effects":
 			return unsupported("the correlated effects %q (lot S2)", id)
-		case "data":
-			switch n.Type {
-			case "group_index", "category":
-				return unsupported("the %s data node %q (lot S1)", n.Type, id)
-			}
 		}
 	}
 	return nil

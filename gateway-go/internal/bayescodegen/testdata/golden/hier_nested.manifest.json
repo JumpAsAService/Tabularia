@@ -1,0 +1,112 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "954374dca56126f520467bf11dc16dd488cc726b4b85db50211d73663416196f",
+  "program_sha256": "8dc3c0de86ddd2694f310a1d10feab62166473358e956649ab928a7cc264459a",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_dst",
+      "kind": "size",
+      "of": "dst"
+    },
+    {
+      "stan": "J_sch",
+      "kind": "size",
+      "of": "sch"
+    },
+    {
+      "stan": "d",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "s",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "s",
+      "target": "sch"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Up_d_sch",
+      "kind": "lift",
+      "plate": "sch",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "mu",
+      "role": "quantity",
+      "node": "mu",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    },
+    {
+      "stan": "tau_d",
+      "role": "quantity",
+      "node": "taud",
+      "dims": []
+    },
+    {
+      "stan": "tau_s",
+      "role": "quantity",
+      "node": "taus",
+      "dims": []
+    },
+    {
+      "stan": "u_d",
+      "role": "quantity",
+      "node": "ud",
+      "dims": [
+        {
+          "plate": "dst"
+        }
+      ]
+    },
+    {
+      "stan": "u_s",
+      "role": "quantity",
+      "node": "us",
+      "dims": [
+        {
+          "plate": "sch"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "a4da216001d820eddde6b95f90e1eb371e9bf32c609f8cdb98009c15ca4cc709",
+  "program_sha256": "a079a052b528a0562dc627487bcc1b47b1ad7bdc73ffb642ed6e57bfcf2089ea",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_dst",
+      "kind": "size",
+      "of": "dst"
+    },
+    {
+      "stan": "J_sch",
+      "kind": "size",
+      "of": "sch"
+    },
+    {
+      "stan": "d",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "s",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "s",
+      "target": "sch"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Up_d_sch",
+      "kind": "lift",
+      "plate": "sch",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "s_hyper",
+      "role": "quantity",
+      "node": "sh",
+      "dims": []
+    },
+    {
+      "stan": "tau",
+      "role": "quantity",
+      "node": "tau",
+      "dims": []
+    },
+    {
+      "stan": "mu_district",
+      "role": "quantity",
+      "node": "mud",
+      "dims": [
+        {
+          "plate": "dst"
+        }
+      ]
+    },
+    {
+      "stan": "sigma_school",
+      "role": "quantity",
+      "node": "sigs",
+      "dims": [
+        {
+          "plate": "sch"
+        }
+      ]
+    }
+  ]
+}

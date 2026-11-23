@@ -75,6 +75,12 @@ func (w *writer) open(head string) {
 	w.depth++
 }
 
+// openNested writes a nested block's "{" alone and goes one level in.
+func (w *writer) openNested() {
+	w.line("{")
+	w.depth++
+}
+
 // close writes "}" one level out.
 func (w *writer) close() {
 	if w.depth == 0 {

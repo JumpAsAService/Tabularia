@@ -1,0 +1,144 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "dst",
+      "kind": "group",
+      "label": "District",
+      "parent": null,
+      "key": "d",
+      "form": "non_centred"
+    },
+    {
+      "id": "sch",
+      "kind": "group",
+      "label": "School",
+      "parent": "dst",
+      "key": "s",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Score",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d",
+      "kind": "data",
+      "name": "d",
+      "label": "District of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "dst"
+    },
+    {
+      "id": "s",
+      "kind": "data",
+      "name": "s",
+      "label": "School of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "sch"
+    },
+    {
+      "id": "sh",
+      "kind": "parameter",
+      "name": "s_hyper",
+      "label": "Scale of the scales",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "tau",
+      "kind": "parameter",
+      "name": "tau",
+      "label": "Spread between districts",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "s_hyper"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "mud",
+      "kind": "parameter",
+      "name": "mu_district",
+      "label": "Level of a district",
+      "plate": "dst",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "tau"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigs",
+      "kind": "parameter",
+      "name": "sigma_school",
+      "label": "Spread within a school",
+      "plate": "sch",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "mu_district[d]"
+          },
+          "sigma": {
+            "expr": "s_hyper"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Score given the district and the school",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "mu_district[d]"
+        },
+        "sigma": {
+          "expr": "sigma_school[s]"
+        }
+      }
+    }
+  ]
+}

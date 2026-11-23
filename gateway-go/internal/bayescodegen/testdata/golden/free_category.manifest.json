@@ -1,0 +1,70 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "5e7680c9a13b38faf4d94a337bb68042b1976586aed315882f6aa2948eb96cfe",
+  "program_sha256": "ed18050586ba330ee6c00370df87a03b77f3dbdd0adaa4d8314e28e3ea5dd775",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "K_ch",
+      "kind": "size",
+      "of": "levels:ch"
+    },
+    {
+      "stan": "channel",
+      "kind": "category",
+      "plate": "rows",
+      "node": "ch"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "alpha",
+      "role": "quantity",
+      "node": "alpha",
+      "dims": []
+    },
+    {
+      "stan": "b_channel",
+      "role": "quantity",
+      "node": "bch",
+      "dims": [
+        {
+          "plate": "levels:ch"
+        }
+      ]
+    },
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    }
+  ]
+}
