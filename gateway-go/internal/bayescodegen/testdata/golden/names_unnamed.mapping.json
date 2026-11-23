@@ -1,0 +1,98 @@
+[
+  {
+    "stan": "N",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "score",
+    "block": "data",
+    "node_id": "n1",
+    "component": null,
+    "name": "score",
+    "label": "Score",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "V_n2",
+    "block": "data",
+    "node_id": "n2",
+    "component": null,
+    "name": null,
+    "label": "Hours, unnamed",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": "no_name"
+  },
+  {
+    "stan": "Mode",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "mode",
+    "plate": null,
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "V_n3",
+    "block": "parameters",
+    "node_id": "n3",
+    "component": null,
+    "name": null,
+    "label": "Intercept, unnamed",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": "no_name"
+  },
+  {
+    "stan": "V_n4",
+    "block": "parameters",
+    "node_id": "n4",
+    "component": null,
+    "name": null,
+    "label": "Slope, unnamed",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": "no_name"
+  },
+  {
+    "stan": "V_n5",
+    "block": "parameters",
+    "node_id": "n5",
+    "component": null,
+    "name": null,
+    "label": "Spread, unnamed",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": "no_name"
+  },
+  {
+    "stan": "V_n6",
+    "block": "model",
+    "node_id": "n6",
+    "component": null,
+    "name": null,
+    "label": "Expected score, unnamed",
+    "kind": "linear_predictor",
+    "plate": "rows",
+    "role": null,
+    "renamed": "no_name"
+  }
+]

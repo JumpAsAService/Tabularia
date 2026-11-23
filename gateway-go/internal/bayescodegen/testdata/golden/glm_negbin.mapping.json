@@ -1,0 +1,98 @@
+[
+  {
+    "stan": "N",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "x",
+    "block": "data",
+    "node_id": "x",
+    "component": null,
+    "name": "x",
+    "label": "Predictor",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "y",
+    "block": "data",
+    "node_id": "y",
+    "component": null,
+    "name": "y",
+    "label": "Outcome (a count)",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "Mode",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "mode",
+    "plate": null,
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "alpha",
+    "block": "parameters",
+    "node_id": "alpha",
+    "component": null,
+    "name": "alpha",
+    "label": "Intercept",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "b_x",
+    "block": "parameters",
+    "node_id": "bx",
+    "component": null,
+    "name": "b_x",
+    "label": "Effect of the predictor",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "phi",
+    "block": "parameters",
+    "node_id": "phi",
+    "component": null,
+    "name": "phi",
+    "label": "Extra variation of the count",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "eta",
+    "block": "model",
+    "node_id": "eta",
+    "component": null,
+    "name": "eta",
+    "label": "Expected outcome",
+    "kind": "linear_predictor",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "f52113fc3e4ecf4d77e84b92f8457bfe12cb02d88ce27f8f32c7bdc11b5060ba",
+  "program_sha256": "35fa15fb2bf6b4742d03a165428060dc847ae33770cf107452a93fc6f6612230",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "int",
+      "plate": "rows",
+      "node": "y",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "alpha",
+      "role": "quantity",
+      "node": "alpha",
+      "dims": []
+    },
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    }
+  ]
+}

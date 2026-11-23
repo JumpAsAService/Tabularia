@@ -1,0 +1,110 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "model",
+      "label": "Outcome named after a block",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "lower",
+      "label": "Predictor named after a bound",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "normal",
+      "label": "Intercept named after a distribution",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "b",
+      "kind": "parameter",
+      "name": "x_lpdf",
+      "label": "Slope with a density's suffix",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread",
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "normal"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "x_lpdf"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the predictor",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ]
+}

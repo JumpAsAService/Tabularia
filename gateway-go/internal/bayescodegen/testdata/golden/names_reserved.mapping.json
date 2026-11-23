@@ -1,0 +1,102 @@
+[
+  {
+    "stan": "N",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "V_x",
+    "block": "data",
+    "node_id": "x",
+    "component": null,
+    "name": "lower",
+    "label": "Predictor named after a bound",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": "reserved",
+    "word": "lower"
+  },
+  {
+    "stan": "V_y",
+    "block": "data",
+    "node_id": "y",
+    "component": null,
+    "name": "model",
+    "label": "Outcome named after a block",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": "reserved",
+    "word": "model"
+  },
+  {
+    "stan": "Mode",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "mode",
+    "plate": null,
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "V_a",
+    "block": "parameters",
+    "node_id": "a",
+    "component": null,
+    "name": "normal",
+    "label": "Intercept named after a distribution",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": "reserved",
+    "word": "normal"
+  },
+  {
+    "stan": "V_b",
+    "block": "parameters",
+    "node_id": "b",
+    "component": null,
+    "name": "x_lpdf",
+    "label": "Slope with a density's suffix",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": "reserved",
+    "word": "_lpdf"
+  },
+  {
+    "stan": "sigma",
+    "block": "parameters",
+    "node_id": "s",
+    "component": null,
+    "name": "sigma",
+    "label": "Spread",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "eta",
+    "block": "model",
+    "node_id": "eta",
+    "component": null,
+    "name": "eta",
+    "label": "Expected outcome",
+    "kind": "linear_predictor",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  }
+]

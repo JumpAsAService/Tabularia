@@ -1,0 +1,105 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n1",
+      "kind": "data",
+      "name": "score",
+      "label": "Score",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "n2",
+      "kind": "data",
+      "label": "Hours, unnamed",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "n3",
+      "kind": "parameter",
+      "label": "Intercept, unnamed",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "10"
+          }
+        }
+      }
+    },
+    {
+      "id": "n4",
+      "kind": "parameter",
+      "label": "Slope, unnamed",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "n5",
+      "kind": "parameter",
+      "label": "Spread, unnamed",
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "n6",
+      "kind": "linear_predictor",
+      "label": "Expected score, unnamed",
+      "plate": "rows",
+      "intercept": {
+        "ref": "n3"
+      },
+      "terms": [
+        {
+          "data": "n2",
+          "coef": {
+            "ref": "n4"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n7",
+      "kind": "likelihood",
+      "label": "Score given the hours",
+      "observed": "n1",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "ref": "n6"
+        },
+        "sigma": {
+          "ref": "n5"
+        }
+      }
+    }
+  ]
+}
