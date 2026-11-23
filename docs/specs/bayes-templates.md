@@ -115,7 +115,10 @@ at the right; every node's sources to its left, so each edge leaves a right hand
 rightwards). It is not part of the model (the graph spec). (Correction of 2026-11-24 from the mockups: the textbook's
 top-down drawing, with the editor's side handles, made edges run backwards; the layouts of
 `gateway-go/internal/bayestemplates/templates.json` and of its browser copy are rewritten by lot **T4**, the graphs
-otherwise unchanged, `version` raised.)
+otherwise unchanged, `version` raised.) As rewritten by T4: columns 240 px apart (a node is 180 × 80), rows 110 px
+apart; the rows plate has a box of its own (`w`, `h`) beside the group boxes, never overlapping them, and holds the
+likelihood; the AR coefficients stand in columns of `per_column` (8) under the first one, `column_width` (200) apart,
+and what stands right of them moves right by the columns an order adds.
 
 ### Opening a template (the browser)
 
@@ -178,8 +181,9 @@ intercept whose meaning depends on the φ's. The golden `ts_ar2` follows this te
     {"id": "lik", "kind": "likelihood", "label": "Outcome given the predictor", "observed": "y", "dist": "normal",
      "args": {"mu": {"expr": "eta"}, "sigma": {"expr": "sigma"}}}
   ],
-  "layout": { "alpha": {"x": 0, "y": 0}, "bx": {"x": 0, "y": 110}, "x": {"x": 0, "y": 220}, "sigma": {"x": 0, "y": 330},
-              "eta": {"x": 240, "y": 110}, "y": {"x": 240, "y": 330}, "lik": {"x": 480, "y": 220} } }
+  "layout": { "rows": {"x": 220, "y": 0, "w": 700, "h": 270},
+              "alpha": {"x": 0, "y": 0}, "bx": {"x": 0, "y": 110}, "sigma": {"x": 0, "y": 220},
+              "x": {"x": 240, "y": 60}, "y": {"x": 240, "y": 170}, "eta": {"x": 480, "y": 60}, "lik": {"x": 720, "y": 115} } }
 ```
 
 One predictor in every template: the panel of the linear predictor says how to add another (a data node and a term),

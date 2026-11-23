@@ -157,6 +157,49 @@ test('the layout: no two nodes overlap, at any order', () => {
   }
 })
 
+// The canvas reads left to right (docs/specs/bayes-graph-editor.md, «Edges»): an edge leaves its
+// source's right handle and enters its target's left one, so every source stands wholly to the left
+// of its target, at every order of the AR template and with the outcome's numbers.
+test('the layout: every edge goes rightwards, at any order', () => {
+  const W = 180
+  const owner = (end) => end.split('.')[0]
+  for (const tpl of bayesTemplates()) {
+    const cases = [...casesOf(tpl), ...(tpl.order ? [['p9', { order: 9 }]] : [])]
+    for (const [name, options] of cases) {
+      const g = bayesOpenTemplate(tpl.id, options)
+      const model = check(g)
+      assert.ok(model.edges.length > 0, `${tpl.id}.${name}: no edge`)
+      for (const e of model.edges) {
+        const from = g.layout[owner(e.from)]
+        const to = g.layout[owner(e.to)]
+        assert.ok(from && to, `${tpl.id}.${name}: ${e.from} → ${e.to} has no place`)
+        assert.ok(from.x + W <= to.x, `${tpl.id}.${name}: ${e.from} (x ${from.x}) → ${e.to} (x ${to.x}) does not go rightwards`)
+      }
+    }
+  }
+})
+
+test('the layout: the rows and every group plate have a box, and each node sits in its own', () => {
+  const W = 180
+  const H = 80
+  for (const tpl of bayesTemplates()) {
+    const g = bayesOpenTemplate(tpl.id, tpl.order ? { order: 5 } : {})
+    const observedPlate = new Map(g.nodes.map(n => [n.id, n.plate ?? null]))
+    for (const p of g.plates) {
+      const box = g.layout[p.id]
+      assert.ok(box && box.w > 0 && box.h > 0, `${tpl.id}: the plate ${p.id} has no box`)
+    }
+    for (const n of g.nodes) {
+      const at = g.layout[n.id]
+      const plate = n.kind === 'likelihood' ? observedPlate.get(n.observed) : (n.plate ?? null)
+      if (plate === null) continue
+      const box = g.layout[plate]
+      const inside = at.x >= box.x && at.x + W <= box.x + box.w && at.y >= box.y && at.y + H <= box.y + box.h
+      assert.ok(inside, `${tpl.id}: ${n.id} is not inside the box of ${plate}`)
+    }
+  }
+})
+
 test('the labels come from the person\'s language, English where a key is missing', () => {
   const texts = { 'bayes.templates.ts_ar.labels.mu': 'Livello', 'bayes.templates.ts_ar.labels.phi': 'Coefficiente del ritardo {k}', 'bayes.templates.ts_ar.labels.plate_rows': 'Mesi' }
   const g = bayesOpenTemplate('ts_ar', { order: 3 }, texts)

@@ -52,7 +52,9 @@ export interface BayesTemplateOrder {
   slot: string
   outcome: string
   mean: string
-  columns: number
+  /** The coefficients stand in columns of `per_column`, `row_height` apart, the columns `column_width` apart. */
+  per_column: number
+  column_width: number
   row_height: number
 }
 
@@ -153,7 +155,7 @@ function applyOrder (g: BayesTemplateGraph, o: BayesTemplateOrder, p: number): v
   const isLag = (id: string): boolean => id.startsWith(o.id_prefix) && /^\d+$/.test(id.slice(o.id_prefix.length))
   const home = g.layout[proto.id] ?? { x: 0, y: 0 }
   const rowsBefore = g.nodes.filter(n => isLag(n.id)).length
-  const extraBefore = Math.floor((Math.max(rowsBefore, 1) - 1) / o.columns)
+  const columnsBefore = Math.ceil(Math.max(rowsBefore, 1) / o.per_column)
   const lags: BayesTemplateNode[] = []
   for (let k = 1; k <= p; k++) {
     const n = clone(proto)
@@ -163,14 +165,17 @@ function applyOrder (g: BayesTemplateGraph, o: BayesTemplateOrder, p: number): v
     lags.push(n)
   }
   g.nodes = [...g.nodes.slice(0, at), ...lags, ...g.nodes.slice(at).filter(n => !isLag(n.id))]
-  const shift = (Math.floor((p - 1) / o.columns) - extraBefore) * o.row_height
+  // The canvas reads left to right: the coefficients fill columns downwards from the first one's
+  // place, and whatever stands right of it (the rows' box, the likelihood) moves right by the
+  // columns added, so every edge still goes rightwards.
+  const shift = (Math.ceil(p / o.per_column) - columnsBefore) * o.column_width
   const layout: BayesTemplateGraph['layout'] = {}
   for (const [id, box] of Object.entries(g.layout)) {
     if (isLag(id)) continue
-    layout[id] = box.y > home.y ? { ...box, y: box.y + shift } : box
+    layout[id] = box.x > home.x ? { ...box, x: box.x + shift } : box
   }
   lags.forEach((n, i) => {
-    layout[n.id] = { x: home.x + 200 * (i % o.columns), y: home.y + o.row_height * Math.floor(i / o.columns) }
+    layout[n.id] = { x: home.x + o.column_width * Math.floor(i / o.per_column), y: home.y + o.row_height * (i % o.per_column) }
   })
   g.layout = layout
   const lik = g.nodes.find(n => n.id === o.likelihood)

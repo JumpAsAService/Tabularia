@@ -214,7 +214,8 @@ func TestEveryTemplateIsAValidCleanModel(t *testing.T) {
 }
 
 // checkLayout: every node has a place, the nodes' boxes (180 × 80) do not overlap within 1280 px,
-// and a node is inside the box of its group plate, a node of no group plate outside every box.
+// and a node is inside the box of its plate (a likelihood's is its observed node's), a node of
+// another plate outside every box but those its own box is nested in.
 func checkLayout(t *testing.T, what string, g *bayesgraph.Graph) {
 	t.Helper()
 	const w, h = 180.0, 80.0
@@ -235,12 +236,12 @@ func checkLayout(t *testing.T, what string, g *bayesgraph.Graph) {
 		}
 		for _, p := range g.Plates {
 			box, ok := g.Layout[p.ID]
-			if p.Kind != "group" || !ok || box.W == nil || box.H == nil {
+			if (p.Kind != "group" && p.Kind != "rows") || !ok || box.W == nil || box.H == nil {
 				continue
 			}
 			inside := ba.X >= box.X && ba.X+w <= box.X+*box.W && ba.Y >= box.Y && ba.Y+h <= box.Y+*box.H
 			outside := ba.X+w <= box.X || box.X+*box.W <= ba.X || ba.Y+h <= box.Y || box.Y+*box.H <= ba.Y
-			on := a.Plate != nil && *a.Plate == p.ID
+			on := plateOf(g, a) == p.ID
 			if on && !inside {
 				t.Errorf("%s: %s is not inside its plate %s", what, a.ID, p.ID)
 			}
@@ -252,6 +253,60 @@ func checkLayout(t *testing.T, what string, g *bayesgraph.Graph) {
 			}
 		}
 	}
+	// Two boxes are apart, or one holds the other and is its parent (or an ancestor's).
+	for i, p := range g.Plates {
+		a, ok := g.Layout[p.ID]
+		if !ok || a.W == nil || a.H == nil {
+			continue
+		}
+		for _, q := range g.Plates[i+1:] {
+			b, ok := g.Layout[q.ID]
+			if !ok || b.W == nil || b.H == nil {
+				continue
+			}
+			apart := a.X+*a.W <= b.X || b.X+*b.W <= a.X || a.Y+*a.H <= b.Y || b.Y+*b.H <= a.Y
+			holds := func(o, in bayesgraph.Box) bool {
+				return in.X >= o.X && in.X+*in.W <= o.X+*o.W && in.Y >= o.Y && in.Y+*in.H <= o.Y+*o.H
+			}
+			nested := (holds(a, b) && ancestor(g, q.ID, p.ID)) || (holds(b, a) && ancestor(g, p.ID, q.ID))
+			if !apart && !nested {
+				t.Errorf("%s: the boxes %s and %s overlap", what, p.ID, q.ID)
+			}
+		}
+	}
+}
+
+// plateOf: the plate a node is drawn in, "" for none; a likelihood's is its observed node's.
+func plateOf(g *bayesgraph.Graph, n bayesgraph.Node) string {
+	if n.Kind == "likelihood" {
+		for _, o := range g.Nodes {
+			if o.ID == n.Observed && o.Plate != nil {
+				return *o.Plate
+			}
+		}
+		return ""
+	}
+	if n.Plate == nil {
+		return ""
+	}
+	return *n.Plate
+}
+
+// ancestor: plate up is child's parent, or its parent's, and so on.
+func ancestor(g *bayesgraph.Graph, child, up string) bool {
+	for p := child; p != ""; {
+		var next string
+		for _, pl := range g.Plates {
+			if pl.ID == p && pl.Parent != nil {
+				next = *pl.Parent
+			}
+		}
+		if next == up {
+			return true
+		}
+		p = next
+	}
+	return false
 }
 
 // isNestedInside: a node of a child plate of plate is drawn inside it.

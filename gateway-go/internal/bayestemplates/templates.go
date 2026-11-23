@@ -36,19 +36,23 @@ type Scaled struct {
 }
 
 // Order describes the AR template's order: the coefficient node that is copied for each lag,
-// and the likelihood's slot that reads them.
+// and the likelihood's slot that reads them. The copies stand in columns of PerColumn from the
+// first one's place down (RowHeight apart), the columns ColumnWidth apart going right; whatever
+// stands right of the first one moves right by the columns added, so the canvas still reads left
+// to right.
 type Order struct {
-	Default    int    `json:"default"`
-	Node       string `json:"node"`
-	IDPrefix   string `json:"id_prefix"`
-	NamePrefix string `json:"name_prefix"`
-	Label      string `json:"label"`
-	Likelihood string `json:"likelihood"`
-	Slot       string `json:"slot"`
-	Outcome    string `json:"outcome"`
-	Mean       string `json:"mean"`
-	Columns    int    `json:"columns"`
-	RowHeight  int    `json:"row_height"`
+	Default     int    `json:"default"`
+	Node        string `json:"node"`
+	IDPrefix    string `json:"id_prefix"`
+	NamePrefix  string `json:"name_prefix"`
+	Label       string `json:"label"`
+	Likelihood  string `json:"likelihood"`
+	Slot        string `json:"slot"`
+	Outcome     string `json:"outcome"`
+	Mean        string `json:"mean"`
+	PerColumn   int    `json:"per_column"`
+	ColumnWidth int    `json:"column_width"`
+	RowHeight   int    `json:"row_height"`
 }
 
 // Template is one model. Graph is a document of the model graph's format at the default

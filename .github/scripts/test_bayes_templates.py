@@ -78,7 +78,7 @@ class Drift(unittest.TestCase):
     def test_a_changed_file_fails_until_the_copies_are_written(self):
         path = self.root / SOURCE
         data = json.loads(path.read_text(encoding="utf-8"))
-        data["templates"][0]["version"] = 2
+        data["templates"][0]["version"] += 1
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         r = run("--check", root=self.root)
         self.assertNotEqual(r.returncode, 0)
