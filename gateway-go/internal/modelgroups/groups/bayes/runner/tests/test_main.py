@@ -18,6 +18,7 @@ GO_TESTDATA = HERE.parents[4] / "bayescontract" / "testdata"
 import pyarrow as pa  # noqa: E402
 import pyarrow.parquet as pq  # noqa: E402
 
+import bayes_binary  # noqa: E402
 import bayes_main  # noqa: E402
 import bayes_task  # noqa: E402
 from tab_protocol import Refusal  # noqa: E402
@@ -91,7 +92,8 @@ class TestDispatch(MainCase):
         fake = types.ModuleType("bayes_follow")
         fake.run = lambda task, prepared: calls.append((task.mode, prepared.facts.n, prepared.data_path.exists())) or 0
         task = bayes_task.parse_task(go_task())
-        with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}):
+        with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
+                    mock.patch.object(bayes_binary, "fetch_binary", lambda workdir, expected: workdir / "model"):
             self.assertEqual(bayes_main.run_task(task, self.dir, self.dir / "run"), 0)
         self.assertEqual(calls, [("sample", 6, True)])
 
@@ -105,7 +107,8 @@ class TestDispatch(MainCase):
 
             fake.run = run
             task = bayes_task.parse_task(go_task())
-            with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}):
+            with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
+                    mock.patch.object(bayes_binary, "fetch_binary", lambda workdir, expected: workdir / "model"):
                 with self.assertRaises(type(error)):
                     bayes_main.run_task(task, self.dir, self.dir / "run")
             self.assertFalse((self.dir / "run").exists())

@@ -13,6 +13,8 @@ The modes after the task reader are other lots' and are loaded when they exist (
   compile                    bayes_compile.run(task)            lot K3
   selftest                   bayes_selftest.main(code_dir)      lot B0
 
+The binary is fetched, hashed and compared (bayes_binary) before `prepare_run` opens the input.
+
 `prepare_run` is this lot's part of a sampling Job: pass A of the data, the expansion of the quantity manifest with the sizes it found
 (and the refusal `too_many_quantities` before anything is sampled), pass B and data.json.
 """
@@ -27,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from tab_protocol import ENV_INPUT, EXIT_OK, EXIT_REFUSED, Refusal, catalog, code_dir, not_built, variant_spec, write_error
+import bayes_binary
 import bayes_data
 import bayes_selftest
 import bayes_task
@@ -43,6 +46,7 @@ class Prepared:
     facts: bayes_data.Facts
     layout: Layout
     data_path: Path
+    binary_path: Path | None = None
 
 
 def prepare_run(task: Task, workdir: Path = WORKDIR, input_path: str | None = None, batch_rows: int = bayes_data.BATCH_ROWS,
@@ -88,7 +92,9 @@ def run_task(task: Task, here: Path, workdir: Path = WORKDIR) -> int:
         return _stage("bayes_compile", "compiling a Bayesian model").run(task)
     follow = _stage("bayes_follow", "sampling a Bayesian model")
     try:
+        binary = bayes_binary.fetch_binary(workdir, task.model["binary_sha256"])  # the binary first: a poisoned one is refused before a row is read
         prepared = prepare_run(task, workdir)
+        prepared.binary_path = binary
         return follow.run(task, prepared)
     except BaseException:
         shutil.rmtree(workdir, ignore_errors=True)  # a refusal or a crash leaves no partial result
