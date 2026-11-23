@@ -23,6 +23,9 @@ const (
 	ElemInt                   // integers
 	ElemIndex                 // a group index: for each unit of its plate, a unit of its target
 	ElemTime                  // the order of a series: not a number
+	// ElemNotNumber is a named value that is not a number (the correlation matrix of correlated
+	// effects; any other such value later): refused wherever it is written.
+	ElemNotNumber
 )
 
 // Type is the type of a node or of a value: real or int, scalar (Plate "") or one per unit of
@@ -46,6 +49,8 @@ func (t Type) String() string {
 		return "index[" + string(t.Plate) + "->" + string(t.Target) + "]"
 	case ElemTime:
 		s = "time"
+	case ElemNotNumber:
+		s = "not_number"
 	default:
 		return "?"
 	}
@@ -64,7 +69,8 @@ const (
 	RoleTransformed     Role = "transformed"
 	RoleLinearPredictor Role = "linear_predictor"
 	RoleState           Role = "state"
-	RoleComponent       Role = "component" // a component of correlated effects
+	RoleComponent       Role = "component"   // a component of correlated effects
+	RoleCorrelation     Role = "correlation" // the correlation matrix of correlated effects (ElemNotNumber)
 )
 
 // lagRoles are the nodes lag may take (data, parameter, transformed, latent state).
@@ -243,7 +249,9 @@ func operands(args ...*Typed) []*Typed {
 	return args
 }
 
-// lookup finds a name that must be a number: unknown and time nodes are refused at s.
+// lookup finds a name that must be a number: unknown nodes, time nodes and values that are not
+// numbers are refused at s (a name, either name of an indexing, a lag's name; a call's argument
+// is a name).
 func (c *checker) lookup(name string, s span) (Symbol, *Error) {
 	sym, ok := c.env.Lookup(name)
 	if !ok {
@@ -251,6 +259,9 @@ func (c *checker) lookup(name string, s span) (Symbol, *Error) {
 	}
 	if sym.Type.Elem == ElemTime {
 		return Symbol{}, errSpan(s, CodeTimeValue, argsOf("name", name))
+	}
+	if sym.Type.Elem == ElemNotNumber {
+		return Symbol{}, errSpan(s, CodeNotNumber, argsOf("name", name))
 	}
 	return sym, nil
 }

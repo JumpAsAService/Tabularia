@@ -41,6 +41,7 @@ const (
 const (
 	CodeUnknownName     Code = "expr.unknown_name"     // not a named node; args: name
 	CodeTimeValue       Code = "expr.time_value"       // a time node used as a number; args: name
+	CodeNotNumber       Code = "expr.not_number"       // a value that is not a number (a correlation matrix); args: name
 	CodeIndexAlone      Code = "expr.index_alone"      // a group index used as a value, or indexed; args: name, target
 	CodeNeedsIndex      Code = "expr.needs_index"      // x's plate encloses the context; args: name, plate, index (when IndexOf names one)
 	CodeWrongPlate      Code = "expr.wrong_plate"      // x's plate does not enclose the context; args: name, plate, context
@@ -58,7 +59,7 @@ const (
 
 // checkCodes are the codes Check can return.
 var checkCodes = []Code{
-	CodeUnknownName, CodeTimeValue, CodeIndexAlone, CodeNeedsIndex, CodeWrongPlate,
+	CodeUnknownName, CodeTimeValue, CodeNotNumber, CodeIndexAlone, CodeNeedsIndex, CodeWrongPlate,
 	CodeNotIndex, CodeIndexScalar, CodeIndexTarget, CodeIndexContext,
 	CodeUnknownFunction, CodeNotFunction, CodeArity,
 	CodeLagNotSeries, CodeLagArgument, CodeLagK,

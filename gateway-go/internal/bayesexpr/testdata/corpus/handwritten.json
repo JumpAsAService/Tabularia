@@ -1,5 +1,5 @@
 {
-  "about": "The expression language's cases written by hand (docs/specs/bayes-expression-language.md). A case without env is read by Parse alone: expect is {ok, ast, format} or {code, pos, len, args}; pos and len count code points. A case with env ({use, context}: one of envs, and the slot's context plate, \"\" for a single value) is read by Parse then Check: when accepted, expect adds type and interval (the catalogue's form, a missing bound infinite). An env lists its plates (kind rows, group with its parent, levels; series on the rows of a series) and its named nodes (role; type real, int, index with its target, time; plate, \"\" for a single value; declared interval). Read by the Go tests and by the TypeScript mirror.",
+  "about": "The expression language's cases written by hand (docs/specs/bayes-expression-language.md). A case without env is read by Parse alone: expect is {ok, ast, format} or {code, pos, len, args}; pos and len count code points. A case with env ({use, context}: one of envs, and the slot's context plate, \"\" for a single value) is read by Parse then Check: when accepted, expect adds type and interval (the catalogue's form, a missing bound infinite). An env lists its plates (kind rows, group with its parent, levels; series on the rows of a series) and its named nodes (role; type real, int, index with its target, time, not_number (a correlation matrix); plate, \"\" for a single value; declared interval). Read by the Go tests and by the TypeScript mirror.",
   "envs": {
     "schools": {
       "about": "pupils (rows) in schools (p1) in districts (p2); teachers (p3) without a named index; the levels of the category color",
@@ -30,7 +30,8 @@
         {"name": "theta", "id": "n18", "role": "transformed", "type": "real", "plate": "rows", "interval": {"lower": 0, "lower_open": true, "upper": 1, "upper_open": true}},
         {"name": "n_total", "id": "n19", "role": "data", "type": "int", "plate": "", "interval": {"lower": 0}},
         {"name": "alpha_teacher", "id": "n20", "role": "parameter", "type": "real", "plate": "p3"},
-        {"name": "slope", "id": "n21.c2", "role": "component", "type": "real", "plate": "p1"}]},
+        {"name": "slope", "id": "n21.c2", "role": "component", "type": "real", "plate": "p1"},
+        {"name": "omega", "id": "n21.corr", "role": "correlation", "type": "not_number", "plate": ""}]},
     "series": {
       "about": "a series (rows) by region (p1)",
       "plates": [
@@ -46,7 +47,8 @@
         {"name": "trend", "id": "n7", "role": "transformed", "type": "real", "plate": "rows"},
         {"name": "lp", "id": "n8", "role": "linear_predictor", "type": "real", "plate": "rows"},
         {"name": "mu_region", "id": "n9", "role": "parameter", "type": "real", "plate": "p1"},
-        {"name": "sigma", "id": "n10", "role": "parameter", "type": "real", "plate": "", "interval": {"lower": 0, "lower_open": true}}]}
+        {"name": "sigma", "id": "n10", "role": "parameter", "type": "real", "plate": "", "interval": {"lower": 0, "lower_open": true}},
+        {"name": "omega", "id": "n11.corr", "role": "correlation", "type": "not_number", "plate": ""}]}
   },
   "cases": [
     {"id": "num.int", "input": "2", "expect": {"ok": true, "ast": {"num": "2"}, "format": "2"}},
@@ -519,6 +521,14 @@
     {"id": "type.arith.int_quotient", "input": "(n_total + n_total) / n_total", "env": {"use": "schools", "context": ""}, "expect": {"ok": true, "ast": {"op": "/", "args": [{"op": "+", "args": [{"name": "n_total"}, {"name": "n_total"}]}, {"name": "n_total"}]}, "format": "(n_total + n_total) / n_total", "type": "real", "interval": {}}, "note": "no integer division: every integer leaf is converted"},
     {"id": "type.arith.int_call", "input": "exp(n_total)", "env": {"use": "schools", "context": ""}, "expect": {"ok": true, "ast": {"call": "exp", "args": [{"name": "n_total"}]}, "format": "exp(n_total)", "type": "real", "interval": {"lower": 0, "lower_open": true}}},
     {"id": "type.arith.int_rows_sum", "input": "count + count", "env": {"use": "schools", "context": "rows"}, "expect": {"ok": true, "ast": {"op": "+", "args": [{"name": "count"}, {"name": "count"}]}, "format": "count + count", "type": "real[rows]", "interval": {"lower": 0}}},
-    {"id": "type.lag.int_sum", "input": "lag(u, 1) + lag(u, 2)", "env": {"use": "series", "context": "rows"}, "expect": {"ok": true, "ast": {"op": "+", "args": [{"lag": "u", "k": 1}, {"lag": "u", "k": 2}]}, "format": "lag(u, 1) + lag(u, 2)", "type": "real[rows]", "interval": {"lower": 0}}}
+    {"id": "type.lag.int_sum", "input": "lag(u, 1) + lag(u, 2)", "env": {"use": "series", "context": "rows"}, "expect": {"ok": true, "ast": {"op": "+", "args": [{"lag": "u", "k": 1}, {"lag": "u", "k": 2}]}, "format": "lag(u, 1) + lag(u, 2)", "type": "real[rows]", "interval": {"lower": 0}}},
+    {"id": "type.not_number.bare", "input": "omega", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 0, "len": 5, "args": {"name": "omega"}}, "note": "a correlation matrix is named in the graph but is not a number"},
+    {"id": "type.not_number.in_sum", "input": "mu + omega", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 5, "len": 5, "args": {"name": "omega"}}},
+    {"id": "type.not_number.indexed", "input": "omega[school]", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 0, "len": 5, "args": {"name": "omega"}}},
+    {"id": "type.not_number.as_index", "input": "alpha_school[omega]", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 13, "len": 5, "args": {"name": "omega"}}},
+    {"id": "type.not_number.argument", "input": "exp(omega)", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 4, "len": 5, "args": {"name": "omega"}}},
+    {"id": "type.not_number.lag", "input": "lag(omega, 1)", "env": {"use": "series", "context": "rows"}, "expect": {"code": "expr.not_number", "pos": 4, "len": 5, "args": {"name": "omega"}}},
+    {"id": "type.not_number.passes_component", "input": "inv_logit(slope)", "env": {"use": "schools", "context": "p1"}, "expect": {"ok": true, "ast": {"call": "inv_logit", "args": [{"name": "slope"}]}, "format": "inv_logit(slope)", "type": "real[p1]", "interval": {"lower": 0, "lower_open": true, "upper": 1, "upper_open": true}}, "note": "a component of the same correlated effects is a number"},
+    {"id": "type.not_number.called", "input": "omega(1)", "env": {"use": "schools", "context": "rows"}, "expect": {"code": "expr.not_function", "pos": 0, "len": 5, "args": {"name": "omega"}}}
   ]
 }

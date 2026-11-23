@@ -54,7 +54,7 @@ func newTestEnv(t testing.TB, spec envSpec, ctx Plate) *testEnv {
 	return e
 }
 
-var elems = map[string]Elem{"real": ElemReal, "int": ElemInt, "index": ElemIndex, "time": ElemTime}
+var elems = map[string]Elem{"real": ElemReal, "int": ElemInt, "index": ElemIndex, "time": ElemTime, "not_number": ElemNotNumber}
 
 func (e *testEnv) Lookup(name string) (Symbol, bool) {
 	for _, n := range e.nodes {
