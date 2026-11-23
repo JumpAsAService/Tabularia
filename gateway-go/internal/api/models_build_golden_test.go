@@ -90,3 +90,21 @@ func TestTheOtherGroupsBuildAndCheckAreAsTheyWere(t *testing.T) {
 		t.Errorf("the build or the check of a group changed:\nbefore\n%s\nnow\n%s", want, text)
 	}
 }
+
+// The check of the group `bayes` (docs/specs/bayes-image.md, «Changes to the machinery»): the lock gets the toolchain's
+// `package@version` lines and CmdStan's `cmdstan@<version> sha256:<hex>`, then the self-test runs.
+func TestTheBayesCheckScriptLocksTheToolchainAndCmdStan(t *testing.T) {
+	want := "set -e\n" +
+		`python -I -c "$TABULARIA_PY_MANAGED_CHECK"` + "\n" +
+		"[ -f /opt/tabularia/system-libraries.txt ] && cat /opt/tabularia/system-libraries.txt || true\n" +
+		`awk 'NF == 2 && $2 !~ /\.whl$/ { print $2 " sha256:" $1 }' /opt/tabularia/package-sha256.txt` + "\n" +
+		"echo\necho TABULARIA_SELFTEST_BEGIN\ncd /tabularia/code\npython -I -B /tabularia/code/runner/run.py --selftest\n"
+	if got := mgCheckScriptOf("bayes", "python"); got != want {
+		t.Errorf("the check's script:\n%s\nwanted:\n%s", got, want)
+	}
+	// TABULARIA_DUMP_CHECK=<dir> writes the script and the Python lock, to run the check by hand on an image built on a laptop
+	if dir := os.Getenv("TABULARIA_DUMP_CHECK"); dir != "" {
+		_ = os.WriteFile(filepath.Join(dir, "check.sh"), []byte(mgCheckScriptOf("bayes", "python")), 0o644)
+		_ = os.WriteFile(filepath.Join(dir, "py-check.py"), []byte(mgPyCheck), 0o644)
+	}
+}

@@ -55,7 +55,11 @@ points.json, format 1:
                 "logcdf", "cdf": where the catalogue has a CDF (lcdf), its log and its value (the
                             same underflow rule); absent otherwise;
                 "k"         for multi_normal_cholesky, the component;
-                "dim"       for lkj_corr_cholesky, the dimension K.
+                "dim"       for lkj_corr_cholesky, the dimension K;
+                "stan"      where Stan's own function is known to be less accurate than the self-test's declared
+                            tolerances (docs/specs/bayes-image.md, check 7), the wider relative tolerance of its
+                            "logpdf_rel" or "logcdf_rel" and the "reason", with the error measured; absent otherwise
+                            (STAN_TOLERANCES below; the browser's test does not read it).
   "quantiles" are the cases with "p" set: quantile(p, args) = x.
 Every number is written with Python's repr, so it reads back as the same double.
 """
@@ -161,6 +165,27 @@ CONTINUOUS = {
 }
 
 
+# The cases where Stan 2.40's function differs from SciPy's more than the self-test's declared tolerances (check 7 of
+# docs/specs/bayes-image.md: a relative 1e-10 for the log-density, 1e-8 for the log-CDF), each with the wider tolerance it
+# gets and why: measured on the pinned CmdStan by that self-test (lot B0, 2026-11-23). Keyed by the distribution, its
+# arguments and the probability level of the point.
+STAN_TOLERANCES = {
+    ("student_t", (1.0, 0.0, 1.0), 1e-6): {
+        "logcdf_rel": 1e-5,
+        "reason": "Stan 2.40's student_t_lcdf with nu = 1 in the far tail: relative error 2.1e-7 measured against the "
+                  "closed form log(1e-6) of the Cauchy CDF at its 1e-6 quantile"},
+    ("student_t", (1.0, 0.0, 1.0), 1 - 1e-6): {
+        "logcdf_rel": 1e-5,
+        "reason": "Stan 2.40's student_t_lcdf with nu = 1 in the far tail: relative error 2.9e-6 measured against the "
+                  "closed form log(1 - 1e-6) of the Cauchy CDF at its 1 - 1e-6 quantile"},
+}
+
+
+def stan_tolerance(dist: str, args: list, p) -> dict:
+    found = STAN_TOLERANCES.get((dist, tuple(args), p))
+    return {"stan": found} if found else {}
+
+
 def main() -> None:
     self_checks()
     cases: list = []
@@ -170,7 +195,8 @@ def main() -> None:
             frozen = make(args)
             for p in P_LEVELS:
                 x = float(frozen.ppf(p))
-                density_case(cases, dist, "density", args, x, frozen, p=p, has_cdf=True)
+                density_case(cases, dist, "density", args, x, frozen, p=p, has_cdf=True,
+                             **stan_tolerance(dist, args, p))
 
     # LKJ: one correlation r of a K x K matrix; u = (r + 1)/2 ~ Beta(a, a), a = eta - 1 + K/2
     for dim, eta in [(2, 1.0), (3, 2.0), (5, 0.5)]:

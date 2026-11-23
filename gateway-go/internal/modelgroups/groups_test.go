@@ -32,7 +32,8 @@ var pinned = map[string]*regexp.Regexp{
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 7 {
+	// the catalogue's seven, and the group `bayes` shipped ahead of its entry (aheadOfCatalogue)
+	if len(groups) != len(modelcatalog.Groups())+len(aheadOfCatalogue) || len(groups) != 8 {
 		t.Fatalf("groups: %d", len(groups))
 	}
 	for _, g := range groups {
@@ -54,8 +55,12 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 			seen[name] = true
 		}
 		// R: arrow reads and writes the Parquet files, jsonlite task.json and the card; Python:
-		// pyarrow, numpy and pandas, the library's own (json is Python's)
+		// pyarrow, numpy and pandas, the library's own (json is Python's); the group `bayes` holds
+		// numpy and pyarrow only (docs/specs/bayes-image.md)
 		need := map[string][]string{"r": {"arrow", "jsonlite"}, "python": {"pyarrow", "numpy", "pandas"}}[r.Language]
+		if g.ID == "bayes" {
+			need = []string{"pyarrow", "numpy"}
+		}
 		for _, n := range need {
 			if !seen[n] {
 				t.Errorf("%s: %s must be pinned", g.ID, n)
@@ -755,7 +760,8 @@ func TestTheFoundationForecastDockerfile(t *testing.T) {
 	}
 	// every other group: what the scripting machinery makes of its recipe, nothing more (no wheel, no file, no ARG)
 	for _, other := range Groups() {
-		if other.ID == "foundation_forecast" {
+		// the group `bayes` builds CmdStan (TestTheBayesDockerfile)
+		if other.ID == "foundation_forecast" || other.ID == "bayes" {
 			continue
 		}
 		got, err := Dockerfile(other.ID, scriptcfg.DefaultBaseImages, scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2})

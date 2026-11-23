@@ -54,7 +54,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Errorf("a refused task: %v", err)
 	}
 	out.Reset()
-	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 7 {
+	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 8 { // the catalogue's seven and `bayes`, ahead of it
 		t.Errorf("groups: %v\n%s", err, out.String())
 	}
 	// a Python group: its Dockerfile and its code, the library of its language only

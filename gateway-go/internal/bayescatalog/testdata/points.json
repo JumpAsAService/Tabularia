@@ -226,6 +226,10 @@
    ],
    "x": -318309.8861827435,
    "p": 1e-06,
+   "stan": {
+    "logcdf_rel": 1e-05,
+    "reason": "Stan 2.40's student_t_lcdf with nu = 1 in the far tail: relative error 2.1e-7 measured against the closed form log(1e-6) of the Cauchy CDF at its 1e-6 quantile"
+   },
    "logpdf": -26.48629123008244,
    "pdf": 3.1415926535794517e-12,
    "logcdf": -13.815510557964274,
@@ -286,6 +290,10 @@
    ],
    "x": 318309.88617359026,
    "p": 0.999999,
+   "stan": {
+    "logcdf_rel": 1e-05,
+    "reason": "Stan 2.40's student_t_lcdf with nu = 1 in the far tail: relative error 2.9e-6 measured against the closed form log(1 - 1e-6) of the Cauchy CDF at its 1 - 1e-6 quantile"
+   },
    "logpdf": -26.48629123002493,
    "pdf": 3.141592653760129e-12,
    "logcdf": -1.000000500029089e-06,

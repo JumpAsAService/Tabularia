@@ -890,7 +890,7 @@ func mustLoad() []Group {
 // group's, and no model of theirs runs yet. The group `bayes` (docs/specs/bayes-image.md, lot B0): its entry in the catalogue,
 // the model `bayes_model`, comes with lot K0 of docs/specs/bayes-contract.md, which takes it out of here (a group the catalogue
 // names is the catalogue's).
-var aheadOfCatalogue []modelcatalog.Group
+var aheadOfCatalogue = []modelcatalog.Group{{ID: "bayes", Language: "python", Label: "Bayesian models"}}
 
 // catalogueGroups are the groups of the catalogue, then those shipped ahead of it that it does not name yet.
 func catalogueGroups() []modelcatalog.Group {

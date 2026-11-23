@@ -1,0 +1,54 @@
+{
+  "language": "python",
+  "base": "3.14",
+  "pinned_on": "2026-11-23",
+  "packages": [
+    "numpy==2.5.5",
+    "pyarrow==26.0.1"
+  ],
+  "hashes": {
+    "numpy==2.5.5": ["c48960d420e90cf305cb1fde0d4e6082cc90512cda87a9acf0b6e04e91cf4abe", "cc6eb7502facce90349b4097a26821af224aaa0ab36e78304711cdb544352882"],
+    "pyarrow==26.0.1": ["0044cb9303c3ae082cc52a2493312109c955bcfa84e87be768736f7d6d8f6257", "7ae48ab53610b85e004b03bccff593fbdf22186d0ab48ed42c90797915dac814"]
+  },
+  "toolchain": [
+    "g++",
+    "make"
+  ],
+  "sources": [
+    {
+      "name": "cmdstan",
+      "version": "2.40.0",
+      "machine": "x86_64",
+      "url": "https://github.com/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0.tar.gz",
+      "sha256": "26d21c9737b35728e926f9b7a5d7362b38dc23e2e7d5e166c890e1fa74dac90c"
+    },
+    {
+      "name": "cmdstan",
+      "version": "2.40.0",
+      "machine": "aarch64",
+      "url": "https://github.com/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0-linux-arm64.tar.gz",
+      "sha256": "c31e9f45a701c47f547381080ee804bf7e2428aace68eff68d4262b5c406aa63"
+    }
+  ],
+  "cmdstan": {
+    "threads": true,
+    "precompiled_header": true,
+    "jobs": 1
+  },
+  "resources": {
+    "cpu": "4",
+    "memory": "2Gi",
+    "tmp": "2Gi"
+  },
+  "compile": {
+    "cpu": "1",
+    "memory": "3Gi",
+    "seconds": 300,
+    "tmp": "512Mi"
+  },
+  "cache": {
+    "max_bytes": 2147483648
+  },
+  "max_rows": 1000000,
+  "max_seconds": 3600
+}

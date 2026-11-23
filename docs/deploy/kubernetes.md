@@ -206,6 +206,18 @@ official file of Mistral AI's weights is the authority for its text and its inte
 not explain it); the acceptance is in the [audit log](../governance/audit-log.md) as `models.licence_accept`, and an installation that
 keeps its audit for a limited time should know that, once the row is gone, the next build asks again.
 
+**The Bayesian group** (`bayes`: Python 3.14, CmdStan 2.40.0 and Debian's `g++` and `make`, which compile each model) builds
+CmdStan from its release tarball, pinned by URL and sha256 for x86-64 and for arm64, and needs, **at build time only**,
+`github.com` **with the storage host it redirects release downloads to** (allow the redirect, not only the first host),
+PyPI or your mirror for `numpy` and `pyarrow`, and the Debian mirror of the base image for the toolchain. **An air-gapped
+cluster** points `MODELS__SOURCES_BASE_URL` at a mirror of GitHub's release downloads that holds the same paths
+(`stan-dev/cmdstan/releases/download/v2.40.0/…`); the sha256 stays the recipe's. The build runs CmdStan's own `make` with one
+compiler at a time, which fits the default build Pod (`SCRIPTS__BUILD_MEMORY` 4 GiB; two compilers at once were killed there
+for memory), and took about ten minutes on a modest 2018 laptop CPU with the default 2 CPUs and 4 GiB (seven and a half of
+them CmdStan's `make`, peak 3.2 GiB); the image weighs about 1.8 GB, half of it CmdStan's precompiled header, which saves about
+ten seconds on every compile. The group is supported on x86-64; arm64 is pinned but not yet built
+and self-tested on an arm64 node.
+
 ## Backend image (`backend/Dockerfile`)
 
 One Dockerfile for the four backend roles and for both development and production.

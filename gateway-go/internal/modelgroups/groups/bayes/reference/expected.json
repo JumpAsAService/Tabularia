@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "cmdstan": {
+    "version": "2.40.0",
+    "sha256": {
+      "x86_64": "26d21c9737b35728e926f9b7a5d7362b38dc23e2e7d5e166c890e1fa74dac90c",
+      "aarch64": "c31e9f45a701c47f547381080ee804bf7e2428aace68eff68d4262b5c406aa63"
+    }
+  },
+  "seed": 20261123,
+  "draws_sha256": {
+    "x86_64": [
+      "1c82c60befbb634f26aee90492197c18cbddee13dd122047bddf9cb063c2b59c",
+      "af4bba12605ed2d5faf745d27972b3fe79b501d5748b62647614f3d296e88468",
+      "47f330cda2f912b12da09896a29e78324a9cb9d0305ba179f5347b12a6d1151b",
+      "3fc42dabc8ed0e8f3165a49c2fc275deae813c09f927fce5e0b39b9fc1ed2152"
+    ]
+  }
+}

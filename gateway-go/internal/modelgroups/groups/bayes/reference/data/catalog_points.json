@@ -1,0 +1,127 @@
+{
+  "distributions": {
+    "bernoulli_logit": {
+      "real": [
+        0
+      ],
+      "integer": [],
+      "integer_outcome": true,
+      "lcdf": false
+    },
+    "beta": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "binomial_logit": {
+      "real": [
+        1
+      ],
+      "integer": [
+        0
+      ],
+      "integer_outcome": true,
+      "lcdf": false
+    },
+    "cauchy": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "exponential": {
+      "real": [
+        0
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "gamma": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "inv_gamma": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "lognormal": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "neg_binomial_2_log": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": true,
+      "lcdf": false
+    },
+    "normal": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "poisson_log": {
+      "real": [
+        0
+      ],
+      "integer": [],
+      "integer_outcome": true,
+      "lcdf": false
+    },
+    "std_normal": {
+      "real": [],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "student_t": {
+      "real": [
+        0,
+        1,
+        2
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    },
+    "uniform": {
+      "real": [
+        0,
+        1
+      ],
+      "integer": [],
+      "integer_outcome": false,
+      "lcdf": true
+    }
+  },
+  "format_version": 1
+}
