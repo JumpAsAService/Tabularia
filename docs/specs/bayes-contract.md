@@ -414,7 +414,7 @@ computation has a budget of its own, `compute_bytes` = `memory_bytes` / 8, besid
 |---|---|---|
 | `summary` (default) | one row a quantity: `quantity`, `node`, `label`, `unit`, `index`, `index_2`, `kind` (`parameter`, `transformed`, `state`, `effect`, `correlation`), `scale` (`model`, or `original` for the second row of a linear-predictor coefficient, answer 6 and the owner's 2026-11-23 answer), `mean`, `sd`, `q5`, `q25`, `q50`, `q75`, `q95`, `mcse_mean`, `mcse_sd`, `rhat`, `ess_bulk`, `ess_tail` | yes (fixed) |
 | `draws` | the draws parquet (long) | yes (fixed) |
-| `replicated` | y_rep rows for a thinned set of draws: `chain`, `draw`, `row` (1…N, the kept rows in the input's order), `value`; written in blocks like the draws (from a second CmdStan run of `predictive-checks`, assumed: its spec) | yes (fixed) |
+| `replicated` | y_rep rows for a thinned set of draws: `chain`, `draw`, `row` (1…N, the kept rows in the input's order), `outcome` (the observed data's Stan identifier, dictionary-encoded: Correction of 2026-11-24 from the step-5 specs), `value`; written in blocks like the draws (from a second CmdStan run of `predictive-checks`, assumed: its spec) | yes (fixed) |
 | `results` | nothing beyond `results.parquet` | — |
 
 The summary's numbers are Float64 (`rhat`, `ess_*` NULL when not computed: a quantity constant over every draw); its
@@ -484,7 +484,10 @@ most `max_nodes` = 200 nodes × 8 rows each: 3,200) + `sampler` (9 × 10) + `mod
 `prior_check` (`predictive-checks`' caps, at most 5,000) ≈ **92,300 rows, under 100,000**. (Correction of 2026-11-24 from the step-4 specs): the code's formula
 (`bayescontract.MaxResultRows`, with `bayes_max_quantity_entries` 600 × 10 for the `quantity` section) gives **96,690**;
 the pair charts of `bayes-diagnostics` add 6 × 300 = 1,800, **98,490**. A change of any cap, or of
-the chains' maximum, re-runs the test.
+the chains' maximum, re-runs the test. (Correction of 2026-11-24 from the step-5 specs: with the contraction and the original scale counted for the
+`bayes_max_quantity_entries` alone, as lot X4 of `bayes-diagnostics` built it, the arithmetic is **93,490**: 26,000 + 3,000
++ 25,920 + 1,800 + 24,000 + 6,000 + 1,600 + 90 + 80 + 5,000, 6,510 under the limit; the figures 96,690 and 98,490 above are
+superseded.)
 
 ### The catalogue's declaration
 
@@ -894,3 +897,40 @@ The models' catalogue is unchanged (no `bayes_model` yet), and the seven groups'
 ## Open questions
 
 None (the two opened by K0 are answered in «Decisions of 2026-11-24 (K0)»).
+
+## Correction of 2026-11-24 from the step-5 specs
+
+From `bayes-runner.md`, `bayes-report.md` and `bayes-flow-node.md`, approved by the owner on 2026-11-24. Where this section
+and the text above differ, this section holds.
+
+1. **`task.json`'s `bayes` gains four keys, all `omitempty`** (the other groups' bytes unchanged), written by `flow-node`:
+   `finite_variance` (the `of` of every `prior_marginal` whose prior has a finite variance, decided in Go by
+   `bayeschecks.FiniteVariance` from the stored graph; absent: every contraction NULL with its note), `scale_pairs` (the
+   original-scale pairs of `Model.Pairs` as Stan identifiers: `{coef, data}` for a term, `{intercept, lp, data}` for a
+   linear predictor's intercept), `model.program_bytes` and `model.image` (the card's `program.bytes` and `binary.image`).
+   `series` (correction 3 of the step-4 section) is written by `flow-node` too.
+2. **The `generate_quantities` runs.** Besides the sampling run, a sampling Job runs CmdStan as `/tmp/run/model
+   method=generate_quantities fitted_params=/tmp/run/fitted.csv num_chains=<C> data file=/tmp/run/data_gq.json random
+   seed=<seed> output file=/tmp/run/gq.csv refresh=<refresh> num_threads=1` (the first three measured by lot P0 of
+   `bayes-predictive-checks.md`, the rest checked by `bayes-runner`'s lot R2) for the posterior checks and, with the output
+   `replicated`, once more with `fitted_rep.csv`. Their header is the quantity manifest's entries whose mapping `block` is
+   `generated quantities`, expanded with that run's sizes; their data file is `data.json`'s bytes up to the first entry of
+   the extension's data, then that run's entries.
+3. **The files under `/tmp/run`.** `prior.parquet` holds the sampling run's `prior_marginal` columns (long, the draws'
+   schema and order), read by the second pass for the prior's density and the contraction; `checks.parquet` holds the
+   checks' run's check columns only (its redrawn `prior_marginal` columns are dropped).
+4. **The `replicated` output** gains the column `outcome` (the observed data's Stan identifier, dictionary-encoded):
+   `chain`, `draw`, `row`, `outcome`, `value`; `draw` is the thinned draw's number in its chain (the owner's decision of
+   2026-11-24, through the coordinator).
+5. **The `model` section** gains the numbers `seconds_checks` and `seconds_replicated` and the notes `note_checks_dropped`
+   (draws whose generated quantities CmdStan wrote as NaN, dropped from the checks and counted), `note_no_checks` (a version
+   stored before the checks), `note_prior_undrawn` (quantities without an ancestral draw in the prior predictive).
+6. **Time and disk** count the `generate_quantities` runs (their data file, fitted lines, outputs); the disk is also
+   projected before sampling with the measured constants; a checks' run that would pass the timeout is `too_slow` for the
+   whole step, before any partial result (the owner's rule on the limits).
+7. **The charts' ids** hold the **quantity's name** (`trace:alpha_school[Liceo Galilei]`), as lot X3 writes them, the
+   identifier only for a scalar.
+8. **K0b** is lot Q0 of `bayes-report.md` (the filtered view, alone) and lot Q1 (the entry `bayes_model`, in one commit
+   with the interface's catalogue lot and the report's first layout); a node of type `model` naming `bayes_model` is
+   refused by the gateway («the Bayesian model is a node of its own»).
+9. **The arithmetic of the caps is 93,490** (the paragraph «The arithmetic» above, corrected in place).

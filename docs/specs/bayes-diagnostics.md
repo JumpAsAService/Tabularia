@@ -106,6 +106,8 @@ the precision is a fact the report says once for every quantity (`bayes-report`)
 
 `bayes-report` writes the sentences; this module only fixes the references, so that every module quotes the same ones.
 Each value below is **assumed** until `bayes-report` quotes it verbatim from its source and records the page.
+(Correction of 2026-11-24 from the step-5 specs: the quotation is **in English, as the source writes it, in all five languages** — the owner, 2026-11-24 —,
+with author, year and page; the sentence around it is translated, the quotation never; `bayes-report`'s lot Q4.)
 
 | Measure | What it measures | The literature's reference value, as the source writes it |
 |---|---|---|

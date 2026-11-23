@@ -83,7 +83,10 @@ Words: **verified** = read in this repository's code on 2026-11-22.
    conventional cut-off (Cohen's 0.2 / 0.5 / 0.8, «an AUC above 0.8 is good») is ever said.
 4. **Threshold checks are measures** (a VIF, Cook's distance, an EPV, a boosting diagnostic): the reading
    says the number and the threshold the page uses, «above / below the threshold of 10», never «failed».
-   The checks' table keeps its verdict column as it is (Open question 3).
+   The checks' table keeps its verdict column as it is (Open question 3). (Correction of 2026-11-24 from the step-5 specs: **except `bayes_model`**,
+   whose report compares no number of the run with a threshold at all — answer 11 of
+   `bayesian-editor-map.md` —: the literature's reference values appear only as quotations, in English as their source
+   writes them, in the method's paragraphs, never «above / below».)
 5. **Many rows**: when a model's `n` is above `MANY_ROWS` (5,000) the assumptions' reading says in words
    what the page already says in amber: with this many rows a test rejects departures too small to
    matter.

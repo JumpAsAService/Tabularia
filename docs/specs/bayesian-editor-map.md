@@ -9,7 +9,8 @@ to the interview («Interview answers»), which came **before** any module spec.
 module `expression-language` was added between `distribution-catalog` and `model-graph` (answer 3). Each module
 spec is written by module id (`docs/specs/bayes-<module-id>.md`). Approved on 2026-11-23:
 `bayes-distribution-catalog.md`, `bayes-expression-language.md`, `bayes-model-graph.md`, `bayes-image.md`; approved on
-2026-11-24: `bayes-stan-compile.md`, `bayes-diagnostics.md`, `bayes-predictive-checks.md` (Correction of 2026-11-24 from the step-4 specs).
+2026-11-24: `bayes-stan-compile.md`, `bayes-diagnostics.md`, `bayes-predictive-checks.md` (Correction of 2026-11-24 from the step-4 specs);
+`bayes-runner.md`, `bayes-report.md`, `bayes-flow-node.md` (Correction of 2026-11-24 from the step-5 specs).
 
 Words, as in the other specs: **checked online** = read on the project's own page, registry or repository on
 2026-11-23; **verified** = read in this repository's code on 2026-11-23; **assumed** = known from the
@@ -396,6 +397,11 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   bytes of text.
 - **Measure first.** Memory peak and time of the conversion for the sizes of `bayes-contract`; a test that
   measures the memory peak, as the rule asks, and shows it flat when the draws are multiplied by ten.
+- (Correction of 2026-11-24 from the step-5 specs) Spec: `bayes-runner.md`, approved. The sampler's accumulators are fed from the batch while sampling;
+  the posterior predictive checks come from a `generate_quantities` run on 1,000 thinned draws after sampling (lot P0's
+  (b)), not from accumulators of the sampling run; the binary is hashed before the data are read; the prior's draws come
+  from the sampling run's `prior_marginal` columns. A checks' run that would pass the timeout is `too_slow` for the whole
+  step; the replicated output names its outcome.
 
 ### `bayes-report`
 
@@ -414,6 +420,10 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   parameters in full and the group-level ones in a compact table or chart (answer 14: the parquet holds all
   parameters; the report holds less).
 - **Measure first.** Nothing beyond the layouts' render time with the largest table the contract allows.
+- (Correction of 2026-11-24 from the step-5 specs) Spec: `bayes-report.md`, approved. The PDF prints the scalars and the correlations in full and each
+  plate's quantities as a caterpillar, the full table in Excel; the literature's reference values are quoted in English,
+  as the source writes them, in all five languages (owner, 2026-11-24); the charts are addressed by slot; the report also
+  holds lot K0b of the contract.
 
 ### `flow-node`
 
@@ -430,6 +440,11 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
 - **Risks.** The binding broken when a newer version adds a data variable (the node keeps its pinned version
   and names the unbound variable when the person moves to the newer one).
 - **Measure first.** Nothing beyond the runner's numbers.
+- (Correction of 2026-11-24 from the step-5 specs) Spec: `bayes-flow-node.md`, approved. The node's type is `bayes_model`, its runs' kind `model`; the
+  prior predictive check is a trial of the node (`{"check": "prior_predictive"}`), never its output; the compile is asked
+  when the step is planned, its wait counted in the step's timeout; a flow's save locks the models it pins. **Version 1.5.0
+  «Augustus» holds everything of the three step-5/6 specs** (sampling, summary, diagnostics, posterior and prior predictive
+  checks, the replicated output, the original scale: owner, 2026-11-24).
 
 ### `bayes-mlflow`
 

@@ -647,3 +647,17 @@ section holds.
 - **The client**: `BayesCompileState` gains `'timeout'`; the list's cell (`bayesCompileCell`) shows «too long to compile»
   (`bayesModels.compile_timeout`, five languages) in danger with the gateway's sentence; Explore's row names it as the
   other states. The editor's header shows no compile state today, so nothing changed there.
+
+## Correction of 2026-11-24 from the step-5 specs
+
+From `bayes-flow-node.md` and `bayes-runner.md`, approved by the owner on 2026-11-24. Where this section and the text above
+differ, this section holds.
+
+1. **«A run»**: `Binaries` is `Ready`, `Need` and `Place` (as built by lot C3). `flow-node` calls `Need` when the step is
+   planned (it queues the compile with the run's authority before the input is prepared), then waits on the state every
+   2 seconds within the step's timeout, then `Place`s the binary at `<step prefix>/model`; `ErrAltered` and `ErrGone` ask
+   `Need` again.
+2. **The wait is the step's**: the Job's deadline and `time_budget_seconds` are the step's timeout minus the time it waited
+   for the compile.
+3. The runner fetches the binary from `TABULARIA_BINARY_IN` **before it reads the data** and compares its sha256 before
+   `chmod` and exec (`bayes-runner.md`, «The binary»).

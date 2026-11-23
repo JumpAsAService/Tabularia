@@ -442,3 +442,17 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
 ## Open questions
 
 None.
+
+## Correction of 2026-11-24 from the step-5 specs
+
+From `bayes-flow-node.md`, approved by the owner on 2026-11-24. Where this section and the text above differ, this section
+holds.
+
+1. **The lock at a flow's save.** Every write of `flows.definition` — `saveFlow`, `insertFlow` and the promotion of a flow's
+   version, each in a transaction — takes `pg_advisory_xact_lock(Lock::integer, id::integer)` for every model the new
+   definition pins, **in increasing id order** (two saves never deadlock), checks under it that each pinned version exists,
+   and refuses a new or changed pin of a model the saver cannot see (the same sentence for absent and not seen). A `Delete`
+   then waits for the commit and finds the flow among the references.
+2. **The node's type** is `bayes_model` (`NodeType`); its runs' kind is `model`.
+3. **The notice** «a newer version exists» follows `Newer`'s rule (the semantic hash differs); moving the pin keeps the
+   bindings that still fit, by data node id.

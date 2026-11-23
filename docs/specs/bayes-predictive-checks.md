@@ -205,7 +205,7 @@ density and the checked units' means; it is freed before sampling starts.
 
 **While a run converts its CSV** (the contract's follower): the check columns go to `/tmp/run/checks.parquet` (long,
 the draws' schema, at most `max_check_columns` columns), the `prior_marginal` columns to the same file under their
-names; nothing is accumulated in memory but the counts of rows written.
+names (Correction of 2026-11-24 from the step-5 specs: to `/tmp/run/prior.parquet` of the sampling run instead, `bayes-runner.md`); nothing is accumulated in memory but the counts of rows written.
 
 **The second pass over the checks file** (after the run; at most 200 columns × 80,000 draws = 128 MB at the most
 chains and draws the node allows, read by blocks of columns like the draws' second pass):
@@ -397,7 +397,7 @@ On small data only: the templates' graphs, a few hundred rows, fake CSVs.
 | **P0** | The measures on the image; the assumptions of `generate_quantities`, `quantile`, `to_int`, `inv_inc_beta` | «As built» | recorded | `bayes-image` B0; `bayes-contract` K3 | sonnet (by hand, alone) |
 | **P1** | The codegen's additions: `SlotOn`, `ValueOn`, `Add`, `Mul`, the functions, `CodegenVersion` 2 | `bayescodegen/*`, `catalog.json` | golden and stanc green | — | **opus** (the safety of the output) |
 | **P2** | The extension: outcomes, statistics, bins, units, prior draws and marginals, truncation | `bayeschecks/*`; `save.go` | Go tests and stanc green | P1 | **opus** (the safety of the output) |
-| **P3** | The runner's side: pass A, the checks file, the second pass, the rows, the generate-quantities runs | `bayes_checks.py`, tests | Python tests green | P2; the contract's K1, K2; P0 (which of the owner's (b) or (a)) | sonnet |
+| **P3** | The runner's side: pass A, the checks file, the second pass, the rows, the generate-quantities runs (Correction of 2026-11-24 from the step-5 specs: split into P3a and P3b, the runs moved to `bayes-runner`'s R2) | `bayes_checks.py`, tests | Python tests green | P2; the contract's K1, K2; P0 (which of the owner's (b) or (a)) | sonnet |
 | **P4** | The fixtures and their command; the preview's P3 unblocked | `cmd/bayesfixtures`, `gateway-go/scripts/bayes-prior-fixtures.sh`, fixtures | criterion 5 | P2; the image | sonnet (by hand, alone) |
 
 P0 and P1 can start at once; P0 and P4 are heavy.
@@ -694,3 +694,19 @@ codegen's golden programs without an extension keep their bytes).
 ## Open questions
 
 None.
+
+## Correction of 2026-11-24 from the step-5 specs
+
+From `bayes-runner.md`, approved by the owner on 2026-11-24. Where this section and the text above differ, this section
+holds.
+
+1. **Lot P3 is split.** **P3a**: pass A's observations of the checked outcomes and the extension's data values of every run
+   (`plan(task)`, `plan.observe(batch)`, `plan.extension(run, facts)` with `run` in `sample` — the checks off —, `checks`,
+   `replicated`, `prior`); **P3b**: the second pass over the checks file and the `ppc` / `prior_check` rows and densities
+   (`plan.rows(checks_path, writer, section, seconds_left)`). P3a blocks `bayes-runner`'s R1 (a program with the extension
+   needs its checks-off values); P3b its R2 and R3.
+2. **The `generate_quantities` runs** (the fitted files, their data file, following their output) are `bayes-runner`'s lot
+   R2, not P3's.
+3. **The `prior_marginal` columns** of the sampling run go to `/tmp/run/prior.parquet`, the source of the report's prior
+   density and of the contraction; the checks' run's redrawn ones are dropped; `checks.parquet` holds the check columns only.
+4. **The replicated output** names each row's outcome in a column `outcome` (`bayes-contract.md`, the same correction).
