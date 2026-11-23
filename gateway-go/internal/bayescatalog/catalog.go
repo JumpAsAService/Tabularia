@@ -254,7 +254,11 @@ type Limits struct {
 	MaxPlateDepth          int     `json:"max_plate_depth"`
 	MaxEffectComponents    int     `json:"max_effect_components"`
 	MaxTotalExpressionNode int     `json:"max_total_expression_nodes"`
-	MaxGraphBytes          int     `json:"max_graph_bytes"`
+	// MaxProgramVectorNodes bounds the compile cost: the nodes of the expressions whose value is
+	// over a plate, and of the linear predictors over a plate, summed over the graph (correction
+	// of 2026-11-24 from the expression language's review E4, owner).
+	MaxProgramVectorNodes int `json:"max_program_vector_nodes"`
+	MaxGraphBytes         int `json:"max_graph_bytes"`
 }
 
 // positive reports whether every limit is a finite number above zero.
@@ -264,7 +268,7 @@ func (l Limits) positive() bool {
 		float64(l.MaxExpressionBytes), float64(l.MaxExpressionNesting), float64(l.MaxExpressionNodes),
 		float64(l.MaxNumberChars), l.MaxAbsLiteral, float64(l.MaxLag), float64(l.MaxNodes),
 		float64(l.MaxPlates), float64(l.MaxPlateDepth), float64(l.MaxEffectComponents),
-		float64(l.MaxTotalExpressionNode), float64(l.MaxGraphBytes),
+		float64(l.MaxTotalExpressionNode), float64(l.MaxProgramVectorNodes), float64(l.MaxGraphBytes),
 	} {
 		if !(v > 0) || math.IsInf(v, 0) {
 			return false

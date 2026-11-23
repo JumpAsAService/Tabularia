@@ -7867,6 +7867,7 @@ export default {
         "nodes": "Il modello ha {got} nodi; il limite è {max}: togline alcuni.",
         "plates": "Il modello ha {got} riquadri (i gruppi, più uno per ogni predittore di testo); il limite è {max}: togline alcuni.",
         "expression_nodes": "Le formule del modello, insieme, sono troppo lunghe ({got} parti; il limite è {max}): semplificale.",
+        "vector_nodes": "Le formule calcolate per ogni riga o per ogni gruppo, insieme, sono troppo lunghe per compilare il modello ({got} parti; il limite è {max}): dividi il modello o semplifica queste formule.",
       },
       "id": {
         "malformed": "Questo nodo o riquadro ha un identificatore interno non valido ({id}): duplicalo ed elimina l'originale.",

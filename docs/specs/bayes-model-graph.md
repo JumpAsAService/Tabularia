@@ -224,7 +224,7 @@ findings are reported, sorted by (node id, slot, code), not only the first.
 | Code | Severity | Rule |
 |---|---|---|
 | `graph.format` | error | Known `format_version`; no unknown key; the right JSON types (strict decoding; `detail` names the value's JSON path and the JSON type it must be, never a Go type: correction of 2026-11-24 from E4) |
-| `graph.too_big` | error | Within `max_graph_bytes`, `max_nodes`, `max_plates`, `max_total_expression_nodes` |
+| `graph.too_big` | error | Within `max_graph_bytes`, `max_nodes`, `max_plates`, `max_total_expression_nodes`, `max_program_vector_nodes` (`what: vector_nodes`, with `got` and `max`; correction of 2026-11-24 from E4, owner). A **vector node** is every node of an expression whose typed value is over a plate (one value a row or a unit: a per-row mean, a transformed node on a plate, a likelihood's argument over the rows), counted whole as `max_expression_nodes` counts it, and **1 + 3 a term** of each linear predictor over a plate (the sum the program writes: each term's product and addition, and the result); summed over the graph, on the slots that typed. An expression whose value is a single value, and the forms the generator writes alone (a prior over a plate, the effects, a state), do not count: they are what the compile measures found cheap |
 | `graph.id` | error | Ids well formed and unique; `rows` only for the rows plate; no id equal to a reserved suffix (`lpdf`, `cdf`…; reason `reserved_suffix`, correction of 2026-11-24 from lot S0) |
 | `graph.name`, `graph.name_taken`, `graph.name_function` | error | Names lexically valid, unique, not a function of the language |
 | `graph.label`, `graph.note` | error | Labels present, of allowed characters and length; notes within `max_note_chars` |

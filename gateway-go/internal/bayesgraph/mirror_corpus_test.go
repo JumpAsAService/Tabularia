@@ -384,6 +384,17 @@ func mirrorHand() []struct {
 				mirrorAddNode(m, mtree{"id": fmt.Sprintf("t%d", i), "kind": "transformed", "label": "T", "plate": nil, "value": mex(long)})
 			}
 		}},
+		// max_program_vector_nodes: the example's own 5 (its mean) and transformed nodes on the rows
+		{"vector-nodes-1500", "example", func(m mtree) {
+			for _, x := range vectorFill("hours", 1500-5) {
+				mirrorAddNode(m, x)
+			}
+		}},
+		{"vector-nodes-1501", "example", func(m mtree) {
+			for _, x := range vectorFill("hours", 1501-5) {
+				mirrorAddNode(m, x)
+			}
+		}},
 		// likelihood
 		{"likelihood-none", "example", func(m mtree) { mirrorDrop(m, "n9") }},
 		{"likelihood-missing-observed", "example", func(m mtree) { delete(n(m, "n9"), "observed") }},

@@ -1081,6 +1081,7 @@
     "max_plate_depth": 4,
     "max_effect_components": 10,
     "max_total_expression_nodes": 4096,
+    "max_program_vector_nodes": 1500,
     "max_graph_bytes": 262144
   }
 }

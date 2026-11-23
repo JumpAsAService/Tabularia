@@ -7867,6 +7867,7 @@ export default {
         "nodes": "El modelo tiene {got} nodos; el límite es {max}: quita algunos.",
         "plates": "El modelo tiene {got} recuadros (los grupos, más uno por cada predictor de texto); el límite es {max}: quita algunos.",
         "expression_nodes": "Las fórmulas del modelo son demasiado largas en conjunto ({got} partes; el límite es {max}): simplifícalas.",
+        "vector_nodes": "Las fórmulas calculadas para cada fila o cada grupo son, juntas, demasiado largas para compilar el modelo ({got} partes; el límite es {max}): divide el modelo o simplifica estas fórmulas.",
       },
       "id": {
         "malformed": "Este nodo o recuadro tiene un identificador interno no válido ({id}): duplícalo y elimina el original.",

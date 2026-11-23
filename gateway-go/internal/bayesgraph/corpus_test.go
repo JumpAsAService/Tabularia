@@ -123,6 +123,28 @@ func cpX(text string, plate any) func(m map[string]any) {
 	}
 }
 
+// vectorFill is transformed nodes on the rows plate whose expressions (data + data + …) hold n
+// nodes together, each at most 255 (max_expression_nodes 256, odd sizes): the vector nodes of
+// max_program_vector_nodes, added to a graph's own.
+func vectorFill(data string, n int) []map[string]any {
+	var sizes []int
+	for ; n > 255; n -= 255 {
+		sizes = append(sizes, 255)
+	}
+	if n%2 == 0 && n > 0 {
+		sizes = append(sizes, 1)
+		n--
+	}
+	if n > 0 {
+		sizes = append(sizes, n)
+	}
+	var out []map[string]any
+	for i, k := range sizes {
+		out = append(out, transformed(fmt.Sprintf("v%d", i+1), "", cpMany((k+1)/2, data, "+"), "rows"))
+	}
+	return out
+}
+
 func cpMany(n int, word, sep string) string {
 	return strings.TrimSuffix(strings.Repeat(word+sep, n), sep)
 }
@@ -202,6 +224,13 @@ func corpusCases() []corpusCase {
 		for i := 0; i < 20; i++ {
 			addNodes(m, transformed(fmt.Sprintf("z%d", i), "", cpMany(120, "1", "+"), nil))
 		}
+	})
+	// max_program_vector_nodes (1,500; the regression's own: 8, its linear predictor 1 + 3 × 2 and its mean)
+	trips("too-big-vector-nodes", "graph.too_big", "", regression, func(m map[string]any) {
+		addNodes(m, vectorFill("area", 1501-8)...)
+	})
+	clean("too-big-vector-nodes-1500", "graph.too_big", regression, func(m map[string]any) {
+		addNodes(m, vectorFill("area", 1500-8)...)
 	})
 	big("too-big-bytes", "graph.too_big", "trips", "", cpOn(regression, func(m map[string]any) {
 		node(m, 0)["note"] = strings.Repeat("a", 300000)

@@ -975,6 +975,7 @@ class Validation {
     }
     this.env = new GraphEnv(this.g, ranges, this.catalog)
     this.typeSlots()
+    this.vectorNodes()
     this.priorData()
     this.modelRules()
     bayesSortFindings(this.out)
@@ -1251,6 +1252,24 @@ class Validation {
     }
     walk(s.tree as BayesExprNode)
     return { plain: sortedKeys(plain), lag: sortedKeys(lag), index: sortedKeys(index) }
+  }
+
+  /**
+   * graph.too_big (what vector_nodes): the nodes of every expression whose typed value is over a plate, counted whole,
+   * and 1 + 3 a term of every linear predictor over a plate, summed over the graph, past max_program_vector_nodes
+   * (the compile cost; correction of 2026-11-24 from E4, finding 1, owner). As Go's vectorNodes.
+   */
+  vectorNodes (): void {
+    let total = 0
+    for (const s of this.specs) {
+      const t = this.slots.get(slotKey(s.node, s.slot))
+      if (t && t.tree && t.type.plate !== '') total += countNodes(s.tree)
+    }
+    for (const n of this.nodeList()) {
+      if (n.kind === 'linear_predictor' && plateOf(n) !== '') total += 1 + 3 * n.terms.length
+    }
+    const max = this.lim('max_program_vector_nodes')
+    if (total > max) this.out.push(tooBig('vector_nodes', total, max))
   }
 
   typeSlots (): void {

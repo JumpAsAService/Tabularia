@@ -7867,6 +7867,7 @@ export default {
         "nodes": "Das Modell hat {got} Knoten; das Limit ist {max}: Entfernen Sie einige.",
         "plates": "Das Modell hat {got} Kästen (die Gruppen, dazu einen für jeden Textprädiktor); das Limit ist {max}: Entfernen Sie einige.",
         "expression_nodes": "Die Formeln des Modells sind zusammen zu lang ({got} Teile; das Limit ist {max}): Vereinfachen Sie sie.",
+        "vector_nodes": "Die Formeln, die für jede Zeile oder jede Gruppe berechnet werden, sind zusammen zu lang, um das Modell zu kompilieren ({got} Teile; das Limit ist {max}): Teilen Sie das Modell auf oder vereinfachen Sie diese Formeln.",
       },
       "id": {
         "malformed": "Dieser Knoten oder Kasten hat eine ungültige interne Kennung ({id}): Duplizieren Sie ihn und löschen Sie das Original.",

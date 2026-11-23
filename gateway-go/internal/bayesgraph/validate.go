@@ -91,6 +91,7 @@ func validate(g *Graph) *validation {
 	}
 	v.env = newGraphEnv(g, ranges)
 	v.typeSlots()
+	v.vectorNodes()
 	v.priorData()
 	v.modelRules()
 	SortFindings(v.out)

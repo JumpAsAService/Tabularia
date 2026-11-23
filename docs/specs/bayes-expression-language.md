@@ -550,18 +550,20 @@ threshold and its lot: the codegen spec's «Correction of 2026-11-24 from E4»).
 person at a time, and a program whose sha256 already passed the deadline is not compiled again (the map's
 `stan-compile`, «Correction of 2026-11-24 from E4»).
 
-**Still open, for the owner** (the extreme split case does not fit): a graph near `max_total_expression_nodes`
-still exceeds the default 300 s even split (3,984 nodes: > 330 s). Options, measured above: a **per-program budget
-of vector-expression nodes** of **1,500** (133 s split, less than half the deadline: the margin for a slower node or
-a busier cluster) or 2,000 (between 133 s and 293 s; about 200 s by the trend, not measured), checked by the graph
-validator before any compile (a finding, not a failed Job), the 4,096 limit kept for the scalar expressions, which
-cost little; or a longer deadline (600 s) or 2 CPUs for the compile Job of a large program. Recommendation: the
-1,500-node budget of vector nodes, with the deadline unchanged.
+**The budget (Owner, 2026-11-24)**, decided after these measures (the extreme split case does not fit: 3,984
+nodes still pass 330 s): option (a), a **per-program budget of 1,500 vector nodes**, the catalogue's
+`max_program_vector_nodes`, checked by the graph validator before any compile (`graph.too_big` with `what:
+vector_nodes`, an error that blocks the save as the others do; a vector node as the graph spec defines it), the
+deadline unchanged. 1,494 such nodes compiled split in 133 s, less than half of 300 s: the margin for a slower node
+or a busier cluster. The other options set aside: 2,000 (about 200 s by the trend, not measured), a longer deadline
+or 2 CPUs for a large program.
 
 ### Corrections of 2026-11-24 (from E4)
 
 - **Finding 1**: measured above, decided by the owner (the decision under «Measured on 2026-11-24, finding 1»); the
-  splitting is lot S5 of `stan-codegen`, the compile rules belong to `stan-compile`; the per-program budget is open.
+  splitting is lot S5 of `stan-codegen`, the compile rules belong to `stan-compile`, the budget of 1,500 vector
+  nodes is the catalogue's `max_program_vector_nodes`, checked by `bayesgraph` and its TypeScript mirror (two cases
+  of each corpus: 1,500 passes, 1,501 is `graph.too_big`).
 - **Finding 2**: the catalogue has two new lists, `stan.backend_member_words` (21 words) and
   `stan.backend_member_patterns` (`get_*_sizedtypes`, `*_impl`), and the identifier rule of `stan-codegen`
   (`reservedNames`, `reservedWordFor`, `CheckIdentifiers`) and `Emit`'s identifier check treat them as reserved: such

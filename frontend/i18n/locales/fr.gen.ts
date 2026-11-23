@@ -7867,6 +7867,7 @@ export default {
         "nodes": "Le modèle a {got} nœuds ; la limite est {max} : retirez-en quelques-uns.",
         "plates": "Le modèle a {got} cadres (les groupes, plus un par prédicteur texte) ; la limite est {max} : retirez-en quelques-uns.",
         "expression_nodes": "Les formules du modèle sont trop longues ensemble ({got} parties ; la limite est {max}) : simplifiez-les.",
+        "vector_nodes": "Les formules calculées pour chaque ligne ou chaque groupe sont, ensemble, trop longues pour compiler le modèle ({got} parties ; la limite est {max}) : divisez le modèle ou simplifiez ces formules.",
       },
       "id": {
         "malformed": "Ce nœud ou ce cadre a un identifiant interne invalide ({id}) : dupliquez-le et supprimez l'original.",

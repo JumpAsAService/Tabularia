@@ -332,6 +332,10 @@ var declared = Catalog{
 		MaxExpressionBytes: 1000, MaxExpressionNesting: 32, MaxExpressionNodes: 256,
 		MaxNumberChars: 32, MaxAbsLiteral: 1e15, MaxLag: 60,
 		MaxNodes: 200, MaxPlates: 8, MaxPlateDepth: 4, MaxEffectComponents: 10,
-		MaxTotalExpressionNode: 4096, MaxGraphBytes: 262144,
+		MaxTotalExpressionNode: 4096,
+		// Measured: split into locals, 1,494 such nodes compile in 133 s with 1 CPU and 3 GiB,
+		// 2,490 in 293 s, 3,984 past 330 s (E4, finding 1; the owner's choice, 2026-11-24).
+		MaxProgramVectorNodes: 1500,
+		MaxGraphBytes:         262144,
 	},
 }

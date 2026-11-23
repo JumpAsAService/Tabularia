@@ -223,6 +223,7 @@ them before any request: they shape the instant feedback).
 | `max_plate_depth` | 4 | `model-graph` | Nested group plates |
 | `max_effect_components` | 10 | `model-graph` | Components of a correlated-effects node |
 | `max_total_expression_nodes` | 4,096 | `model-graph` | All the syntax trees of a graph |
+| `max_program_vector_nodes` | 1,500 | `model-graph` | The compile cost: the nodes of the expressions whose value is over a plate, and 1 + 3 a term of each linear predictor over a plate, summed over the graph (correction of 2026-11-24 from E4, owner: split into locals, 1,494 such nodes compile in 133 s with 1 CPU and 3 GiB, 3,984 do not finish in 330 s) |
 | `max_graph_bytes` | 262,144 | `model-graph` (and the routes that receive a graph) | The graph's JSON |
 
 These limits bound what a person may write, not a result; no verdict comes from them. They are **documented

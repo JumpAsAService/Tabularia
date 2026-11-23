@@ -12,7 +12,7 @@ import (
 // This file is the rules of the slots (docs/specs/bayes-model-graph.md, «Validation»):
 // graph.slot, expr.* (the expression's own error, with the node and the slot), graph.slot_shape,
 // graph.slot_interval, graph.slot_maybe, graph.constant, graph.prior_data, and graph.too_big for
-// max_total_expression_nodes.
+// max_total_expression_nodes and max_program_vector_nodes.
 //
 // The slots and their context plate:
 //
@@ -133,6 +133,36 @@ func (v *validation) collectSlots() {
 	if total > v.lim.MaxTotalExpressionNode {
 		v.out = append(v.out, tooBig("expression_nodes", total, v.lim.MaxTotalExpressionNode)...)
 	}
+}
+
+// vectorNodes: graph.too_big (what vector_nodes) when the program's vector expressions together
+// pass max_program_vector_nodes, the measure of their compile cost (correction of 2026-11-24 from
+// the expression language's review E4, finding 1, owner). A vector node is every node of an
+// expression whose typed value is over a plate (one value a row or a unit: a per-row mean, a
+// transformed node on a plate), counted whole as max_expression_nodes counts it, and 1 + 3 a term
+// of a linear predictor over a plate (the sum the program writes: each term's product and its
+// addition, and the result). A single value's expression costs nothing of it, nor do the forms
+// the generator writes alone (a prior over a plate, an effect, a state). Counted on the slots
+// that typed: an expression with an error is reported by its own finding.
+func (v *validation) vectorNodes() {
+	if total := v.vectorNodeTotal(); total > v.lim.MaxProgramVectorNodes {
+		v.out = append(v.out, tooBig("vector_nodes", total, v.lim.MaxProgramVectorNodes)...)
+	}
+}
+
+func (v *validation) vectorNodeTotal() int {
+	total := 0
+	for _, s := range v.specs {
+		if t, ok := v.slots[s.key]; ok && t.Expr != nil && t.Type.Plate != "" {
+			total += countNodes(s.tree)
+		}
+	}
+	for _, n := range v.nodeList() {
+		if n.Kind == "linear_predictor" && plateOf(n) != "" {
+			total += 1 + 3*len(n.Terms)
+		}
+	}
+	return total
 }
 
 // distSlots lists a distribution's argument slots, in the order of their names, with what the

@@ -242,7 +242,8 @@ func TestLimitsArePositiveAndAsDocumented(t *testing.T) {
 	if !l.positive() {
 		t.Fatalf("a limit is not positive: %+v", l)
 	}
-	if l.MaxNameBytes != 40 || l.MaxNodes != 200 || l.MaxGraphBytes != 262144 || l.MaxAbsLiteral != 1e15 || l.MaxLag != 60 {
+	if l.MaxNameBytes != 40 || l.MaxNodes != 200 || l.MaxGraphBytes != 262144 || l.MaxAbsLiteral != 1e15 || l.MaxLag != 60 ||
+		l.MaxProgramVectorNodes != 1500 {
 		t.Errorf("a default differs from the spec's table: %+v", l)
 	}
 }

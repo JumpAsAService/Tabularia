@@ -7867,6 +7867,7 @@ export default {
         "nodes": "The model has {got} nodes; the limit is {max}: remove some.",
         "plates": "The model has {got} boxes (the groups, plus one for each text predictor); the limit is {max}: remove some.",
         "expression_nodes": "The formulas of the model are too long together ({got} parts; the limit is {max}): simplify them.",
+        "vector_nodes": "The formulas computed for every row or every group are too long together for the model to be compiled ({got} parts; the limit is {max}): split the model or simplify these formulas.",
       },
       "id": {
         "malformed": "This node or box has an invalid internal identifier ({id}): duplicate it and delete the original.",
