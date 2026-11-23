@@ -98,7 +98,7 @@ the precision is a fact the report says once for every quantity (`bayes-report`)
 |---|---|---|
 | `divergences` | the count of draws with `divergent__` = 1 | Betancourt (2016); Stan Reference Manual, «Divergent transitions» (assumed) |
 | `treedepth_hits`, `treedepth_max` | the draws whose `treedepth__` equals the node's `max_treedepth`; the deepest | Stan Reference Manual, «Tree depth» (assumed) |
-| `e_bfmi` | Σₙ₌₂ᴺ (Eₙ − Eₙ₋₁)² / (N − 1) divided by Σₙ (Eₙ − Ē)² / N, E the chain's `energy__`; the last energy of a block kept for the next | Betancourt (2016); ArviZ's `bfmi` (assumed, the witness) |
+| `e_bfmi` | Σₙ₌₂ᴺ (Eₙ − Eₙ₋₁)² / (N − 1) divided by Σₙ (Eₙ − Ē)² / (N − 1), E the chain's `energy__`; the last energy of a block kept for the next. *Correction of 2026-11-24 from X1: the variance's divisor is N − 1, as ArviZ 1.3.0's `_bfmi` (`var(ddof=1)`) computes it; the first draft's N differed by (N − 1)/N, beyond the 1e-10 tolerance* | Betancourt (2016); ArviZ's `bfmi` (assumed, the witness) |
 | `stepsize`, `accept_stat_mean`, `n_leapfrog_mean` | the step size after adaptation (the CSV's comment, the contract), the means of `accept_stat__` and `n_leapfrog__` | — |
 | `all` | the sums of the counts, the deepest tree, the smallest E-BFMI over the chains | — |
 
