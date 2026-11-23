@@ -135,10 +135,10 @@ class TheCheckCatchesDrift(unittest.TestCase):
         self.assertIn("WORKER_MEM_CEILING", r.stdout + r.stderr)
 
     def test_a_variable_the_go_code_no_longer_reads_fails(self):
-        self.edit("gateway-go/internal/api/jobs_script_builds.go", '"MODELS__WHEELS_BASE_URL"', '"MODELS__WHEEL_URL"')
+        self.edit("gateway-go/internal/config/config_jobs.go", '"MODELS__MAX_CONCURRENT_BUILDS"', '"MODELS__MAX_BUILDS"')
         r = run("--check", root=self.root)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("MODELS__WHEELS_BASE_URL", r.stdout + r.stderr)
+        self.assertIn("MODELS__MAX_CONCURRENT_BUILDS", r.stdout + r.stderr)
 
     def test_a_hand_edit_of_the_page_fails(self):
         self.edit("docs/configuration.md", "`SFTP__MAX_FILES`", "`SFTP__MAX_FILEZ`")

@@ -86,6 +86,12 @@ Deployments at the same time.
   For as long, a version the other release has just made is not answered with one of the
   running release's recipe.
 
+  After an upgrade that changes the recipes of several enabled groups the images are built
+  **one at a time** (`MODELS__MAX_CONCURRENT_BUILDS`, 1 by default): the other groups show
+  *Waiting to build* and start in turn, so the groups take as long as the sum of their builds,
+  and the old image of each keeps serving until its new one is ready. Raise the limit only if
+  the build namespace has the memory for more builds at once (each up to `SCRIPTS__BUILD_MEMORY`).
+
   One case is not covered: two releases that ship the same recipe and runner of a group but
   write its Dockerfile differently (a change in how Tabularia builds every image, not in
   the group). Either release may then build the other's version, as it would its own, and

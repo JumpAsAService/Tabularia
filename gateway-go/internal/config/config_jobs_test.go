@@ -59,3 +59,23 @@ func TestTheWaitForAnotherReleasesVersion(t *testing.T) {
 		}
 	}
 }
+
+// How many statistical model groups' images are built at once: one unless MODELS__MAX_CONCURRENT_BUILDS
+// says otherwise, never fewer, and a refusal at start names the variable.
+func TestTheLimitOfConcurrentModelBuilds(t *testing.T) {
+	vars := map[string]string{"APP__ROLE": "orchestrator", "SECURITY__FERNET_KEY": "k"}
+	c, err := Load(env(vars))
+	if err != nil || c.Jobs.Kube.ModelsMaxConcurrentBuilds != 1 {
+		t.Fatalf("default: %v %d", err, c.Jobs.Kube.ModelsMaxConcurrentBuilds)
+	}
+	vars["MODELS__MAX_CONCURRENT_BUILDS"] = "3"
+	if c, err = Load(env(vars)); err != nil || c.Jobs.Kube.ModelsMaxConcurrentBuilds != 3 {
+		t.Errorf("set: %v %d", err, c.Jobs.Kube.ModelsMaxConcurrentBuilds)
+	}
+	for _, bad := range []string{"0", "-1", "two"} {
+		vars["MODELS__MAX_CONCURRENT_BUILDS"] = bad
+		if _, err := Load(env(vars)); err == nil || !strings.Contains(err.Error(), "MODELS__MAX_CONCURRENT_BUILDS") {
+			t.Errorf("%q accepted: %v", bad, err)
+		}
+	}
+}

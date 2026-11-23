@@ -490,7 +490,7 @@ func sbEnvironmentOf(ctx context.Context, tx pgx.Tx, id int64) (*sbEnvironment, 
 
 // advance is script_builds.advance: one step of a version, if its Job has moved; the
 // caller writes the version back.
-func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) error {
+func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion, slots *mgBuildSlots) error {
 	k := kubeAPI()
 	env, err := sbEnvironmentOf(ctx, tx, v.EnvironmentID)
 	if err != nil {
@@ -500,6 +500,14 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		b.fail(v, "The environment no longer exists", nil)
 		return nil
 	}
+	if v.Status == "building" && mgGroupOfManaged(env.ManagedBy) != "" {
+		// the build of a model group's image: when it ends, however it ends, its place is free for a later version of this round
+		defer func() {
+			if v.Status != "building" {
+				slots.release()
+			}
+		}()
+	}
 	// a model group's version queued by a gateway of another release: no Job of it is made here
 	// (mgOfAnotherRelease); what its Jobs did is read by any gateway
 	foreign := mgOfAnotherRelease(env, v)
@@ -508,15 +516,29 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		return nil
 	}
 	if v.Status == "queued" {
+		// a model group's build starts only when fewer than MODELS__MAX_CONCURRENT_BUILDS are running
+		managed := mgGroupOfManaged(env.ManagedBy) != ""
+		if managed && !slots.take() {
+			return nil // stays queued, in its order: the next round asks again
+		}
 		manifest, err := b.buildJob(v, env.Language, env.ManagedBy)
 		var bad sbValueError
 		if errors.As(err, &bad) { // packages or settings that cannot become a Dockerfile
+			if managed {
+				slots.release()
+			}
 			b.fail(v, bad.Error(), nil)
 			return nil
 		} else if err != nil {
+			if managed {
+				slots.release()
+			}
 			return err
 		}
 		if _, err := kube.CreateJob(ctx, k, b.buildNamespace(), manifest); err != nil {
+			if managed {
+				slots.release()
+			}
 			return err
 		}
 		now := jobs.NaiveNow()
@@ -760,10 +782,14 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
+	slots, err := b.buildSlots(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
 	var changed int64
 	for _, v := range versions {
 		before := v.Status
-		err := b.advance(ctx, tx, v)
+		err := b.advance(ctx, tx, v, slots)
 		var ke *kube.Error
 		switch {
 		case errors.As(err, &ke) && (ke.Status == 0 || ke.Status == 429 || ke.Status >= 500):

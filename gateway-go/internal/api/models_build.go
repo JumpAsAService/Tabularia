@@ -365,6 +365,39 @@ func (b *scriptBuilds) otherReleaseWait() time.Duration {
 	return time.Duration(b.cfg.ModelsOtherReleaseWait) * time.Second
 }
 
+// mgBuildSlots counts the builds of the model groups' images a round may still start: the limit
+// MODELS__MAX_CONCURRENT_BUILDS less the builds running. The count is taken from the database (the versions
+// in `building` of a group's environment, whichever gateway started them), inside the round's transaction and
+// under its advisory lock, so two replicas never go over the limit together.
+//
+// Only builds count. A check (the self-test Job of a built image, or a recheck) runs no compiler: it starts the
+// image and fits a few reference cases, a fraction of a build's memory and time, and a version that goes from
+// its build to its check frees its place, so the queue moves while the check runs. A scripting environment's
+// build is not a model group's and is not limited here (its own size is SCRIPTS__BUILD_MEMORY).
+type mgBuildSlots struct{ free int64 }
+
+// take uses a place if one is free.
+func (s *mgBuildSlots) take() bool {
+	if s.free <= 0 {
+		return false
+	}
+	s.free--
+	return true
+}
+
+func (s *mgBuildSlots) release() { s.free++ }
+
+// buildSlots reads how many builds of the model groups run now.
+func (b *scriptBuilds) buildSlots(ctx context.Context, tx pgx.Tx) (*mgBuildSlots, error) {
+	var running int64
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM script_environment_versions v JOIN script_environments e ON e.id = v.environment_id
+		WHERE v.status = 'building' AND e.managed_by LIKE $1`, mgManagedPrefix+"%").Scan(&running); err != nil {
+		return nil, err
+	}
+	limit := max(b.cfg.ModelsMaxConcurrentBuilds, 1)
+	return &mgBuildSlots{free: max(limit-running, 0)}, nil
+}
+
 // mgOtherReleaseSentence is why a version of another release, which no gateway of that release built
 // or checked, is failed.
 const mgOtherReleaseSentence = "This version was queued by another version of Tabularia (another recipe or runner of the group), " +

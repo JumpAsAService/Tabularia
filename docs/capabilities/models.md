@@ -75,7 +75,11 @@ reads its input from it. Without the bucket the section says so and the models d
 
 **Enable** creates the group's own scripting environment (managed by Tabularia, you do not
 edit its packages) and queues its first version. **Build again** makes a new version from the
-shipped recipe, after a failure or to start over. **Disable** takes the nodes out of the
+shipped recipe, after a failure or to start over. The images are built one group at a time
+(`MODELS__MAX_CONCURRENT_BUILDS`, [one by default](../configuration.md#scripting-environments-kubernetes), counted over all
+the gateway's replicas): a version queued while another group is building shows **Waiting to build**
+and starts when that build ends, so enabling several groups, or an upgrade that renews several recipes,
+takes the sum of their builds. The self-test of a built image does not count: it runs while the next build starts. **Disable** takes the nodes out of the
 palette and stops the steps that use them with a sentence; the images stay, and enabling the
 group again uses the current version at once. A flow that holds a node of a group that is not
 enabled opens, shows the node as unusable with the reason, and does not run.

@@ -7455,6 +7455,7 @@ export default {
       "licence_pending": "Licence to accept",
     },
     "rebuildNeededHint": "This version of Tabularia ships a new recipe for the group. A new version is queued by itself; until it is ready, the group's steps do not run.",
+    "queuedHint": "The images of the groups are built one at a time (MODELS__MAX_CONCURRENT_BUILDS): this version waits for another group's build and starts when it ends.",
     "checkingHint": "The image is built. The self-test is fitting the reference cases and comparing them with the values computed outside Tabularia.",
     "recheckingHint": "This version of Tabularia ships a new runner for the group: the self-test runs again on the image in use, without a build. The version in use serves meanwhile.",
     "recheckRetryingHint": "The self-test with the new runner could not run ({why}): that says nothing of the image. The version in use serves on. Next attempt: {at} ({n} of {max} made).",

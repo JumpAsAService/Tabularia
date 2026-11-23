@@ -948,6 +948,13 @@ type = "integer, ≥ 60"
 default = "`600`"
 text = "How long a version of a [statistical model group](capabilities/models.md#turning-a-group-on-administrators)'s image queued by another release of Tabularia waits for a gateway of that release, the only one that builds and self-tests it. While two releases run side by side (a rolling upgrade) that gateway takes it within seconds; when none is left (a `helm rollback` in the middle of the build) the version is marked failed once this has passed since it was queued, and a version of the running release's recipe is queued. For as long, a version another release has just made is not answered with one of this release's recipe. Raise it if your upgrades keep the old and new pods side by side longer ([Upgrading](deploy/upgrading.md#what-happens-during-helm-upgrade)). Read at start."
 
+[var.MODELS__MAX_CONCURRENT_BUILDS]
+go = "gateway-go/internal/config/config_jobs.go"
+section = "gateway-scripts"
+type = "integer, ≥ 1"
+default = "`1`"
+text = "How many images of the [statistical model groups](capabilities/models.md#turning-a-group-on-administrators) are built at once, counted over all the gateway's replicas. The other versions wait queued (**Waiting to build** in the panel) and start, in the order they were queued, when a build ends: after an upgrade that renews several recipes, or when several groups are enabled together, the builds follow one another instead of starting together (each may use up to `SCRIPTS__BUILD_MEMORY`), and the total time is their sum ([Upgrading](deploy/upgrading.md#what-happens-during-helm-upgrade)). Only the builds are counted: the self-test of a built image, and the environments of the scripting, are not. Raise it where the build namespace has the memory for more builds at once. The refusal at start names the variable. Read at start."
+
 [var.MODELS__WHEELS_BASE_URL]
 go = "gateway-go/internal/api/jobs_script_builds.go"
 section = "gateway-scripts"

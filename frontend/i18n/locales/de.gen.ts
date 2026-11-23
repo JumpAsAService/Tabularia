@@ -7455,6 +7455,7 @@ export default {
       "licence_pending": "Lizenz zu akzeptieren",
     },
     "rebuildNeededHint": "Diese Version von Tabularia bringt ein neues Rezept für die Gruppe mit. Eine neue Version wird von selbst eingereiht; bis sie bereit ist, laufen die Schritte der Gruppe nicht.",
+    "queuedHint": "Die Images der Gruppen werden nacheinander gebaut (MODELS__MAX_CONCURRENT_BUILDS): Diese Version wartet auf den Bau einer anderen Gruppe und startet, wenn er endet.",
     "checkingHint": "Das Image ist gebaut. Der Selbsttest schätzt die Referenzfälle und vergleicht sie mit den außerhalb von Tabularia berechneten Werten.",
     "recheckingHint": "Diese Version von Tabularia bringt einen neuen Runner für die Gruppe mit: Der Selbsttest läuft erneut auf dem verwendeten Image, ohne Neubau. Die verwendete Version dient währenddessen weiter.",
     "recheckRetryingHint": "Der Selbsttest mit dem neuen Runner konnte nicht laufen ({why}): Das sagt nichts über das Image. Die verwendete Version dient weiter. Nächster Versuch: {at} ({n} von {max} gemacht).",

@@ -263,6 +263,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
       <p v-if="shown(g).state === 'failed' && shown(g).versions[0]?.error" class="version-error" role="alert">
         <code>{{ failureSentence(shown(g).versions[0].error) }}</code>
       </p>
+      <p v-else-if="shown(g).state === 'building' && shown(g).versions[0]?.status === 'queued'" class="hint muted small">{{ $t('modelsAdmin.queuedHint') }}</p>
       <p v-else-if="shown(g).state === 'rebuild_needed'" class="hint muted small">{{ $t('modelsAdmin.rebuildNeededHint') }}</p>
       <p v-else-if="shown(g).state === 'licence_pending'" class="notice" role="status">
         <TriangleAlert :size="13" /> <span>{{ $t('modelsAdmin.licence.pendingHint') }}</span>

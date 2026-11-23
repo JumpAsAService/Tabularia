@@ -7455,6 +7455,7 @@ export default {
       "licence_pending": "Licenza da accettare",
     },
     "rebuildNeededHint": "Questa versione di Tabularia porta una nuova ricetta del gruppo. Una nuova versione viene messa in coda da sola; finché non è pronta, i passi del gruppo non girano.",
+    "queuedHint": "Le immagini dei gruppi si costruiscono una alla volta (MODELS__MAX_CONCURRENT_BUILDS): questa versione attende la costruzione di un altro gruppo e parte quando finisce.",
     "checkingHint": "L'immagine è costruita. L'auto-test sta stimando i casi di riferimento e confrontandoli con i valori calcolati fuori da Tabularia.",
     "recheckingHint": "Questa versione di Tabularia porta un nuovo runner del gruppo: l'auto-test gira di nuovo sull'immagine in uso, senza ricostruirla. Intanto la versione in uso continua a servire.",
     "recheckRetryingHint": "L'auto-test con il nuovo runner non è riuscito a girare ({why}): questo non dice nulla dell'immagine. La versione in uso continua a servire. Prossimo tentativo: {at} ({n} di {max} già fatti).",
