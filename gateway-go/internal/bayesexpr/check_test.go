@@ -248,9 +248,16 @@ func TestCheckRecordsLagsAndLifts(t *testing.T) {
 	}
 	schools := newTestEnv(t, envs["schools"], "p1")
 	c = check(t, schools, "mu_district[district] + alpha_school[school] - mu_district[district]")
-	want := []Lift{{Index: "district", ID: "n5", Rows: "rows", Context: "p1"}, {Index: "school", ID: "n4", Rows: "rows", Context: "p1"}}
+	// alpha_school[school] per school is alpha_school itself: not a lift.
+	want := []Lift{{Index: "district", ID: "n5", Rows: "rows", Context: "p1"}}
 	if !slices.Equal(c.Lifts, want) || len(c.Lags) != 0 {
 		t.Errorf("lifts %+v, lags %v", c.Lifts, c.Lags)
+	}
+	for ctx, src := range map[Plate]string{"p1": "alpha_school[school]", "levels:n6": "beta_color[color]"} {
+		c := check(t, newTestEnv(t, envs["schools"], ctx), src)
+		if len(c.Lifts) != 0 || c.Tree.Lifted || c.Tree.By == nil || c.Tree.Type.String() != "real["+string(ctx)+"]" {
+			t.Errorf("%s in %s: %+v %+v", src, ctx, c.Lifts, c.Tree)
+		}
 	}
 	// An indexing on the context's own rows is not a lift.
 	c = check(t, newTestEnv(t, envs["schools"], "rows"), "mu_district[district]")

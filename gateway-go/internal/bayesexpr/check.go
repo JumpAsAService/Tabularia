@@ -320,8 +320,12 @@ func (c *checker) index(n *Node) (*Typed, *Error) {
 	switch {
 	case c.ctx == rows:
 	case c.ctx != "" && c.env.Encloses(target, c.ctx) && c.env.Encloses(c.ctx, rows):
-		lifted = true
-		c.lifts = append(c.lifts, Lift{Index: n.By, ID: g.ID, Rows: rows, Context: c.ctx})
+		// The context being g's target itself (alpha_school[school] per school) is x itself,
+		// not a lift: the emitter writes x without the index.
+		if c.ctx != target {
+			lifted = true
+			c.lifts = append(c.lifts, Lift{Index: n.By, ID: g.ID, Rows: rows, Context: c.ctx})
+		}
 	default:
 		return nil, errSpan(n.own(), CodeIndexContext,
 			argsOf("name", n.Name, "by", n.By, "rows", string(rows), "target", string(target), "context", string(c.ctx)))

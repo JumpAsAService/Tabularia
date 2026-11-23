@@ -127,7 +127,8 @@ func checkIdentifier(what, s string) error {
 //
 //	number v        strconv.FormatFloat(v, 'g', -1, 64), ".0" appended without "." nor "e"
 //	name            Identifier(id), id[RowsSubset] over the context on a subset of the rows
-//	x[g]            (x[IndexArray(g, context)]), (x[g_array[RowsSubset]]) on a subset
+//	x[g]            (x[IndexArray(g, context)]), (x[g_array[RowsSubset]]) on a subset; x alone
+//	                when the context is g's target
 //	lag(x, k)       (x[LagArray(k)])
 //	f(e, …)         the catalogue's Stan name of f, (e, …)
 //	-e              (-e)
@@ -293,6 +294,18 @@ func (e *emitter) index(t *Typed) error {
 	x, err := e.identifier(t.Sym.ID)
 	if err != nil {
 		return err
+	}
+	if t.Sym.Type.Plate == e.ctx {
+		// The context is the index's target (alpha_school[school] per school): x itself, written
+		// as a name; the index does not appear.
+		if t.Lifted {
+			return emitError("an indexing on its own target marked lifted")
+		}
+		if e.subset != "" {
+			x += "[" + e.subset + "]"
+		}
+		e.convert(t, x)
+		return nil
 	}
 	arr := e.env.IndexArray(t.By.ID, e.ctx)
 	if err := checkIdentifier("IndexArray("+strconv.Quote(t.By.ID)+")", arr); err != nil {
