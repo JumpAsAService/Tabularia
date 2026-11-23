@@ -9,6 +9,8 @@ What comes from the code, so it cannot drift:
     field of the pydantic-settings tree, nested models as `SECTION__FIELD`, with its type,
     default, bounds (`Field(ge=…, le=…)`, `Literal[…]`) and whether it is a secret;
   - the variables both apps read directly (`os.getenv`, `os.environ.get`, `os.environ[…]`);
+  - the variables only the Go gateway reads, which the texts name with `go = "<file>"` (the
+    file must still name the variable);
   - the frontend's runtime variables (`process.env.NUXT_…` in nuxt.config.ts);
   - the variables of the development compose file (`${NAME:-default}`) and of
     infrastructure/.env.example, and the names the Helm chart sets, with the values.yaml
@@ -54,7 +56,8 @@ ENV_EXAMPLE = "infrastructure/.env.example"
 HELM_TEMPLATES = "infrastructure/helm/tabularia/templates"
 NUXT_CONFIG = "frontend/nuxt.config.ts"
 # what the page is generated from (the tests copy these into a throwaway tree)
-SOURCES = [BACKEND_APP, GATEWAY_APP, COMPOSE, ENV_EXAMPLE, HELM_TEMPLATES, NUXT_CONFIG]
+SOURCES = [BACKEND_APP, GATEWAY_APP, COMPOSE, ENV_EXAMPLE, HELM_TEMPLATES, NUXT_CONFIG,
+           "gateway-go/internal/config/config_jobs.go", "gateway-go/internal/api/jobs_script_builds.go"]
 
 FIRST_LINE = "<!-- {% raw %} GitHub Pages: no Liquid in this page -->"
 LAST_LINE = "<!-- {% endraw %} -->"
@@ -340,7 +343,32 @@ def helm_variables(templates: Path) -> dict[str, tuple[str, bool]]:
 # ── Collecting ───────────────────────────────────────────────────────────────
 
 
-def collect(root: Path) -> Found:
+def go_variables(root: Path, texts: dict, variables: dict[str, Variable], errors: list[str]) -> None:
+    """The variables only the Go gateway reads: `go = "<file>"` in their [var.NAME] of the texts
+    names the Go file that reads them, and the type (and the default, when the code has no
+    Python field to show it) are written there. The file must still name the variable in a
+    string, so a variable renamed or removed in the Go code fails the check."""
+    for name, note in sorted(texts.get("var", {}).items()):
+        path_ = note.get("go")
+        if not path_:
+            continue
+        source = root / path_
+        if not source.is_file():
+            errors.append(f"[var.{name}] says the Go file {path_} reads it, and there is no such file")
+        elif f'"{name}"' not in source.read_text(encoding="utf-8"):
+            errors.append(f"[var.{name}] says {path_} reads it, and the file no longer names it")
+        elif name in variables:
+            errors.append(f"[var.{name}] has go = \"{path_}\" but the Python code has the variable too: drop `go`")
+        elif not note.get("type") or not note.get("section"):
+            errors.append(f"[var.{name}] is read by Go only: it needs `type` and `section`")
+        else:
+            var = Variable(name, order=len(variables))
+            var.readers.add("gateway")
+            var.type = note["type"]
+            variables[name] = var
+
+
+def collect(root: Path, texts: dict | None = None) -> Found:
     variables: dict[str, Variable] = {}
     errors: list[str] = []
     settings_fields(root / BACKEND_CONFIG, "engine", variables, errors)
@@ -382,6 +410,8 @@ def collect(root: Path) -> Found:
                 variables[name].panel_restart = restart
             else:
                 errors.append(f"{path_}: the panel setting {name} is not a setting of the {who}")
+    if texts:
+        go_variables(root, texts, variables, errors)
     return Found(variables, errors)
 
 
@@ -619,7 +649,7 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
 
     texts = tomllib.loads((root / TEXTS_FILE).read_text(encoding="utf-8"))
-    found = collect(root)
+    found = collect(root, texts)
     errors = validate(found, texts)
     if errors:
         print(f"{PAGE}: the environment variables of the code and their explanations disagree:")

@@ -58,11 +58,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 170 |
+| [Gateway](#gateway) | 173 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
 | [Compose and Helm only](#compose-and-helm-only) | 46 |
-| **Total** | **333** |
+| **Total** | **336** |
 
 ## Before production
 
@@ -364,8 +364,8 @@ Administration → Scripting environments: the Python and R environments the Scr
 | `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. Also adjustable in Administration → Settings. |
 | `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. Also adjustable in Administration → Settings. |
 | `MODELS__OTHER_RELEASE_WAIT_SECONDS` | integer, ≥ 60 | `600` | `extraEnv` | How long a version of a [statistical model group](capabilities/models.md#turning-a-group-on-administrators)'s image queued by another release of Tabularia waits for a gateway of that release, the only one that builds and self-tests it. While two releases run side by side (a rolling upgrade) that gateway takes it within seconds; when none is left (a `helm rollback` in the middle of the build) the version is marked failed once this has passed since it was queued, and a version of the running release's recipe is queued. For as long, a version another release has just made is not answered with one of this release's recipe. Raise it if your upgrades keep the old and new pods side by side longer ([Upgrading](deploy/upgrading.md#what-happens-during-helm-upgrade)). Read at start. |
-| `MODELS__WHEELS_BASE_URL` | https address | empty (`https://download.pytorch.org/whl/cpu/`) | `extraEnv` | Where the build of a [statistical model group](capabilities/models.md#turning-a-group-on-administrators) that installs wheels by their address (the pre-trained forecasting group's CPU-only PyTorch) downloads them from, for a cluster that may not reach the official host. The file names and their sha256 checksums stay the recipe's: the mirror holds the same files (the CPU wheel of `torch`, about 196 MB for x86-64 and 159 MB for arm64). Needed only on a cluster whose build namespace cannot reach `download.pytorch.org`; read when a version is built. |
 | `MODELS__WEIGHTS_BASE_URL` | https address | empty (`https://huggingface.co/`) | `extraEnv` | Where the build of a group that downloads the weights of a pre-trained model (the pre-trained forecasting group's) fetches them from: the same paths as on Hugging Face Hub, the same checksums (`mistralai/Timestral-<size>` at a pinned revision: `model.safetensors`, `config.json` and `LICENSE`, 21 MB to 837 MB a size). Needed only on a cluster whose build namespace cannot reach `huggingface.co` and the storage host it redirects to; the weights are under [a licence](capabilities/models.md#pre-trained-forecasting-timestral) an administrator accepts when enabling the group. Read when a version is built. |
+| `MODELS__WHEELS_BASE_URL` | https address | empty (`https://download.pytorch.org/whl/cpu/`) | `extraEnv` | Where the build of a [statistical model group](capabilities/models.md#turning-a-group-on-administrators) that installs wheels by their address (the pre-trained forecasting group's CPU-only PyTorch) downloads them from, for a cluster that may not reach the official host. The file names and their sha256 checksums stay the recipe's: the mirror holds the same files (the CPU wheel of `torch`, about 196 MB for x86-64 and 159 MB for arm64). Needed only on a cluster whose build namespace cannot reach `download.pytorch.org`; read when a version is built. |
 
 ### Container registries (Kubernetes)
 
