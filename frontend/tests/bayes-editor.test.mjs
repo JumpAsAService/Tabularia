@@ -284,3 +284,82 @@ test('the history: a gesture is one step, typing one step when it stops, undo an
   assert.ok(ed.findings.value.some(f => f.severity === 'error'))
   ed.dispose()
 })
+
+// A node's box changed from the inspector must move it, as a drop does: the canvas draws a node at
+// its layout place in the box of its plate, so a plate changed alone left it drawn in the old box.
+const drawnIn = (g, id) => {
+  const n = g.nodes.find(x => x.id === id)
+  const at = g.layout[id]
+  const r = { x: at.x, y: at.y, w: BAYES_NODE_W, h: BAYES_NODE_H }
+  // the deepest box the node lies wholly in, and whether it touches a box's edge without being in it
+  let deepest = null
+  for (const b of bayesBoxes(g)) {
+    const meets = r.x < b.x + b.w && b.x < r.x + r.w && r.y < b.y + b.h && b.y < r.y + r.h
+    const inside = r.x >= b.x && r.y >= b.y + 30 && r.x + r.w <= b.x + b.w && r.y + r.h <= b.y + b.h
+    assert.ok(!meets || inside, `${id} drawn across the edge of ${b.id}`)
+    if (inside && (!deepest || b.depth > deepest.depth)) deepest = b
+  }
+  assert.equal(n.kind === 'likelihood', false)
+  return deepest?.id ?? null
+}
+
+test('the inspector\'s «Box» moves the node into the new box, and out of it, in one step of the history', async () => {
+  const g = bayesOpenTemplate('hier_intercepts')
+  assert.equal(drawnIn(g, 'bx'), null)
+  assert.equal(E.bayesPlaceInBox(g, 'bx', 'rows'), true)
+  assert.equal(drawnIn(g, 'bx'), 'rows')
+  assert.equal(E.bayesPlaceInBox(g, 'bx', 'grp'), true)
+  assert.equal(g.nodes.find(n => n.id === 'bx').plate, 'grp')
+  assert.equal(drawnIn(g, 'bx'), 'grp')
+  assert.equal(E.bayesPlaceInBox(g, 'bx', null), true)
+  assert.equal('plate' in g.nodes.find(n => n.id === 'bx'), false)
+  assert.equal(drawnIn(g, 'bx'), null)
+  assert.equal(E.bayesPlaceInBox(g, 'bx', null), false)
+  assert.equal(E.bayesPlaceInBox(g, 'lik', null), false)
+  // the canvas places it in the new box: its position is relative to that box
+  E.bayesPlaceInBox(g, 'bx', 'grp')
+  const flow = bayesCanvasNodes(g).find(n => n.id === 'bx')
+  assert.equal(flow.parentNode, 'grp')
+  assert.ok(flow.position.x >= 0 && flow.position.y >= 30, JSON.stringify(flow.position))
+  // one step to undo
+  const clock = fakeClock()
+  const ed = useBayesEditor({ settleMs: 400, schedule: clock.schedule, cancel: clock.cancel })
+  ed.load(bayesOpenTemplate('hier_intercepts'))
+  await nextTick(); clock.advance(500)
+  const before = JSON.parse(JSON.stringify(ed.doc.value))
+  ed.edit(d => E.bayesPlaceInBox(d, 'bx', 'grp'))
+  assert.equal(ed.undo(), true)
+  assert.deepEqual(ed.doc.value, before)
+  assert.equal(ed.canUndo.value, false)
+  ed.dispose()
+})
+
+test('the inspector\'s «Inside» moves a box, and what it holds, into its new container and out of it', () => {
+  const g = bayesOpenTemplate('hier_nested')
+  const groups = g.plates.filter(p => p.kind === 'group')
+  const inner = groups.find(p => p.parent)
+  const outerId = inner.parent
+  const within = (id, host) => {
+    const a = g.layout[id]; const b = g.layout[host]
+    return a.x >= b.x && a.y >= b.y + 30 && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h
+  }
+  assert.equal(E.bayesNestInBox(g, inner.id, null), true)
+  assert.equal(inner.parent, null)
+  const boxes = bayesBoxes(g)
+  const me = boxes.find(b => b.id === inner.id)
+  for (const b of boxes) {
+    if (b.id === inner.id || b.parent === inner.id) continue
+    const meets = me.x < b.x + b.w && b.x < me.x + me.w && me.y < b.y + b.h && b.y < me.y + me.h
+    assert.equal(meets, false, `${b.id} meets the box taken out`)
+  }
+  assert.equal(E.bayesNestInBox(g, inner.id, outerId), true)
+  assert.equal(inner.parent, outerId)
+  assert.ok(within(inner.id, outerId))
+  for (const n of g.nodes) {
+    if (bayesBoxes(g).some(b => b.id === n.plate && (b.id === inner.id))) {
+      const a = g.layout[n.id]; const b = g.layout[inner.id]
+      assert.ok(a.x >= b.x && a.x + BAYES_NODE_W <= b.x + b.w, `${n.id} left its box`)
+    }
+  }
+  assert.equal(E.bayesNestInBox(g, outerId, inner.id), false, 'never into what it holds')
+})

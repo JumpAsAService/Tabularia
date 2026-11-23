@@ -33,7 +33,7 @@ import { useBayesEditor } from '~/composables/useBayesEditor'
 import { bayesBoxes, BAYES_NODE_W, type BayesRect } from '~/composables/bayesCanvasModel'
 import {
   bayesAddItem, bayesDisconnect, bayesDropItem, bayesDropTarget, bayesDuplicateNode, bayesFreeSpot, bayesIsBox, bayesMoveItem, bayesRemoveItem,
-  bayesResizeBox, bayesSetForm, bayesSetKey, bayesSetLabel, bayesSetName, bayesSetParent, bayesSetPlate, bayesSetSeries,
+  bayesResizeBox, bayesSetForm, bayesSetKey, bayesSetLabel, bayesSetName, bayesNestInBox, bayesPlaceInBox, bayesSetSeries,
   bayesSetSeriesPart, bayesSetTarget, bayesWriteSlot, type BayesDoc, type BayesEdgeChoice, type BayesPaletteKind,
 } from '~/composables/bayesGraphEdits'
 import { bayesOpenTemplate, bayesTemplate, bayesTemplates, type BayesOpenOptions } from '~/composables/bayesTemplates'
@@ -166,8 +166,8 @@ const setSeries = (on: boolean) => editor.edit(g => bayesSetSeries(g, on))
 const setSeriesPart = (part: 'time' | 'by', v: string | null) => editor.edit(g => bayesSetSeriesPart(g, part, v))
 const setLabel = (id: string, text: string) => editor.edit(g => bayesSetLabel(g, id, text, t('bayes.editor.newNode.fallbackName')), false)
 const setName = (id: string, text: string) => editor.edit(g => bayesSetName(g, id, text), false)
-const setPlate = (id: string, plate: string | null) => editor.edit(g => bayesSetPlate(g, id, plate))
-const setParent = (id: string, parent: string | null) => editor.edit(g => bayesSetParent(g, id, parent))
+const setPlate = (id: string, plate: string | null) => editor.edit(g => bayesPlaceInBox(g, id, plate))
+const setParent = (id: string, parent: string | null) => editor.edit(g => bayesNestInBox(g, id, parent))
 const setKey = (id: string, key: string) => editor.edit(g => bayesSetKey(g, id, key))
 const setTarget = (id: string, target: string) => editor.edit(g => bayesSetTarget(g, id, target))
 /** A change of a node's own fields (the inspector's): a choice is a step at once, typing one when it stops. */

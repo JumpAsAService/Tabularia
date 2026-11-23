@@ -152,12 +152,13 @@ export function bayesAddItem (doc: BayesDoc, kind: BayesPaletteKind, at: BayesPo
 /**
  * A free place for a node, near `start`: the first spot of a grid going right then down that
  * overlaps no node. Inside a box the grid starts under its header and stays within its width;
- * outside one, no spot straddles a box's edge (a node is drawn wholly in a box or wholly out of it).
+ * outside one, no spot straddles a box's edge (a node is drawn wholly in a box or wholly out of it);
+ * with `outside`, no spot is in a box at all.
  */
-export function bayesFreeSpot (doc: BayesDoc, start: BayesPoint, within: BayesRect | null): BayesPoint {
+export function bayesFreeSpot (doc: BayesDoc, start: BayesPoint, within: BayesRect | null, outside = false): BayesPoint {
   const rects: BayesRect[] = doc.nodes.flatMap(n => (doc.layout[n.id] ? [{ ...doc.layout[n.id]!, w: BAYES_NODE_W, h: BAYES_NODE_H }] : []))
   const meets = (r: BayesRect, o: BayesRect) => r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h
-  const holds = (o: BayesRect, r: BayesRect) => r.x >= o.x && r.y >= o.y + BAYES_PLATE_HEAD && r.x + r.w <= o.x + o.w && r.y + r.h <= o.y + o.h
+  const holds = (o: BayesRect, r: BayesRect) => !outside && r.x >= o.x && r.y >= o.y + BAYES_PLATE_HEAD && r.x + r.w <= o.x + o.w && r.y + r.h <= o.y + o.h
   const boxes = within ? [] : bayesBoxes(doc)
   const overlaps = (r: BayesRect) => rects.some(o => meets(r, o)) || boxes.some(b => meets(r, b) && !holds(b, r))
   const stepX = BAYES_NODE_W + BAYES_PLATE_PAD
@@ -167,9 +168,13 @@ export function bayesFreeSpot (doc: BayesDoc, start: BayesPoint, within: BayesRe
     const x0 = within.x + BAYES_PLATE_PAD
     const y0 = within.y + BAYES_PLATE_HEAD
     const cols = Math.max(1, Math.floor((within.w - BAYES_PLATE_PAD) / stepX))
-    for (let i = 0; i < 200; i++) {
-      const p = { x: x0 + (i % cols) * stepX, y: y0 + Math.floor(i / cols) * stepY }
-      if (free(p)) return { x: round(p.x), y: round(p.y) }
+    // a spot wholly in the box first; a full box gives the first free one below its last row
+    for (const fits of [true, false]) {
+      for (let i = 0; i < 200; i++) {
+        const p = { x: x0 + (i % cols) * stepX, y: y0 + Math.floor(i / cols) * stepY }
+        if (fits && p.y + BAYES_NODE_H > within.y + within.h) break
+        if (free(p)) return { x: round(p.x), y: round(p.y) }
+      }
     }
     return { x: round(x0), y: round(y0) }
   }
@@ -289,6 +294,85 @@ export function bayesSetParent (doc: BayesDoc, id: string, parent: string | null
   if (parent !== null && bayesBoxSubtree(doc, id).has(parent)) return false
   if ((p.parent ?? null) === parent) return false
   p.parent = parent
+  return true
+}
+
+/** A box, and the boxes above it, grown (never shrunk) to hold a rectangle. */
+function growToHold (doc: BayesDoc, box: string, r: BayesRect): void {
+  for (let up: string | null = box; up; ) {
+    const b = bayesBoxes(doc).find(x => x.id === up)
+    if (!b) break
+    const w = Math.max(b.w, r.x + r.w + BAYES_PLATE_PAD - b.x)
+    const h = Math.max(b.h, r.y + r.h + BAYES_PLATE_PAD - b.y)
+    if (w !== b.w || h !== b.h) doc.layout[up] = { x: b.x, y: b.y, w, h }
+    up = typeof b.parent === 'string' ? b.parent : null
+  }
+}
+
+/**
+ * A node put in a box (or in none) from the inspector: its plate changes and the node moves to the
+ * free spot nearest to where it was, inside the new box under its header, or outside every box
+ * (never across an edge), as an addition from the keyboard does. Returns whether anything changed.
+ */
+export function bayesPlaceInBox (doc: BayesDoc, id: string, plate: string | null): boolean {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind === 'likelihood') return false
+  if (!bayesSetPlate(doc, id, plate)) return false
+  const old = doc.layout[id]
+  const within = plate ? bayesBoxes(doc).find(b => b.id === plate) ?? null : null
+  const start = old ? { x: old.x, y: old.y } : { x: within?.x ?? 0, y: within?.y ?? 0 }
+  // the node's own old place must not count as taken
+  delete doc.layout[id]
+  let at = bayesFreeSpot(doc, start, within, !plate)
+  // a full box takes one more column to its right before it takes more height
+  for (let extra = 1; within && at.y + BAYES_NODE_H > within.y + within.h && extra <= 4; extra++) {
+    at = bayesFreeSpot(doc, start, { ...within, w: within.w + extra * (BAYES_NODE_W + BAYES_PLATE_PAD) })
+  }
+  doc.layout[id] = { x: at.x, y: at.y }
+  // a full box grows to hold it
+  if (plate) growToHold(doc, plate, { ...at, w: BAYES_NODE_W, h: BAYES_NODE_H })
+  return true
+}
+
+/**
+ * A group box put in another (or in none) from the inspector: its parent changes and the box, with
+ * what it holds, moves into the new parent under its header (the parent grows to hold it), or out
+ * of every box, to the first place beside them that meets none. Returns whether anything changed.
+ */
+export function bayesNestInBox (doc: BayesDoc, id: string, parent: string | null): boolean {
+  if (!bayesSetParent(doc, id, parent)) return false
+  const boxes = bayesBoxes(doc)
+  const me = boxes.find(b => b.id === id)
+  if (!me) return true
+  const own = bayesBoxSubtree(doc, id)
+  const meets = (r: BayesRect, o: BayesRect) => r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h
+  if (parent) {
+    const host = boxes.find(b => b.id === parent)
+    if (!host) return true
+    const others: BayesRect[] = [
+      ...boxes.filter(b => b.parent === parent && !own.has(b.id)),
+      ...doc.nodes.filter(n => bayesDrawnPlate(n, doc) === parent && doc.layout[n.id]).map(n => ({ ...doc.layout[n.id]!, w: BAYES_NODE_W, h: BAYES_NODE_H })),
+    ]
+    const step = BAYES_PLATE_PAD + 20
+    let at = { x: host.x + BAYES_PLATE_PAD, y: host.y + BAYES_PLATE_HEAD }
+    for (let i = 0; i < 200; i++) {
+      const cand = { x: host.x + BAYES_PLATE_PAD, y: host.y + BAYES_PLATE_HEAD + i * step }
+      if (!others.some(o => meets({ ...cand, w: me.w, h: me.h }, o))) { at = cand; break }
+    }
+    bayesMoveItem(doc, id, at)
+    // the parent, and the boxes above it, grow to hold the box
+    growToHold(doc, parent, { ...at, w: me.w, h: me.h })
+    return true
+  }
+  // out of every box: beside the boxes already there
+  const taken: BayesRect[] = [
+    ...boxes.filter(b => !own.has(b.id)),
+    ...doc.nodes.filter(n => !bayesDrawnPlate(n, doc) && doc.layout[n.id]).map(n => ({ ...doc.layout[n.id]!, w: BAYES_NODE_W, h: BAYES_NODE_H })),
+  ]
+  const right = Math.max(me.x, ...boxes.filter(b => !own.has(b.id) && b.depth === 0).map(b => b.x + b.w + BAYES_PLATE_PAD))
+  const cands: BayesPoint[] = [{ x: me.x, y: me.y }, ...Array.from({ length: 40 }, (_, i) => ({ x: right, y: me.y + i * (BAYES_PLATE_PAD + 20) }))]
+  const at = cands.find(c => !taken.some(o => meets({ ...c, w: me.w, h: me.h }, o))) ?? cands[1]!
+  bayesMoveItem(doc, id, at)
   return true
 }
 
