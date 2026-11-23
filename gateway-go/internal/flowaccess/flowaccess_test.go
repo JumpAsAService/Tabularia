@@ -50,3 +50,18 @@ func TestAModelNodeWidens(t *testing.T) {
 		t.Errorf("model nodes of a text: %d", n)
 	}
 }
+
+// A Bayesian model node is one of the model nodes (the lists that read them), but it names no catalogue model:
+// its reach is the pinned version's, added with the save.
+func TestABayesModelNodeIsAModelNode(t *testing.T) {
+	def := `{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}},
+		{"id": "b", "type": "bayes_model", "data": {"bayesModelId": 3, "bayesModelVersion": 1}}]}`
+	if n := len(ModelNodes(def)); n != 1 {
+		t.Errorf("model nodes of a text: %d", n)
+	}
+	for r := range ReachOf(def) {
+		if r.Kind == "model" {
+			t.Errorf("a Bayesian node is not a catalogue model: %v", r)
+		}
+	}
+}

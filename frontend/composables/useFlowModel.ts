@@ -164,7 +164,7 @@ export function resolveChain(
       break
     }
     // a Script, Container, Model or Predict node: what it wrote last time, when there is a last time
-    if (node.type === 'script' || node.type === 'container' || node.type === 'model' || node.type === 'model_predict') {
+    if (node.type === 'script' || node.type === 'container' || node.type === 'model' || node.type === 'model_predict' || node.type === 'bayes_model') {
       const out = scriptSources[node.id]
       if (!out) return { sourceNode: null, operations: [], afterScript: node.id }
       sourceNode = { ...node, data: { bucket: out.bucket, parquetKey: out.key } } as Node

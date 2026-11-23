@@ -83,6 +83,9 @@ func ReachOf(definition string) map[Ref]bool {
 	// someone else stops when a model node is added (docs/specs/statistical-models.md,
 	// «Security»); its MLflow connection is a connectionId, above
 	for _, n := range ModelNodes(obj) {
+		if n.Value("type") == "bayes_model" {
+			continue // its reach is the pinned (model, version), added with the save (bayes-flow-node, F1)
+		}
 		found[Ref{"model", pyjson.Str(pyjson.Or(data(n).Value("model"), ""))}] = true
 	}
 	return found
@@ -108,7 +111,7 @@ func ModelNodes(definition any) []pyjson.Object {
 	}
 	var out []pyjson.Object
 	for _, n := range objectsOf(pyjson.Obj(definition).Value("nodes")) {
-		if t := n.Value("type"); t == "model" || t == "model_predict" {
+		if t := n.Value("type"); t == "model" || t == "model_predict" || t == "bayes_model" {
 			out = append(out, n)
 		}
 	}

@@ -428,9 +428,9 @@ const fresh = <V extends { at: number }>(e: V | undefined): V | undefined =>
   e && Date.now() - e.at < PREVIEW_MEMO_MS ? e : undefined
 
 // the nodes that run outside the engine and hand their output to the nodes after them
-const STEP_TYPES = new Set(['script', 'container', 'model', 'model_predict'])
+const STEP_TYPES = new Set(['script', 'container', 'model', 'model_predict', 'bayes_model'])
 // the nodes only a run of the flow carries out (an orchestration on the server)
-const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container', 'model', 'model_predict'])
+const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container', 'model', 'model_predict', 'bayes_model'])
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
 // a data edge leaves the selected node (not a sequence edge): a Script node must write its output
 const selectedHasDataOut = computed(() => !!selectedId.value
@@ -463,7 +463,7 @@ onMounted(() => { modelGroups.load(true) })
 // the texts of the preview after a step node, by its kind
 function stepTexts(nodeId: string): string {
   const type = findNode(nodeId)?.type
-  return type === 'container' ? 'containers.node' : type === 'model' || type === 'model_predict' ? 'models.node' : 'scripting.node'
+  return type === 'container' ? 'containers.node' : type === 'model' || type === 'model_predict' || type === 'bayes_model' ? 'models.node' : 'scripting.node'
 }
 
 // What each Script or Container node wrote last (a run of the flow, or «Run» in its panel): the
@@ -1511,7 +1511,7 @@ function setQuickActions(nodeId: string | null | undefined) {
   quickActionNode = quickActions.value.length ? node!.id : null
 }
 // node types whose data output an operation can read (the «out» handle)
-const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container', 'model', 'model_predict'])
+const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container', 'model', 'model_predict', 'bayes_model'])
 
 onMounted(() => {
   api.myFlowShortcuts().then((s) => { savedShortcuts.value = s }, () => { /* the defaults */ })
@@ -1734,6 +1734,7 @@ const NODE_TYPE_COLOR: Record<string, string> = {
   container: '#818cf8',
   model: MODEL_COLOR,
   model_predict: MODEL_COLOR,
+  bayes_model: MODEL_COLOR,
   foreach: '#f472b6',
   comment: 'var(--border)',
 }
@@ -2898,6 +2899,7 @@ const statReportMemory = new Recent<StatReportShown>(STAT_REPORT_REMEMBERED)
 // (docs/specs/statistical-models.md, «The report»); its runs are those GET …/outputs gives Script nodes
 const modelReportNodeId = computed(() => {
   const id = selectedId.value ?? computingNodeId.value ?? inputShownFor.value ?? previewNodeId.value
+  if (id && findNode(id)?.type === 'bayes_model') return id
   return id && findNode(id)?.type === 'model' ? id : null
 })
 const modelReportRuns = computed<StatModelRuns | null>(() => {

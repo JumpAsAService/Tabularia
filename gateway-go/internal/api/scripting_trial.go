@@ -78,14 +78,27 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 			break
 		}
 	}
-	kind, _ := node.Value("type").(string)
-	if node == nil || (kind != "script" && kind != "container" && kind != "model" && kind != "model_predict") {
+	nodeType, _ := node.Value("type").(string)
+	kind := bayesRunKind(nodeType) // the run's kind: a Bayesian model node's runs are the models'
+	if node == nil || (nodeType != "script" && nodeType != "container" && nodeType != "model" && nodeType != "model_predict" && nodeType != bayesNodeType) {
 		q.refuse(http.StatusNotFound, "The node is not in the saved flow: save the flow first")
 		return
 	}
 	var label string
 	var detail pyjson.Object
-	if kind == "script" {
+	if nodeType == bayesNodeType {
+		// refused here, with its sentence, before any run exists (docs/specs/bayes-flow-node.md)
+		if err := newQueue(d).planBayes(q.ctx, &p.User, node); err != nil {
+			var sf *scriptFailed
+			if !errors.As(err, &sf) {
+				q.fail(err)
+				return
+			}
+			q.refuse(http.StatusUnprocessableEntity, upperFirst(sf.msg))
+			return
+		}
+		label, detail = modelLabel(node), pyjson.Object{{Key: "model", Value: bayesNodeType}}
+	} else if kind == "script" {
 		resolved, saved, _, err := d.resolvedNode(q.ctx, node)
 		if err != nil {
 			q.fail(err)
@@ -311,7 +324,7 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 			break
 		}
 	}
-	if node == nil || node.Value("type") != run.Kind {
+	if node == nil || bayesRunKind(pyjson.Str(node.Value("type"))) != run.Kind {
 		return &scriptFailed{"the node is no longer in the saved flow"}
 	}
 	// the Script, Container and model nodes before this one: their latest output stands in for them
@@ -335,9 +348,11 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 	resolveDS := d.flowDsResolver(ctx)
 	r := &scriptNodeRun{q: q, user: current, flow: flow, definition: definition, node: node, trigger: "trial", mode: "development",
 		outputs: upstream, resolveDS: resolveDS, trial: runID, firstIO: firstIO}
-	switch run.Kind {
+	switch pyjson.Str(node.Value("type")) {
 	case "container":
 		_, err = q.runContainer(ctx, r)
+	case bayesNodeType:
+		_, err = q.runBayes(ctx, r)
 	case "model":
 		_, err = q.runModel(ctx, r)
 	case "model_predict":

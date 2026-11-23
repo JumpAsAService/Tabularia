@@ -177,6 +177,11 @@ func (q *queue) planModel(ctx context.Context, user *auth.User, node pyjson.Obje
 	}
 	data := nodeData(node)
 	model, _ := data.Value("model").(string)
+	// the Bayesian model is a node of its own: a model node naming it never runs it
+	// (docs/specs/bayes-report.md, Decisions)
+	if model == bayesNodeType || node.Value("type") == bayesNodeType {
+		return nil, &scriptFailed{fmt.Sprintf("model «%s»: the Bayesian model is a node of its own: add «Bayesian model» from the palette", label)}
+	}
 	group := modelcatalog.GroupOf(model)
 	if group == "" {
 		return nil, &scriptFailed{fmt.Sprintf("model «%s»: the model «%s» is not known to this version of Tabularia", label, model)}

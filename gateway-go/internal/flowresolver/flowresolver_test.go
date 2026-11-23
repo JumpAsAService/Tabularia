@@ -165,3 +165,37 @@ func mustNodes(t *testing.T, d any) *pyval.Dict {
 	}
 	return n
 }
+
+// A Bayesian model node is a step boundary as the models are, and runs in the models' priority.
+func TestABayesModelNodeIsAStep(t *testing.T) {
+	d := def(t, `{"nodes": [
+		{"id": "s", "type": "source", "data": {"datasourceId": 1}},
+		{"id": "b", "type": "bayes_model", "data": {"bayesModelId": 3, "bayesModelVersion": 1}},
+		{"id": "o", "type": "output", "data": {"name": "summary"}}],
+		"edges": [{"source": "s", "target": "b"}, {"source": "b", "target": "o"}]}`)
+	found := false
+	for _, typ := range StepNodeTypes {
+		found = found || typ == "bayes_model"
+	}
+	if !found {
+		t.Fatal("StepNodeTypes lacks bayes_model")
+	}
+	if !inStrings("bayes_model", actionTypes...) || defaultPriority["bayes_model"] != defaultPriority["model"] {
+		t.Error("the action types and the priority list the node")
+	}
+	order, err := SequenceOrder(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []any
+	for _, n := range order {
+		ids = append(ids, n.(pyjson.Object).Value("id"))
+	}
+	if len(ids) != 2 || ids[0] != "b" || ids[1] != "o" {
+		t.Errorf("order %v: the node before the output that reads it", ids)
+	}
+	up, err := ScriptsUpstream("o", mustNodes(t, d), d.(pyjson.Object).Value("edges").([]any))
+	if err != nil || len(up) != 1 || up[0] != "b" {
+		t.Errorf("the steps an output reads: %v %v", up, err)
+	}
+}

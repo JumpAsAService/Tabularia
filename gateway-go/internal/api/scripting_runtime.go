@@ -517,6 +517,9 @@ func nodeOutputs(d *Deps) authedFunc {
 		if models := flowaccess.ModelNodes(f.Definition); len(models) > 0 {
 			definition := pyjson.Obj(pyjson.Or(parsedDefinition(f.Definition), pyjson.Object{}))
 			for _, n := range models {
+				if n.Value("type") == "bayes_model" {
+					continue // its fingerprint comes with its run (bayes-flow-node, F2)
+				}
 				if n.Value("type") == "model" {
 					put(n.Value("id"), modelFingerprint(definition, n))
 				} else {

@@ -1161,7 +1161,7 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 	}
 	var scripts []any
 	for i, k := range nodes.Keys() {
-		if inAny(pyval.Get(nodes.Values()[i], "type"), "script", "container", "model", "model_predict") {
+		if inAny(pyval.Get(nodes.Values()[i], "type"), "script", "container", "model", "model_predict", "bayes_model") {
 			scripts = append(scripts, k)
 		}
 	}
@@ -1190,7 +1190,7 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 				refuse("the output «"+name+"» of the flow «"+f.Name+"» reads what the Container node «"+label+"» writes: an image runs on Tabularia's cluster, not in dbt",
 					"container_not_exportable", "flow", f.Name, "output", name, "container", label)
 			}
-			if typ := pyval.Get(script, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") {
+			if typ := pyval.Get(script, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") || pyval.Eq(typ, "bayes_model") {
 				refuse("the output «"+name+"» of the flow «"+f.Name+"» reads what the model node «"+label+"» writes: a statistical model runs on Tabularia's cluster, not in dbt",
 					"model_not_exportable", "flow", f.Name, "output", name, "model", label)
 			}
@@ -1215,7 +1215,7 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 			what, runs := "Script node", "Python or R"
 			if pyval.Eq(pyval.Get(n, "type"), "container") {
 				what, runs = "Container node", "an image"
-			} else if typ := pyval.Get(n, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") {
+			} else if typ := pyval.Get(n, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") || pyval.Eq(typ, "bayes_model") {
 				what, runs = "model node", "a statistical model"
 			}
 			p.note = append(p.note, "The flow «"+f.Name+"» also runs the "+what+" «"+label+"» ("+runs+"): it is not "+

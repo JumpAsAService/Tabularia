@@ -74,7 +74,7 @@ func modelNode(definition string, id any) pyjson.Object {
 	nodes, _ := pyjson.Or(pyjson.Obj(parsed).Value("nodes"), []any{}).([]any)
 	for _, n := range nodes {
 		node := pyjson.Obj(n)
-		if node != nil && node.Value("type") == "model" && pyjson.Equal(node.Value("id"), id) {
+		if node != nil && (node.Value("type") == "model" || node.Value("type") == bayesNodeType) && pyjson.Equal(node.Value("id"), id) {
 			return node
 		}
 	}

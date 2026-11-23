@@ -205,7 +205,7 @@ func (emptyCatalog) Query(context.Context, string, ...any) (pgx.Rows, error) {
 // exists and is reused»): an Output that reads it refuses the export, one that does not
 // leaves it out with a note.
 func TestAModelIsNotExported(t *testing.T) {
-	for _, typ := range []string{"model", "model_predict"} {
+	for _, typ := range []string{"model", "model_predict", "bayes_model"} {
 		def, err := pyjson.Loads(`{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}},
 			{"id": "m", "type": "` + typ + `", "data": {"label": "Elasticity"}},
 			{"id": "o", "type": "output", "data": {"name": "coefficients"}}, {"id": "o2", "type": "output", "data": {"name": "rows"}}],

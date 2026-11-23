@@ -516,7 +516,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				}
 				errs = append(errs, "output: "+pyStrOfError(err))
 			}
-		case "script", "container", "model", "model_predict":
+		case "script", "container", "model", "model_predict", "bayes_model":
 			run := &scriptNodeRun{q: q, user: user, flow: flow, definition: definition, node: node, parent: parent, trigger: trigger,
 				mode: mode, outputs: outputs, resolveDS: resolveDS}
 			var out *flowresolver.Source
@@ -528,6 +528,8 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				out, err = q.runModel(ctx, run)
 			case "model_predict":
 				out, err = q.runPredict(ctx, run)
+			case "bayes_model":
+				out, err = q.runBayes(ctx, run)
 			default:
 				out, err = q.runContainer(ctx, run)
 			}
