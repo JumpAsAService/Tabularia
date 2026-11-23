@@ -508,3 +508,35 @@ def test_0045_adds_the_recheck_columns_and_leaves_what_was_there(temporary_datab
             "created_at) VALUES (2, 1, 2, '4.6', 'rocker/r-ver:4.6.0', '', 'queued', now())"))
     with temporary_database.connect() as c:
         assert c.execute(text("SELECT recheck_attempts FROM script_environment_versions WHERE id = 2")).scalar() == 0
+
+
+def test_0046_adds_the_bayes_models_and_leaves_what_was_there(temporary_database):
+    """Only additions: two empty tables, a model's name unique in its folder, a version's number
+    unique in its model; the tables before are untouched."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0045")
+        c.execute(text("INSERT INTO projects (id, name, description, created_at) VALUES (1, 'Sales', '', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("bayes_models", "bayes_model_versions")] == [0, 0]
+        assert c.execute(text("SELECT count(*) FROM projects")).scalar() == 1
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO bayes_models (id, name, project_id, owner_id, current_version, created_at, updated_at) "
+                       "VALUES (1, 'Forecast', 1, NULL, 1, now(), now())"))
+        c.execute(text(
+            "INSERT INTO bayes_model_versions (model_id, version, graph, format_version, semantic_hash, findings, program, "
+            "program_sha256, mapping, data_manifest, quantity_manifest, codegen_version, family, catalog_sha256, note, "
+            "created_at, created_by) VALUES (1, 1, '{}', 1, :h, '[]', 'model {}', :h, '{}', '{}', '{}', 1, 'free', :h, "
+            "'created', now(), NULL)"), {"h": "0" * 64})
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT description, template_id FROM bayes_models")).one() == ("", None)
+    with pytest.raises(Exception, match="uq_bayes_model_project_name"):
+        with temporary_database.begin() as c:
+            c.execute(text("INSERT INTO bayes_models (id, name, project_id, current_version, created_at, updated_at) "
+                           "VALUES (2, 'Forecast', 1, 1, now(), now())"))
+    with pytest.raises(Exception, match="uq_bayes_model_version"):
+        with temporary_database.begin() as c:
+            c.execute(text(
+                "INSERT INTO bayes_model_versions (id, model_id, version, graph, format_version, semantic_hash, findings, "
+                "program, program_sha256, mapping, data_manifest, quantity_manifest, codegen_version, family, catalog_sha256, "
+                "note, created_at) VALUES (2, 1, 1, '{}', 1, '', '[]', '', '', '{}', '{}', '{}', 1, 'free', '', '', now())"))
