@@ -1,0 +1,80 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "7e610b9212661bd02f1d3a73182b0ca14674d017b49014e95c19b0c5e8b111f5",
+  "program_sha256": "244e66146d468967e4e629cee89048d379bdb6f7d369508809900e864e87dc37",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "N_first",
+      "kind": "size",
+      "of": "Rows_first"
+    },
+    {
+      "stan": "Rows_first",
+      "kind": "first",
+      "plate": "rows"
+    },
+    {
+      "stan": "N_next",
+      "kind": "size",
+      "of": "Rows_next"
+    },
+    {
+      "stan": "Rows_next",
+      "kind": "next",
+      "plate": "rows"
+    },
+    {
+      "stan": "Prev",
+      "kind": "previous",
+      "plate": "rows"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "sigma_level",
+      "role": "quantity",
+      "node": "sigmalevel",
+      "dims": []
+    },
+    {
+      "stan": "Z_level",
+      "role": "internal",
+      "dims": [
+        {
+          "plate": "rows"
+        }
+      ]
+    },
+    {
+      "stan": "sigma_obs",
+      "role": "quantity",
+      "node": "sigmaobs",
+      "dims": []
+    },
+    {
+      "stan": "level",
+      "role": "quantity",
+      "node": "level",
+      "dims": [
+        {
+          "plate": "rows"
+        }
+      ]
+    }
+  ]
+}

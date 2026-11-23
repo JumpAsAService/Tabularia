@@ -1,0 +1,108 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "delta",
+      "kind": "parameter",
+      "name": "delta",
+      "label": "Drift: the average step",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "300"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread of a step",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1 / 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given its last value",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "lag(y, 1) + delta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "rows": {
+      "x": 220,
+      "y": 0,
+      "w": 460,
+      "h": 270
+    },
+    "y": {
+      "x": 240,
+      "y": 60
+    },
+    "t": {
+      "x": 240,
+      "y": 170
+    },
+    "delta": {
+      "x": 0,
+      "y": 0
+    },
+    "sigma": {
+      "x": 0,
+      "y": 110
+    },
+    "lik": {
+      "x": 480,
+      "y": 115
+    }
+  }
+}

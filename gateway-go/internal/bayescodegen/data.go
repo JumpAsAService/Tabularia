@@ -2,6 +2,7 @@ package bayescodegen
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
@@ -9,7 +10,8 @@ import (
 
 // This file is the data block and the data manifest (docs/specs/bayes-stan-codegen.md, «Data»;
 // docs/specs/bayes-contract.md, «The data manifest»): the sizes first, then the data nodes in Order,
-// the lifted indices, then Mode. The manifest lists the same variables in the same order.
+// the lifted indices, the arrays of a series (its lags, its states' first and next rows), then
+// Mode, then the extension's data. The manifest lists the same variables in the same order.
 
 // DataEntry is one variable of the program's data block, as the runner writes it. Column is the
 // input column the flow node binds (answer 6): the codegen does not know it and leaves it empty;
@@ -24,6 +26,8 @@ type DataEntry struct {
 	Standardize bool   `json:"standardize,omitempty"`
 	Target      string `json:"target,omitempty"`
 	Support     string `json:"support,omitempty"`
+	// Lag is k of Lag<k>: the row k steps before, within the series' unit.
+	Lag int `json:"lag,omitempty"`
 }
 
 // Kinds of a data entry (bayes-contract).
@@ -35,6 +39,14 @@ const (
 	DataCategory   = "category"
 	DataLift       = "lift"
 	DataMode       = "mode"
+	// A series: the rows that have every lag (Rows_lag) and the row k steps before each (Lag<k>);
+	// a state's first row of each unit (Rows_first), the other rows (Rows_next) and the row before
+	// each of them (Prev). Their sizes N_lag, N_first, N_next are sizes "of" the array they size.
+	DataRowsSubset = "rows_subset"
+	DataLag        = "lag"
+	DataFirst      = "first"
+	DataNext       = "next"
+	DataPrevious   = "previous"
 )
 
 // Identifiers the program declares for itself.
@@ -174,7 +186,7 @@ func (g *gen) sizeEntry(p bayesgraph.ModelPlate) {
 // The data block: the sizes (N, then the group plates' J and the categories' K in Model.Plates'
 // order), the data nodes in Order, the lifted indices in Model.Lifts' order, then Mode.
 func (g *gen) writeData() error {
-	w := &g.w
+	w := g.w
 	w.open(blockData)
 	for _, p := range g.m.Plates {
 		g.sizeEntry(p)
@@ -215,8 +227,8 @@ func (g *gen) writeData() error {
 			entry.Kind, entry.Target = DataGroupIndex, target.ID
 		case "category":
 			if plate.Kind != bayesgraph.PlateRows {
-				// Full_ is a local of the model block, over the rows.
-				return unsupported("the category %q on the group plate %q (no lot writes it yet)", id, plate.ID)
+				// graph.data_type: a category is on the rows only.
+				return bug("the category %q on the group plate %q", id, plate.ID)
 			}
 			levels, ok := g.plates[bayesgraph.LevelsPlate(id)]
 			if !ok {
@@ -225,7 +237,7 @@ func (g *gen) writeData() error {
 			w.line("array[" + size + "] int<lower=1, upper=" + g.size[levels.ID] + "> " + x + ";")
 			entry.Kind = DataCategory
 		case "time":
-			continue // the runner sorts by it; the program does not read it (a series: lot S2)
+			continue // the runner sorts the series by it; the program does not read it
 		default:
 			return bug("the data node %q has the type %q", id, b.Type)
 		}
@@ -240,9 +252,44 @@ func (g *gen) writeData() error {
 			Plate: strp(string(l.Context))})
 		g.data = append(g.data, DataEntry{Stan: x, Kind: DataLift, Plate: string(l.Context), Node: l.ID, Target: target})
 	}
+	g.writeSeriesData()
 	w.line("int<lower=0, upper=1> " + identMode + ";")
 	g.mapping = append(g.mapping, MappingEntry{Stan: identMode, Block: blockData, Kind: KindMode})
 	g.data = append(g.data, DataEntry{Stan: identMode, Kind: DataMode})
+	if err := g.writeExtensionData(); err != nil {
+		return err
+	}
 	w.close()
 	return nil
+}
+
+// writeSeriesData declares the arrays of a series the runner builds from the sorted rows, within
+// each unit of the series: N_lag, Rows_lag and Lag<k> for each lag the model uses; N_first,
+// Rows_first, N_next, Rows_next and Prev when it has a latent state.
+func (g *gen) writeSeriesData() {
+	rows := g.rows.ID
+	size := func(s, of string) {
+		g.w.line("int<lower=0> " + s + ";")
+		g.mapping = append(g.mapping, MappingEntry{Stan: s, Block: blockData, Kind: KindSize, Plate: strp(rows)})
+		g.data = append(g.data, DataEntry{Stan: s, Kind: DataSize, Of: of})
+	}
+	array := func(s, size, kind string, lag int) {
+		g.w.line("array[" + size + "] int<lower=1, upper=" + identRows + "> " + s + ";")
+		g.mapping = append(g.mapping, MappingEntry{Stan: s, Block: blockData, Kind: KindSeries, Plate: strp(rows)})
+		g.data = append(g.data, DataEntry{Stan: s, Kind: kind, Plate: rows, Lag: lag})
+	}
+	if len(g.m.Lags) > 0 {
+		size(identNLag, identRowsLag)
+		array(identRowsLag, identNLag, DataRowsSubset, 0)
+		for _, k := range g.m.Lags {
+			array(identLagPrefix+strconv.Itoa(k), identNLag, DataLag, k)
+		}
+	}
+	if len(g.states) > 0 {
+		size(identNFirst, identRowsFirst)
+		array(identRowsFirst, identNFirst, DataFirst, 0)
+		size(identNNext, identRowsNext)
+		array(identRowsNext, identNNext, DataNext, 0)
+		array(identPrev, identNNext, DataPrevious, 0)
+	}
 }

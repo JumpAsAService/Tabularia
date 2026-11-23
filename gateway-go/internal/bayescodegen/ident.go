@@ -143,15 +143,22 @@ func generated(prefix string, ids ...string) (string, error) {
 // nodeIdentifier is a node's identifier: its name when it passes the rule, V_<id> otherwise, with
 // the reason (renamed) and the word that made it (for a reserved name).
 func nodeIdentifier(id string, name *string) (ident, renamed, word string, err error) {
+	return nameIdentifier(name, "V", id)
+}
+
+// nameIdentifier is the identifier of what a person may name (a node, a component of correlated
+// effects, their correlation): the name when it passes the rule, prefix_<ids…> otherwise
+// (V_<node>, V_<node>_<component>, Omega_<node>), with the reason and the word that made it.
+func nameIdentifier(name *string, prefix string, ids ...string) (ident, renamed, word string, err error) {
 	if name == nil {
-		ident, err = generated("V", id)
+		ident, err = generated(prefix, ids...)
 		return ident, RenamedNoName, "", err
 	}
 	if !personName(*name) {
-		return "", "", "", bug("the name %s of node %s is not of the graph's form", strconv.Quote(*name), strconv.Quote(id))
+		return "", "", "", bug("the name %s of %s is not of the graph's form", strconv.Quote(*name), strconv.Quote(strings.Join(ids, ".")))
 	}
 	if w := reservedWordFor(*name); w != "" {
-		ident, err = generated("V", id)
+		ident, err = generated(prefix, ids...)
 		return ident, RenamedReserved, w, err
 	}
 	return *name, "", "", nil
@@ -174,16 +181,23 @@ type MappingEntry struct {
 	Word string `json:"word,omitempty"`
 }
 
-// Kinds of a mapping entry beyond the node kinds (parameter, transformed, linear_predictor, data):
-// a size (N, J_<plate>, K_<category>), the mode flag, a lifted index (Up_<index>_<plate>), and an
-// identifier the program declares for a node of its own (Z_<id> the standard normals of the
-// explicit non-centred form, Full_<id> a category's coefficients with the reference's 0,
-// Arg<k>_<id> an argument of a truncated prior over a plate).
+// Kinds of a mapping entry beyond the node kinds (parameter, transformed, linear_predictor, data,
+// state): a size (N, J_<plate>, K_<category>, N_lag, N_first, N_next), the mode flag, a lifted
+// index (Up_<index>_<plate>), the derived data of a series (Rows_lag, Lag<k>, Rows_first,
+// Rows_next, Prev), a component of correlated effects and their correlation matrix, an identifier
+// the program declares for a node of its own (Z_<id> standard normals, L_<id> a Cholesky factor,
+// W_<id> the scaled effects, V_<id> the centred effects, Full_<id> a category's coefficients with
+// the reference's 0, Arg<k>_<id> an argument of a truncated prior over a plate), and what an
+// extension declares.
 const (
-	KindSize     = "size"
-	KindMode     = "mode"
-	KindLift     = "lift"
-	KindInternal = "internal"
+	KindSize        = "size"
+	KindMode        = "mode"
+	KindLift        = "lift"
+	KindSeries      = "series"
+	KindComponent   = "component"
+	KindCorrelation = "correlation"
+	KindInternal    = "internal"
+	KindExtension   = "extension"
 )
 
 // Roles of a written variable (the quantity manifest's, bayes-contract).

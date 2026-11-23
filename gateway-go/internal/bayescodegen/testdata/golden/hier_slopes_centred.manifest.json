@@ -1,0 +1,131 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "52fe182b21586ae2e480b6114a9de9bfb0320ba13f2855b74d0905c156e5591e",
+  "program_sha256": "1f6b53ce9362a7f9c5d64bd44b71dc74ce7d40670991b1cf62a8201e7bfe5da9",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "mu_a",
+      "role": "quantity",
+      "node": "mua",
+      "dims": []
+    },
+    {
+      "stan": "mu_b",
+      "role": "quantity",
+      "node": "mub",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    },
+    {
+      "stan": "tau_a",
+      "role": "quantity",
+      "node": "taua",
+      "dims": []
+    },
+    {
+      "stan": "tau_b",
+      "role": "quantity",
+      "node": "taub",
+      "dims": []
+    },
+    {
+      "stan": "V_eff",
+      "role": "internal",
+      "dims": [
+        {
+          "plate": "grp"
+        },
+        {
+          "component": "eff"
+        }
+      ]
+    },
+    {
+      "stan": "L_eff",
+      "role": "internal",
+      "dims": [
+        {
+          "component": "eff"
+        },
+        {
+          "component": "eff"
+        }
+      ]
+    },
+    {
+      "stan": "a_g",
+      "role": "quantity",
+      "node": "eff.ca",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "b_g",
+      "role": "quantity",
+      "node": "eff.cb",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "rho_g",
+      "role": "quantity",
+      "node": "eff.correlation",
+      "dims": [
+        {
+          "component": "eff"
+        },
+        {
+          "component": "eff"
+        }
+      ],
+      "triangle": "strict_lower"
+    }
+  ]
+}

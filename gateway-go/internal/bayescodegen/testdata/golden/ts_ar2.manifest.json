@@ -1,0 +1,70 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "6822dc688a6519a5ca635eb6d7d3d2de89ffa38748b3ea9b16e5f892825236fc",
+  "program_sha256": "50c4e66bc1d632582bce74e2a9f643fd1884831032922ae66c47434c7e0c0f10",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "N_lag",
+      "kind": "size",
+      "of": "Rows_lag"
+    },
+    {
+      "stan": "Rows_lag",
+      "kind": "rows_subset",
+      "plate": "rows"
+    },
+    {
+      "stan": "Lag1",
+      "kind": "lag",
+      "plate": "rows",
+      "lag": 1
+    },
+    {
+      "stan": "Lag2",
+      "kind": "lag",
+      "plate": "rows",
+      "lag": 2
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "mu",
+      "role": "quantity",
+      "node": "mu",
+      "dims": []
+    },
+    {
+      "stan": "phi1",
+      "role": "quantity",
+      "node": "phi1",
+      "dims": []
+    },
+    {
+      "stan": "phi2",
+      "role": "quantity",
+      "node": "phi2",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    }
+  ]
+}

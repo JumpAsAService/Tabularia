@@ -80,17 +80,21 @@ func (g *gen) param(id string) (bayesgraph.Param, bayescatalog.Distribution, err
 
 // indexForms chooses the non-centred form of each parameter that has one (Param.NonCentred): the
 // explicit form when its location or its scale reads a value the parameters block has not declared
-// before it (a transformed parameter: a transformed node, a linear predictor on a group plate, a
-// parameter itself explicit), the affine form otherwise.
+// before it (a transformed parameter: a transformed node that depends on a parameter, a linear
+// predictor on a group plate, a parameter itself explicit, a component of correlated effects, which
+// is a transformed parameter in both of their forms), the affine form otherwise (data, transformed
+// data, the parameters of the affine or centred forms).
 func (g *gen) indexForms() error {
 	declared := func(id string) bool {
 		n := g.node(id)
 		if n == nil {
-			return false // a component of correlated effects (lot S2)
+			return false // a component of correlated effects: a transformed parameter
 		}
 		switch n.Kind {
 		case "data":
 			return true
+		case "transformed":
+			return g.tdata[id]
 		case "parameter":
 			_, explicit := g.explicit[id]
 			return !explicit
@@ -146,7 +150,8 @@ func (g *gen) units(n *bayesgraph.Node) (bayesgraph.ModelPlate, string, error) {
 	case bayesgraph.PlateLevels:
 		return plate, g.size[plate.ID] + " - 1", nil
 	}
-	return plate, "", unsupported("the parameter %q on the rows (no lot writes a parameter per row)", n.ID)
+	// graph.node_plate: a parameter is single, on a group plate or on a category's levels.
+	return plate, "", bug("the parameter %q on the plate %q", n.ID, plate.ID)
 }
 
 // internal is the mapping entry of an identifier the program declares for a node of its own (Z_,
@@ -160,11 +165,19 @@ func (g *gen) internal(n *bayesgraph.Node, ident, block string, role string) Map
 }
 
 func (g *gen) writeParameters() error {
-	w := &g.w
+	w := g.w
 	w.open(blockParameters)
 	for _, id := range g.m.Order {
 		n := g.node(id)
-		if n.Kind != "parameter" {
+		switch n.Kind {
+		case "state":
+			g.writeStateParameter(n)
+			continue
+		case "correlated_effects":
+			g.writeEffectParameters(n)
+			continue
+		case "parameter":
+		default:
 			continue
 		}
 		p, d, err := g.param(id)
@@ -256,7 +269,7 @@ func (g *gen) explicitValue(n *bayesgraph.Node) (string, error) {
 // explicit non-centred form has its standard normals' statement instead: std_normal() for a normal
 // prior, the prior itself at location 0 and scale 1 otherwise.
 func (g *gen) writePrior(n *bayesgraph.Node) error {
-	w := &g.w
+	w := g.w
 	p, d, err := g.param(n.ID)
 	if err != nil {
 		return err

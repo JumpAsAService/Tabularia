@@ -49,34 +49,20 @@ func TestGenerateRefusesInvalidModels(t *testing.T) {
 	}
 }
 
-type fakeExtension struct{}
-
-func (fakeExtension) extension() {}
-
-func TestGenerateRefusesAnExtensionUntilS2(t *testing.T) {
-	_, m := modelOf(t, graphJSON(dataY, paramA, paramS, likNormal))
-	if _, err := Generate(m, fakeExtension{}); !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("an extension: %v", err)
+// A transformed node that depends on no parameter is transformed data: computed once, never
+// written (it was ErrUnsupported until lot S2).
+func TestTransformedData(t *testing.T) {
+	p := generateText(t, dataY, paramA, paramS, dataX,
+		`{"id":"lx","kind":"transformed","name":"lx","label":"LX","plate":"rows","value":{"expr":"exp(x)"}}`,
+		`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lx"},"sigma":{"expr":"s"}}}`)
+	wantLines(t, p, "transformed data {", "  vector[N] lx = exp(x);", "  y ~ normal((a + lx), s);")
+	if !strings.Contains(string(p.Text), "}\ntransformed data {\n") || !strings.Contains(string(p.Text), "}\nparameters {\n") {
+		t.Errorf("transformed data is not between data and parameters:\n%s", p.Text)
 	}
-}
-
-func TestGenerateRefusesLaterLots(t *testing.T) {
-	cases := map[string][]byte{
-		"transformed data": graphJSON(dataY, paramA, paramS, dataX,
-			`{"id":"lx","kind":"transformed","name":"lx","label":"LX","plate":"rows","value":{"expr":"exp(x)"}}`,
-			`{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lx"},"sigma":{"expr":"s"}}}`),
-		"a series": []byte(`{"format_version":1,"plates":[{"id":"rows","kind":"rows","label":"R","series":{"by":null,"time":"tm"}}],"nodes":[` +
-			dataY + `,` + paramA + `,` + paramS + `,
-			{"id":"tm","kind":"data","name":"tm","label":"T","plate":"rows","type":"time"},
-			{"id":"lik","kind":"likelihood","label":"L","observed":"y","dist":"normal","args":{"mu":{"expr":"a + lag(y, 1)"},"sigma":{"expr":"s"}}}]}`),
-	}
-	for name, data := range cases {
-		t.Run(name, func(t *testing.T) {
-			_, m := modelOf(t, data)
-			if _, err := Generate(m, nil); !errors.Is(err, ErrUnsupported) {
-				t.Fatalf("want ErrUnsupported, got %v", err)
-			}
-		})
+	for _, q := range p.Quantities {
+		if q.Stan == "lx" {
+			t.Error("transformed data is written")
+		}
 	}
 }
 
@@ -215,7 +201,7 @@ func TestExpressionTextNeverRead(t *testing.T) {
 }
 
 // The EmitEnv answers the program's identifiers, a category's Full_ off its levels, an index on its
-// own plate and its lift elsewhere; no lag and no subset until S2.
+// own plate and its lift elsewhere; Lag<k> on the lagged rows for the model's lags.
 func TestEmitEnv(t *testing.T) {
 	levels, grp := "levels:c", "grp"
 	g := &gen{ident: map[string]string{"a": "alpha", "b": "b", "g": "g"},
@@ -226,18 +212,27 @@ func TestEmitEnv(t *testing.T) {
 		plates: map[string]bayesgraph.ModelPlate{levels: {ID: levels, Kind: bayesgraph.PlateLevels}},
 		full:   map[string]string{"b": "Full_b"},
 		lift:   map[string]string{liftKey("g", "sub"): "Up_g_sub"},
+		m:      &bayesgraph.Model{Lags: []int{2}},
 	}
-	rows := emitEnv{g, "rows"}
+	rows := emitEnv{g: g, ctx: "rows"}
 	if rows.Identifier("a") != "alpha" || rows.Identifier("nope") != "" {
 		t.Error("Identifier")
 	}
-	if rows.Identifier("b") != "Full_b" || (emitEnv{g, bayesexpr.Plate(levels)}).Identifier("b") != "b" {
+	if rows.Identifier("b") != "Full_b" || (emitEnv{g: g, ctx: bayesexpr.Plate(levels)}).Identifier("b") != "b" {
 		t.Error("a category's coefficients: Full_ per row, themselves on their levels")
 	}
 	if rows.IndexArray("g", "rows") != "g" || rows.IndexArray("g", "sub") != "Up_g_sub" || rows.IndexArray("g", "other") != "" {
 		t.Error("IndexArray")
 	}
 	if rows.LagArray(1) != "" || rows.RowsSubset() != "" {
-		t.Error("no lag or subset before S2")
+		t.Error("no lag and every row without a subset")
+	}
+	lagged := emitEnv{g: g, ctx: "rows", subset: identRowsLag}
+	if lagged.RowsSubset() != "Rows_lag" || lagged.LagArray(2) != "Lag2" || lagged.LagArray(1) != "" || lagged.LagArray(3) != "" {
+		t.Error("Lag<k> for the model's lags on Rows_lag only")
+	}
+	first := emitEnv{g: g, ctx: "rows", subset: identRowsFirst}
+	if first.LagArray(2) != "" {
+		t.Error("no lag on a state's first rows")
 	}
 }

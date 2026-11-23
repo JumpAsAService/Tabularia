@@ -11,9 +11,9 @@
 // priors and truncation, transformed nodes and linear predictors on the rows or single, the five
 // likelihoods. Lot S1 adds the plates: group plates and their sizes, the indices and their lifts,
 // the non-centred forms (affine and explicit) and the centred one, the categories' levels with the
-// reference at 0, and the truncation loop over a plate. Correlated effects, states, lags,
-// transformed data and the extension point (S2) are refused with ErrUnsupported until their lot is
-// built.
+// reference at 0, and the truncation loop over a plate. Lot S2 adds the correlated effects (LKJ),
+// the latent states, lag on a series (the statements on the rows that have every lag), transformed
+// data, and the extension point of predictive-checks.
 package bayescodegen
 
 import (
@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -39,6 +40,9 @@ var (
 	// ErrBug: the generator produced, or was about to produce, what the output's rules refuse. It is
 	// a fault of the codegen, never of the person's model.
 	ErrBug = errors.New("bayescodegen: bug")
+	// ErrExtension: an extension declared or wrote what the extension point refuses (a name outside
+	// its prefixes, a call outside the catalogue, an assignment to the program's own variables…).
+	ErrExtension = errors.New("bayescodegen: extension")
 )
 
 func bug(format string, a ...any) error {
@@ -47,12 +51,6 @@ func bug(format string, a ...any) error {
 
 func unsupported(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrUnsupported, fmt.Sprintf(format, a...))
-}
-
-// Extension is what predictive-checks adds to a program (generated.go, lot S2). Until that lot,
-// Generate accepts only a nil Extension.
-type Extension interface {
-	extension()
 }
 
 // Program is a generated program with what is stored and shown beside it.
@@ -65,20 +63,20 @@ type Program struct {
 	Quantities     []Quantity
 }
 
-// Generate writes the program of a validated model. A model with an error finding gives
-// ErrInvalidModel, a model this lot does not write ErrUnsupported; any other error is a bug of the
-// codegen (ErrBug or Emit's). A returned program has passed CheckProgram and CheckIdentifiers.
+// Generate writes the program of a validated model, with what ext adds (nil: nothing). A model
+// with an error finding gives ErrInvalidModel, a model this generator does not write
+// ErrUnsupported; an extension's refused declaration or statement ErrExtension; any other error is
+// a bug of the codegen (ErrBug or Emit's). A returned program has passed CheckProgram and
+// CheckIdentifiers.
 func Generate(m *bayesgraph.Model, ext Extension) (*Program, error) {
 	if m == nil || m.Graph == nil || !m.Valid() {
 		return nil, ErrInvalidModel
-	}
-	if ext != nil {
-		return nil, unsupported("the extension point (lot S2)")
 	}
 	g, err := newGen(m)
 	if err != nil {
 		return nil, err
 	}
+	g.ext = ext
 	if err := g.write(); err != nil {
 		return nil, err
 	}
@@ -105,10 +103,12 @@ func Generate(m *bayesgraph.Model, ext Extension) (*Program, error) {
 
 // Block names, as the program and the mapping table write them.
 const (
-	blockData        = "data"
-	blockParameters  = "parameters"
-	blockTransformed = "transformed parameters"
-	blockModel       = "model"
+	blockData            = "data"
+	blockTransformedData = "transformed data"
+	blockParameters      = "parameters"
+	blockTransformed     = "transformed parameters"
+	blockModel           = "model"
+	blockGenerated       = "generated quantities"
 )
 
 // gen is one generation: the model, its nodes by id, the identifiers, and what has been written.
@@ -134,8 +134,24 @@ type gen struct {
 	// explicit is the parameters written in the explicit non-centred form: their identifier is a
 	// transformed parameter, their standard normals Z_<id> the parameter.
 	explicit map[string]string
+	// slotKeys are each node's slots (its components' and correlation's included), sorted.
+	slotKeys map[string][]bayesgraph.SlotKey
+	// data is the transformed nodes that depend on no parameter: transformed data.
+	tdata map[string]bool
+	// lagged is the values per row and the likelihoods computed on the rows that have every lag
+	// (Rows_lag): those with lag in a slot, and those that read one of them.
+	lagged map[string]bool
+	// effects and states by node id; comps the components of correlated effects by
+	// "<node>.<component>" (their identifiers are in ident under the same key).
+	effects map[string]*effect
+	states  map[string]*state
+	comps   map[string]*bayesgraph.Component
 
-	w          writer
+	ext Extension
+	// extNames are the identifiers the extension declared, by name: what Scope.Declared answers.
+	extNames map[string]Decl
+
+	w          *writer
 	mapping    []MappingEntry
 	data       []DataEntry
 	quantities []Quantity
@@ -145,7 +161,9 @@ func newGen(m *bayesgraph.Model) (*gen, error) {
 	g := &gen{m: m, nodes: map[string]*bayesgraph.Node{}, ident: map[string]string{},
 		renamed: map[string][2]string{}, bindings: map[string]bayesgraph.Binding{},
 		plates: map[string]bayesgraph.ModelPlate{}, size: map[string]string{}, lift: map[string]string{},
-		full: map[string]string{}, explicit: map[string]string{}}
+		full: map[string]string{}, explicit: map[string]string{}, tdata: map[string]bool{}, lagged: map[string]bool{},
+		effects: map[string]*effect{}, states: map[string]*state{}, comps: map[string]*bayesgraph.Component{},
+		extNames: map[string]Decl{}, w: &writer{}}
 	for i := range m.Graph.Nodes {
 		n := &m.Graph.Nodes[i]
 		if _, dup := g.nodes[n.ID]; dup {
@@ -184,13 +202,21 @@ func newGen(m *bayesgraph.Model) (*gen, error) {
 	if err := g.indexPlates(); err != nil {
 		return nil, err
 	}
+	if err := g.indexEffectsAndStates(); err != nil {
+		return nil, err
+	}
+	g.indexTransformedData()
 	if err := g.indexForms(); err != nil {
+		return nil, err
+	}
+	if err := g.indexLags(); err != nil {
 		return nil, err
 	}
 	return g, nil
 }
 
-// supported refuses what lots S0 and S1 do not write, naming the lot that will.
+// supported checks what a valid model holds and the generator relies on: the plates' kinds, and a
+// series for lag and states.
 func (g *gen) supported() error {
 	for _, p := range g.m.Plates[1:] {
 		switch p.Kind {
@@ -199,22 +225,12 @@ func (g *gen) supported() error {
 			return bug("the plate %q of kind %q", p.ID, p.Kind)
 		}
 	}
-	if g.rows.Series != nil {
-		return unsupported("a series on the rows (lot S2)")
+	if len(g.m.Lags) > 0 && g.rows.Series == nil {
+		return bug("lag on rows that are not a series")
 	}
-	if len(g.m.Lags) > 0 {
-		return unsupported("lag (lot S2)")
-	}
-	for _, id := range g.m.Order {
-		n := g.nodes[id]
-		if n == nil {
-			continue
-		}
-		switch n.Kind {
-		case "state":
-			return unsupported("the latent state %q (lot S2)", id)
-		case "correlated_effects":
-			return unsupported("the correlated effects %q (lot S2)", id)
+	for _, k := range g.m.Lags {
+		if k < 1 || k > bayescatalog.GetLimits().MaxLag {
+			return bug("the lag %d outside 1…max_lag", k)
 		}
 	}
 	return nil
@@ -226,13 +242,41 @@ func (g *gen) write() error {
 	if err := g.writeData(); err != nil {
 		return err
 	}
+	if err := g.optionalBlock(blockTransformedData, g.writeTransformedData); err != nil {
+		return err
+	}
 	if err := g.writeParameters(); err != nil {
 		return err
 	}
-	if err := g.writeTransformedParameters(); err != nil {
+	if err := g.optionalBlock(blockTransformed, g.writeTransformedParameters); err != nil {
 		return err
 	}
-	return g.writeModel()
+	if err := g.writeModel(); err != nil {
+		return err
+	}
+	return g.optionalBlock(blockGenerated, g.writeGenerated)
+}
+
+// optionalBlock writes "head { … }" with what body writes, and nothing when body writes nothing.
+func (g *gen) optionalBlock(head string, body func() error) error {
+	outer, inner := g.w, &writer{depth: 1, base: 1}
+	g.w = inner
+	err := body()
+	g.w = outer
+	if err != nil {
+		return err
+	}
+	text, err := inner.text()
+	if err != nil {
+		return err
+	}
+	if text == "" {
+		return nil
+	}
+	outer.open(head)
+	outer.raw(text)
+	outer.close()
+	return nil
 }
 
 // node is the node with the id, which the model holds.

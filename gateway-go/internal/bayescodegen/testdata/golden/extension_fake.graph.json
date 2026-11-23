@@ -1,0 +1,201 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "c",
+      "kind": "data",
+      "name": "c",
+      "label": "Channel",
+      "plate": "rows",
+      "type": "category"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "Group of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "Typical level",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "tau",
+      "kind": "parameter",
+      "name": "tau",
+      "label": "Spread between groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "a",
+      "label": "Level of a group",
+      "plate": "grp",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "mu"
+          },
+          "sigma": {
+            "expr": "tau"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "bc",
+      "kind": "parameter",
+      "name": "b_c",
+      "label": "Effect of the channel",
+      "plate": "levels:c",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "Spread within a group",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "a[g]"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        },
+        {
+          "data": "c",
+          "coef": {
+            "expr": "b_c"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the group, the predictor and the channel",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package bayescodegen
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
@@ -11,28 +12,54 @@ import (
 )
 
 // This file is the values and the statements (docs/specs/bayes-stan-codegen.md, «Linear predictors
-// and transformed nodes», «Categories», «Likelihoods»): the EmitEnv every slot is emitted with, the
-// transformed parameters (values computed from parameters, single or over a group plate, and the
-// explicit non-centred parameters: written), the model block's locals (the categories' Full_, the
-// linear predictors and transformed nodes on the rows: never written), the priors and the
-// likelihoods in Order.
+// and transformed nodes», «Categories», «Likelihoods»): the EmitEnv every slot is emitted with,
+// transformed data (values that depend on no parameter: computed once, never written), the
+// transformed parameters (values computed from parameters, single or over a group plate, the
+// explicit non-centred parameters, the non-centred states and the components of correlated
+// effects: written), the model block's locals (the categories' Full_, the linear predictors and
+// transformed nodes on the rows: never written), the priors (and the statements of states and
+// effects) and the likelihoods in Order.
+//
+// lag: a statement or a value per row that uses lag, or reads a value per row that does, runs on
+// the rows that have every lag the model uses (Rows_lag, which the runner builds within each unit
+// of the series): a likelihood is written y[Rows_lag] ~ …, a value per row is declared over all the
+// rows and assigned on Rows_lag only (x[Rows_lag] = …; the other rows are never read), and every
+// per-row name in their expressions is taken on Rows_lag by Emit (RowsSubset), lag(x, k) being
+// x[Lag<k>]. A lag of a value that is itself computed with lag would read rows where that value is
+// not computed: refused (ErrUnsupported).
 
 // emitEnv is the program's EmitEnv for one slot, whose context plate is ctx. A parameter on a
 // category's levels read from another plate (per row, through the category) is its Full_<id>, the
 // coefficients with the reference's 0; an index is its own array on its plate, its lift
-// (Up_<index>_<plate>) on a plate it is lifted to. Lot S2 answers lags and subsets of the rows:
-// until then they answer "", which Emit refuses (a model that needs them is refused before,
-// ErrUnsupported).
+// (Up_<index>_<plate>) on a plate it is lifted to; a lag is Lag<k> on the rows that have every lag
+// (subset Rows_lag); subset is the rows the statement runs on (Rows_lag, Rows_first for a state's
+// first values, "" for every row). ids, when set, gives an extension's identifiers in place of the
+// program's (Scope.ValueWith); use, when set, is told of each node whose identifier is written
+// (full: as its Full_), so that the extension's nested block rebuilds the locals it reads.
 type emitEnv struct {
-	g   *gen
-	ctx bayesexpr.Plate
+	g      *gen
+	ctx    bayesexpr.Plate
+	subset string
+	ids    func(node string) (string, bool)
+	use    func(node string, full bool)
 }
 
 func (e emitEnv) Identifier(id string) string {
+	if e.ids != nil {
+		if s, ok := e.ids(id); ok {
+			return s
+		}
+	}
 	if f, ok := e.g.full[id]; ok {
 		if p, _ := e.g.levelsOf(id); bayesexpr.Plate(p.ID) != e.ctx {
+			if e.use != nil {
+				e.use(id, true)
+			}
 			return f
 		}
+	}
+	if e.use != nil {
+		e.use(id, false)
 	}
 	return e.g.ident[id]
 }
@@ -48,36 +75,73 @@ func (e emitEnv) IndexArray(id string, context bayesexpr.Plate) string {
 	return e.g.lift[liftKey(id, context)]
 }
 
-func (e emitEnv) LagArray(_ int) string { return "" }
-func (e emitEnv) RowsSubset() string    { return "" }
+// LagArray is Lag<k> on the rows that have every lag, for a lag the model declares; "" otherwise
+// (Emit refuses it).
+func (e emitEnv) LagArray(k int) string {
+	if e.subset != identRowsLag {
+		return ""
+	}
+	for _, l := range e.g.m.Lags {
+		if l == k {
+			return identLagPrefix + strconv.Itoa(k)
+		}
+	}
+	return ""
+}
+
+func (e emitEnv) RowsSubset() string { return e.subset }
+
+// subsetOf is the rows a slot's statement runs on: Rows_first for a state's init, Rows_lag for a
+// lagged value or likelihood, every row ("") otherwise.
+func (g *gen) subsetOf(key bayesgraph.SlotKey) string {
+	if n := g.node(key.Node); n != nil && n.Kind == "state" && strings.HasPrefix(key.Slot, "init.") {
+		return identRowsFirst
+	}
+	if g.lagged[key.Node] {
+		return identRowsLag
+	}
+	return ""
+}
 
 // slotValue is a slot's text: its expression through Emit, or the identifier of the node it refers
-// to; with the value's type.
+// to; with the value's type. It is written on the rows its statement runs on (subsetOf).
 func (g *gen) slotValue(key bayesgraph.SlotKey) (string, bayesexpr.Type, error) {
+	return g.emitSlot(key, emitEnv{g: g})
+}
+
+// emitSlot is a slot's text in env, whose context and subset it sets.
+func (g *gen) emitSlot(key bayesgraph.SlotKey, env emitEnv) (string, bayesexpr.Type, error) {
 	t, ok := g.m.Slots[key]
 	if !ok {
 		return "", bayesexpr.Type{}, bug("the slot %s.%s did not type in a valid model", key.Node, key.Slot)
 	}
+	env.ctx, env.subset = t.Context, g.subsetOf(key)
 	if t.Expr != nil {
-		s, err := bayesexpr.Emit(t.Expr, emitEnv{g, t.Context})
+		s, err := bayesexpr.Emit(t.Expr, env)
 		if err != nil {
 			return "", t.Type, fmt.Errorf("slot %s.%s: %w", key.Node, key.Slot, err)
 		}
 		return s, t.Type, nil
 	}
-	x, ok := g.ident[t.Ref]
-	if !ok || t.Ref == "" {
+	if t.Ref == "" {
+		return "", t.Type, bug("the slot %s.%s has neither an expression nor a ref", key.Node, key.Slot)
+	}
+	x := env.Identifier(t.Ref)
+	if x == "" {
 		return "", t.Type, bug("the slot %s.%s refers to %q, which has no identifier", key.Node, key.Slot, t.Ref)
+	}
+	if t.Type.Plate != "" && env.subset != "" {
+		x += "[" + env.subset + "]"
 	}
 	return x, t.Type, nil
 }
 
-// overPlate is a value made a vector over a plate (the rows or a group plate): a vector as it is,
-// an integer array through to_vector, a single real repeated over the units.
-func (g *gen) overPlate(text string, t bayesexpr.Type, plate string) (string, error) {
+// overPlate is a value made a vector of size over a plate (the rows or a group plate): a vector as
+// it is, an integer array through to_vector, a single real repeated size times.
+func (g *gen) overPlate(text string, t bayesexpr.Type, plate, size string) (string, error) {
 	switch {
 	case t.Plate == "" && t.Elem == bayesexpr.ElemReal:
-		return call("rep_vector", text, g.size[plate])
+		return call("rep_vector", text, size)
 	case t.Plate == bayesexpr.Plate(plate) && t.Elem == bayesexpr.ElemReal:
 		return text, nil
 	case t.Plate == bayesexpr.Plate(plate) && t.Elem == bayesexpr.ElemInt:
@@ -87,7 +151,8 @@ func (g *gen) overPlate(text string, t bayesexpr.Type, plate string) (string, er
 }
 
 // readsParameter reports whether a node's value depends on a parameter: a slot of it reads a
-// parameter, or a transformed node or linear predictor that does.
+// parameter, a state, a component of correlated effects, a linear predictor (always placed after
+// the parameters), or a transformed node that does.
 func (g *gen) readsParameter(id string, seen map[string]bool) bool {
 	if seen[id] {
 		return false
@@ -95,16 +160,16 @@ func (g *gen) readsParameter(id string, seen map[string]bool) bool {
 	seen[id] = true
 	for _, r := range g.reads[id] {
 		if strings.IndexByte(r, '.') >= 0 {
-			return true // a component of correlated effects (lot S2)
+			return true // a component of correlated effects
 		}
 		n := g.node(r)
 		if n == nil {
 			continue
 		}
 		switch n.Kind {
-		case "parameter", "state", "correlated_effects":
+		case "parameter", "state", "correlated_effects", "linear_predictor":
 			return true
-		case "transformed", "linear_predictor":
+		case "transformed":
 			if g.readsParameter(r, seen) {
 				return true
 			}
@@ -113,9 +178,11 @@ func (g *gen) readsParameter(id string, seen map[string]bool) bool {
 	return false
 }
 
-// indexReads gathers what each node's slots read (the validated model's Refs), by node.
+// indexReads gathers what each node's slots read (the validated model's Refs) and its slots, by
+// node (a component's and a correlation's slots are their node's).
 func (g *gen) indexReads() {
 	g.reads = map[string][]string{}
+	g.slotKeys = map[string][]bayesgraph.SlotKey{}
 	keys := make([]bayesgraph.SlotKey, 0, len(g.m.Slots))
 	for k := range g.m.Slots {
 		keys = append(keys, k)
@@ -132,7 +199,92 @@ func (g *gen) indexReads() {
 			owner = owner[:i]
 		}
 		g.reads[owner] = append(g.reads[owner], g.m.Slots[k].Refs...)
+		g.slotKeys[owner] = append(g.slotKeys[owner], k)
 	}
+}
+
+// indexTransformedData marks the transformed nodes that depend on no parameter: transformed data.
+func (g *gen) indexTransformedData() {
+	for _, id := range g.m.Order {
+		if n := g.node(id); n.Kind == "transformed" && !g.readsParameter(id, map[string]bool{}) {
+			g.tdata[id] = true
+		}
+	}
+}
+
+// refsOf adds the nodes a typed tree reads as values (plain) and through lag (lagged).
+func refsOf(t *bayesexpr.Typed, plain, lagged map[string]bool) {
+	if t == nil || t.Node == nil {
+		return
+	}
+	if t.Sym != nil {
+		if t.Node.Kind == bayesexpr.KindLag {
+			lagged[t.Sym.ID] = true
+		} else {
+			plain[t.Sym.ID] = true
+		}
+	}
+	for _, a := range t.Args {
+		refsOf(a, plain, lagged)
+	}
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// indexLags marks the lagged nodes (in Order, so what a node reads is marked before it): a value
+// per row or a likelihood on the rows with lag in a slot, or reading a lagged value. A state's init
+// that would run on Rows_lag, and the lag of a lagged value, are refused.
+func (g *gen) indexLags() error {
+	for _, id := range g.m.Order {
+		n := g.node(id)
+		lag := false
+		plain, viaLag := map[string]bool{}, map[string]bool{}
+		for _, k := range g.slotKeys[id] {
+			t := g.m.Slots[k]
+			if t.Expr == nil {
+				plain[t.Ref] = true
+				continue
+			}
+			if len(t.Expr.Lags) > 0 {
+				lag = true
+			}
+			refsOf(t.Expr.Tree, plain, viaLag)
+		}
+		for _, r := range sortedKeys(viaLag) {
+			if g.lagged[r] {
+				return unsupported("the node %q takes the lag of %q, which is itself computed with lag", id, r)
+			}
+		}
+		for _, r := range sortedKeys(plain) {
+			if g.lagged[r] {
+				lag = true
+			}
+		}
+		if !lag {
+			continue
+		}
+		if len(g.m.Lags) == 0 {
+			return bug("the node %q uses lag in a model without lags", id)
+		}
+		switch {
+		case (n.Kind == "transformed" || n.Kind == "linear_predictor") && n.Plate != nil && *n.Plate == g.rows.ID:
+		case n.Kind == "likelihood" && g.node(n.Observed) != nil && g.node(n.Observed).Plate != nil &&
+			*g.node(n.Observed).Plate == g.rows.ID:
+		case n.Kind == "state":
+			return unsupported("the init of the state %q uses lag", id)
+		default:
+			return bug("the %s %q uses lag off the rows", n.Kind, id)
+		}
+		g.lagged[id] = true
+	}
+	return nil
 }
 
 // placement is where a transformed node or a linear predictor is written.
@@ -140,6 +292,7 @@ type placement int
 
 const (
 	placeNone        placement = iota
+	placeData                  // transformed data: a value that depends on no parameter, not written
 	placeTransformed           // transformed parameters: single values computed from parameters, written
 	placeLocal                 // a local of the model block: a value per row, not written
 )
@@ -155,8 +308,8 @@ func (g *gen) place(n *bayesgraph.Node) (placement, error) {
 	default:
 		return placeNone, nil
 	}
-	if n.Kind == "transformed" && !g.readsParameter(n.ID, map[string]bool{}) {
-		return placeNone, unsupported("the transformed node %q depends on no parameter: transformed data (lot S2)", n.ID)
+	if g.tdata[n.ID] {
+		return placeData, nil
 	}
 	if n.Plate == nil {
 		if n.Kind == "transformed" {
@@ -170,13 +323,60 @@ func (g *gen) place(n *bayesgraph.Node) (placement, error) {
 	case bayesgraph.PlateGroup:
 		return placeTransformed, nil
 	}
-	return placeNone, unsupported("the %s %q on the plate %q (no lot writes it yet)", n.Kind, n.ID, *n.Plate)
+	// graph.node_plate: a transformed node or a linear predictor is single, per row or on a group
+	// plate, never on a category's levels.
+	return placeNone, bug("the %s %q on the plate %q", n.Kind, n.ID, *n.Plate)
+}
+
+// writeTransformedData writes the values that depend on no parameter, computed once.
+func (g *gen) writeTransformedData() error {
+	for _, id := range g.m.Order {
+		if !g.tdata[id] {
+			continue
+		}
+		n := g.node(id)
+		if n.Plate == nil {
+			if err := g.writeSingleValue(n); err != nil {
+				return err
+			}
+		} else if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
+			return err
+		}
+		g.mapping = append(g.mapping, g.entry(n, blockTransformedData, ""))
+	}
+	return nil
+}
+
+// writeSingleValue writes "real x = …;": a single transformed value.
+func (g *gen) writeSingleValue(n *bayesgraph.Node) error {
+	v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "value"})
+	if err != nil {
+		return err
+	}
+	if t.Plate != "" || t.Elem != bayesexpr.ElemReal {
+		return bug("the single transformed node %q has a value of type %s", n.ID, t)
+	}
+	g.w.line("real " + g.ident[n.ID] + " = " + v + ";")
+	return nil
 }
 
 func (g *gen) writeTransformedParameters() error {
-	var lines []string
 	for _, id := range g.m.Order {
 		n := g.node(id)
+		switch n.Kind {
+		case "state":
+			if g.states[id].nonCentred {
+				if err := g.writeStateTransformed(n); err != nil {
+					return err
+				}
+			}
+			continue
+		case "correlated_effects":
+			if err := g.writeEffectTransformed(n); err != nil {
+				return err
+			}
+			continue
+		}
 		p, err := g.place(n)
 		if err != nil {
 			return err
@@ -184,94 +384,103 @@ func (g *gen) writeTransformedParameters() error {
 		if p != placeTransformed {
 			continue
 		}
-		x := g.ident[id]
-		var line string
 		var dims []Dim
 		switch {
 		case n.Kind == "parameter":
-			if line, err = g.explicitValue(n); err != nil {
-				return err
-			}
-			dims = []Dim{{Plate: *n.Plate}}
-		case n.Plate == nil:
-			v, t, err := g.slotValue(bayesgraph.SlotKey{Node: id, Slot: "value"})
+			line, err := g.explicitValue(n)
 			if err != nil {
 				return err
 			}
-			if t.Plate != "" || t.Elem != bayesexpr.ElemReal {
-				return bug("the single transformed node %q has a value of type %s", id, t)
+			g.w.line(line)
+			dims = []Dim{{Plate: *n.Plate}}
+		case n.Plate == nil:
+			if err := g.writeSingleValue(n); err != nil {
+				return err
 			}
-			line, dims = "real "+x+" = "+v+";", []Dim{}
+			dims = []Dim{}
 		default:
-			if line, err = g.vectorValue(n); err != nil {
+			if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
 				return err
 			}
 			dims = []Dim{{Plate: *n.Plate}}
 		}
-		lines = append(lines, line)
 		g.mapping = append(g.mapping, g.entry(n, blockTransformed, RoleQuantity))
-		g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: id, Dims: dims})
+		g.quantities = append(g.quantities, Quantity{Stan: g.ident[id], Role: RoleQuantity, Node: id, Dims: dims})
 	}
-	if len(lines) == 0 {
-		return nil
-	}
-	g.w.open(blockTransformed)
-	for _, l := range lines {
-		g.w.line(l)
-	}
-	g.w.close()
 	return nil
 }
 
-// vectorValue is the declaration of a value over a plate (the rows or a group plate): a
-// transformed node's value, or a linear predictor's sum, intercept first, then each term in the
-// node's order, left-associated: a coefficient times a real data vector, an integer data through
-// to_vector, a category's coefficients by its level (Full_<b>[c]).
-func (g *gen) vectorValue(n *bayesgraph.Node) (string, error) {
-	var v string
-	var t bayesexpr.Type
-	var err error
-	if n.Kind == "transformed" {
-		if v, t, err = g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "value"}); err != nil {
-			return "", err
+// writeVectorValue writes a value over a plate (the rows or a group plate): a transformed node's
+// value, or a linear predictor's sum. A lagged value is declared over every row and assigned on
+// Rows_lag only.
+func (g *gen) writeVectorValue(n *bayesgraph.Node, env emitEnv) error {
+	v, t, err := g.vectorValue(n, env)
+	if err != nil {
+		return err
+	}
+	plate, x := *n.Plate, g.ident[n.ID]
+	if !g.lagged[n.ID] {
+		if v, err = g.overPlate(v, t, plate, g.size[plate]); err != nil {
+			return err
 		}
-	} else if v, t, err = g.linearPredictor(n); err != nil {
-		return "", err
+		g.w.line("vector[" + g.size[plate] + "] " + x + " = " + v + ";")
+		return nil
 	}
-	if v, err = g.overPlate(v, t, *n.Plate); err != nil {
-		return "", err
+	if v, err = g.overPlate(v, t, plate, identNLag); err != nil {
+		return err
 	}
-	return "vector[" + g.size[*n.Plate] + "] " + g.ident[n.ID] + " = " + v + ";", nil
+	g.w.line("vector[" + g.size[plate] + "] " + x + ";")
+	g.w.line(x + "[" + identRowsLag + "] = " + v + ";")
+	return nil
 }
 
-func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error) {
+// vectorValue is the text of a transformed node's value or of a linear predictor's sum.
+func (g *gen) vectorValue(n *bayesgraph.Node, env emitEnv) (string, bayesexpr.Type, error) {
+	if n.Kind == "transformed" {
+		return g.emitSlot(bayesgraph.SlotKey{Node: n.ID, Slot: "value"}, env)
+	}
+	return g.linearPredictor(n, env)
+}
+
+// linearPredictor is a linear predictor's sum, intercept first, then each term in the node's
+// order, left-associated: a coefficient times a real data vector, an integer data through
+// to_vector, a category's coefficients by its level (Full_<b>[c]); each data on Rows_lag when the
+// predictor is lagged.
+func (g *gen) linearPredictor(n *bayesgraph.Node, env emitEnv) (string, bayesexpr.Type, error) {
 	plate := *n.Plate
 	over := bayesexpr.Plate(plate)
 	sum, typ := "", bayesexpr.Type{Elem: bayesexpr.ElemReal}
+	subset := ""
+	if g.lagged[n.ID] {
+		subset = "[" + identRowsLag + "]"
+	}
 	if n.Intercept != nil {
-		v, t, err := g.slotValue(bayesgraph.SlotKey{Node: n.ID, Slot: "intercept"})
+		v, t, err := g.emitSlot(bayesgraph.SlotKey{Node: n.ID, Slot: "intercept"}, env)
 		if err != nil {
 			return "", typ, err
 		}
 		if t.Plate != "" {
-			if v, err = g.overPlate(v, t, plate); err != nil {
-				return "", typ, err
+			if t.Elem == bayesexpr.ElemInt {
+				if v, err = call("to_vector", v); err != nil {
+					return "", typ, err
+				}
 			}
 			typ.Plate = over
 		}
 		sum = v
 	}
+	env.ctx = over
 	for i, term := range n.Terms {
 		key := bayesgraph.SlotKey{Node: n.ID, Slot: fmt.Sprintf("terms[%d].coef", i)}
 		d := g.node(term.Data)
 		if d == nil || d.Kind != "data" || d.Plate == nil || *d.Plate != plate {
 			return "", typ, bug("term %d of %q is not a data node on its plate", i, n.ID)
 		}
-		x := g.ident[d.ID]
+		x := env.Identifier(d.ID) + subset
 		var product string
 		switch d.Type {
 		case "real", "int":
-			coef, ct, err := g.slotValue(key)
+			coef, ct, err := g.emitSlot(key, env)
 			if err != nil {
 				return "", typ, err
 			}
@@ -289,11 +498,10 @@ func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error
 			if err != nil {
 				return "", typ, err
 			}
-			full, ok := g.full[b]
-			if !ok {
+			if _, ok := g.full[b]; !ok {
 				return "", typ, bug("the category term %d of %q reads %q, which has no Full_", i, n.ID, b)
 			}
-			product = "(" + full + "[" + x + "])"
+			product = "(" + env.Identifier(b) + "[" + x + "])"
 		default:
 			return "", typ, bug("term %d of %q reads a %s data node", i, n.ID, d.Type)
 		}
@@ -310,8 +518,8 @@ func (g *gen) linearPredictor(n *bayesgraph.Node) (string, bayesexpr.Type, error
 	return sum, typ, nil
 }
 
-// likelihood is "y ~ dist(args)", vectorized over the observed node's plate, the arguments in
-// Stan's order.
+// likelihood is "y ~ dist(args)", vectorized over the observed node's plate (on Rows_lag when it
+// is lagged: y[Rows_lag]), the arguments in Stan's order.
 func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 	d, ok := bayescatalog.LookupDistribution(n.Dist)
 	if !ok || !d.HasUse(bayescatalog.Likelihood) {
@@ -329,26 +537,38 @@ func (g *gen) likelihood(n *bayesgraph.Node) (string, error) {
 		}
 		args = append(args, v)
 	}
-	return sampling(g.ident[obs.ID], d, args, "")
+	lhs := g.ident[obs.ID]
+	if g.lagged[n.ID] {
+		lhs += "[" + identRowsLag + "]"
+	}
+	return sampling(lhs, d, args, "")
+}
+
+// writeFull writes "vector[K_c] Full_<b> = append_row(0.0, b);".
+func (g *gen) writeFull(id string) error {
+	p, _ := g.levelsOf(id)
+	v, err := call("append_row", "0.0", g.ident[id])
+	if err != nil {
+		return err
+	}
+	g.w.line("vector[" + g.size[p.ID] + "] " + g.full[id] + " = " + v + ";")
+	return nil
 }
 
 // writeModel writes the model block: the categories' Full_ (the coefficients with the reference
-// level's 0 in front), the per-row locals, the priors and the likelihoods, each in Order.
+// level's 0 in front), the per-row locals, the priors (with the statements of the states and the
+// correlated effects) and the likelihoods, each in Order.
 func (g *gen) writeModel() error {
-	w := &g.w
+	w := g.w
 	w.open(blockModel)
 	for _, id := range g.m.Order {
-		f, ok := g.full[id]
-		if !ok {
+		if _, ok := g.full[id]; !ok {
 			continue
 		}
-		p, _ := g.levelsOf(id)
-		v, err := call("append_row", "0.0", g.ident[id])
-		if err != nil {
+		if err := g.writeFull(id); err != nil {
 			return err
 		}
-		w.line("vector[" + g.size[p.ID] + "] " + f + " = " + v + ";")
-		g.mapping = append(g.mapping, g.internal(g.node(id), f, blockModel, ""))
+		g.mapping = append(g.mapping, g.internal(g.node(id), g.full[id], blockModel, ""))
 	}
 	for _, id := range g.m.Order {
 		n := g.node(id)
@@ -359,18 +579,23 @@ func (g *gen) writeModel() error {
 		if p != placeLocal {
 			continue
 		}
-		l, err := g.vectorValue(n)
-		if err != nil {
+		if err := g.writeVectorValue(n, emitEnv{g: g}); err != nil {
 			return err
 		}
-		w.line(l)
 		g.mapping = append(g.mapping, g.entry(n, blockModel, ""))
 	}
 	for _, id := range g.m.Order {
-		if n := g.node(id); n.Kind == "parameter" {
-			if err := g.writePrior(n); err != nil {
-				return err
-			}
+		var err error
+		switch n := g.node(id); n.Kind {
+		case "parameter":
+			err = g.writePrior(n)
+		case "state":
+			err = g.writeStateStatements(n)
+		case "correlated_effects":
+			err = g.writeEffectStatements(n)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	for _, id := range g.m.Order {

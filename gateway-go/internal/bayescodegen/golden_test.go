@@ -40,6 +40,23 @@ var goldenCases = []string{
 	// (centre 1200, spread 300: bayestemplates/testdata/opened/*.c1200-s300.json, byte for byte).
 	"hier_intercepts", "hier_nested",
 	"free_truncated_hyper", "free_category", "free_explicit_noncentred", "free_binomial", "free_int_predictor",
+	// Lot S2: correlated effects, states, lag, transformed data, the extension point. hier_slopes,
+	// ts_ar2 (p = 2), ts_random_walk and ts_local_level are the templates opened with example
+	// numbers, byte for byte; the two *_centred are the same graphs with the form "centred".
+	"hier_slopes", "hier_slopes_centred",
+	"ts_ar2", "ts_random_walk", "ts_local_level", "ts_local_level_centred",
+	"free_transformed_data",
+	// The test extension (extension_test.go): its data after Mode, its written declarations sized
+	// by the mode, its nested block.
+	"extension_fake",
+}
+
+// goldenExtension is the extension a case is generated with (nil for none).
+func goldenExtension(name string) Extension {
+	if name == "extension_fake" {
+		return fakeExtension{}
+	}
+	return nil
 }
 
 // goldenManifest is a case's <case>.manifest.json: the two manifests, with the version of the
@@ -80,8 +97,13 @@ func modelOf(t *testing.T, data []byte) (*bayesgraph.Graph, *bayesgraph.Model) {
 
 func generateBytes(t *testing.T, data []byte) (*bayesgraph.Graph, *Program) {
 	t.Helper()
+	return generateWith(t, data, nil)
+}
+
+func generateWith(t *testing.T, data []byte, ext Extension) (*bayesgraph.Graph, *Program) {
+	t.Helper()
 	g, m := modelOf(t, data)
-	p, err := Generate(m, nil)
+	p, err := Generate(m, ext)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -101,7 +123,7 @@ func TestGolden(t *testing.T) {
 	write := os.Getenv("BAYES_GOLDEN_WRITE") == "1"
 	for _, name := range goldenCases {
 		t.Run(name, func(t *testing.T) {
-			g, p := generateBytes(t, readGraph(t, name))
+			g, p := generateWith(t, readGraph(t, name), goldenExtension(name))
 			hash, err := bayesgraph.SemanticHash(g)
 			if err != nil {
 				t.Fatal(err)
@@ -306,15 +328,16 @@ func TestDeterminism(t *testing.T) {
 	for _, name := range goldenCases {
 		t.Run(name, func(t *testing.T) {
 			data := readGraph(t, name)
-			_, a := generateBytes(t, data)
-			_, b := generateBytes(t, data)
+			ext := goldenExtension(name)
+			_, a := generateWith(t, data, ext)
+			_, b := generateWith(t, data, ext)
 			if !bytes.Equal(a.Text, b.Text) || !jsonEqual(t, a.Mapping, b.Mapping) || !jsonEqual(t, a.Data, b.Data) || !jsonEqual(t, a.Quantities, b.Quantities) {
 				t.Fatal("two generations of the same model differ")
 			}
 			g0, _ := modelOf(t, data)
 			h0, _ := bayesgraph.SemanticHash(g0)
 			for seed := uint64(1); seed <= 8; seed++ {
-				gs, c := generateBytes(t, shuffled(t, data, seed))
+				gs, c := generateWith(t, shuffled(t, data, seed), ext)
 				if hs, _ := bayesgraph.SemanticHash(gs); hs == h0 {
 					t.Fatalf("seed %d: the shuffle did not change the labels", seed)
 				}
@@ -359,15 +382,23 @@ func TestRenameOneNode(t *testing.T) {
 }
 
 // TestGoldenQuantitiesDoNotGrowWithRows: the written quantities of every case are its parameters,
-// its transformed values and the units of its group plates and categories, none over the rows
-// (success criterion 4).
+// its transformed values and the units of its group plates and categories, none over the rows,
+// except a latent state's N values (and its N standard normals) (success criterion 4).
 func TestGoldenQuantitiesDoNotGrowWithRows(t *testing.T) {
 	for _, name := range goldenCases {
 		_, m := modelOf(t, readGraph(t, name))
-		_, p := generateBytes(t, readGraph(t, name))
+		_, p := generateWith(t, readGraph(t, name), goldenExtension(name))
+		states := map[string]bool{}
+		for id := range m.States {
+			states[id] = true
+			states["Z_"+id] = true
+		}
 		for _, q := range p.Quantities {
+			if states[q.Node] || states[q.Stan] {
+				continue
+			}
 			for _, d := range q.Dims {
-				if d.Plate == m.Plates[0].ID || d.Size == identRows {
+				if d.Plate == m.Plates[0].ID || d.Size == identRows || d.Size == identNLag {
 					t.Errorf("%s: %s is written over %+v", name, q.Stan, d)
 				}
 			}

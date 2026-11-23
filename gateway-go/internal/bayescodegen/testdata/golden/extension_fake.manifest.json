@@ -1,0 +1,122 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "637a6a0dbf3ef99f01c4de0a673f5daeafa4842036ad7a85f6395cad5872b286",
+  "program_sha256": "93ec8646036811bbd9cbedfb5f435d3736b3ee82560663f8651206dbaf1ee251",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "K_c",
+      "kind": "size",
+      "of": "levels:c"
+    },
+    {
+      "stan": "c",
+      "kind": "category",
+      "plate": "rows",
+      "node": "c"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_bins",
+      "kind": "bins"
+    },
+    {
+      "stan": "Ppc_edges",
+      "kind": "bin_edges"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "b_c",
+      "role": "quantity",
+      "node": "bc",
+      "dims": [
+        {
+          "plate": "levels:c"
+        }
+      ]
+    },
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "mu",
+      "role": "quantity",
+      "node": "mu",
+      "dims": []
+    },
+    {
+      "stan": "s",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    },
+    {
+      "stan": "tau",
+      "role": "quantity",
+      "node": "tau",
+      "dims": []
+    },
+    {
+      "stan": "a",
+      "role": "quantity",
+      "node": "a",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "Ppc_first_rep",
+      "role": "check",
+      "dims": [],
+      "check": "first"
+    },
+    {
+      "stan": "Prior_a",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ],
+      "of": "a"
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "sigmalevel",
+      "kind": "parameter",
+      "name": "sigma_level",
+      "label": "Spread of the level's steps",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "300"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "sigmaobs",
+      "kind": "parameter",
+      "name": "sigma_obs",
+      "label": "Spread of the observation around the level",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1 / 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "level",
+      "kind": "state",
+      "name": "level",
+      "label": "Hidden level",
+      "plate": "rows",
+      "process": "random_walk",
+      "init": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "1200"
+          },
+          "sigma": {
+            "expr": "2.5 * 300"
+          }
+        }
+      },
+      "scale": {
+        "expr": "sigma_level"
+      },
+      "form": "non_centred"
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given the hidden level",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "level"
+        },
+        "sigma": {
+          "expr": "sigma_obs"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "rows": {
+      "x": 220,
+      "y": 0,
+      "w": 460,
+      "h": 380
+    },
+    "y": {
+      "x": 240,
+      "y": 170
+    },
+    "t": {
+      "x": 240,
+      "y": 280
+    },
+    "sigmalevel": {
+      "x": 0,
+      "y": 0
+    },
+    "sigmaobs": {
+      "x": 0,
+      "y": 110
+    },
+    "level": {
+      "x": 240,
+      "y": 60
+    },
+    "lik": {
+      "x": 480,
+      "y": 115
+    }
+  }
+}

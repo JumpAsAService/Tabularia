@@ -1,0 +1,52 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "c57ffa824ab08cbbb6f4f8883919e7f1420065e119fc806ec15abe93b3ee35ce",
+  "program_sha256": "23b37f0491a39e6c2043cd947c3f712c533f8ce698798d0f64495ffa27f02f1d",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "N_lag",
+      "kind": "size",
+      "of": "Rows_lag"
+    },
+    {
+      "stan": "Rows_lag",
+      "kind": "rows_subset",
+      "plate": "rows"
+    },
+    {
+      "stan": "Lag1",
+      "kind": "lag",
+      "plate": "rows",
+      "lag": 1
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "delta",
+      "role": "quantity",
+      "node": "delta",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "sigma",
+      "dims": []
+    }
+  ]
+}

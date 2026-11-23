@@ -1,0 +1,195 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Shop",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Sales",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Price",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "Shop of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "h",
+      "kind": "data",
+      "name": "h",
+      "label": "Floor area of the shop",
+      "plate": "grp",
+      "type": "real"
+    },
+    {
+      "id": "lx",
+      "kind": "transformed",
+      "name": "log_price",
+      "label": "Log of the price",
+      "plate": "rows",
+      "value": {
+        "expr": "log(x)"
+      }
+    },
+    {
+      "id": "lx2",
+      "kind": "transformed",
+      "name": "log_price_sq",
+      "label": "Square of the log price",
+      "plate": "rows",
+      "value": {
+        "expr": "square(log_price)"
+      }
+    },
+    {
+      "id": "lh",
+      "kind": "transformed",
+      "name": "log_area",
+      "label": "Log of the floor area",
+      "plate": "grp",
+      "value": {
+        "expr": "log(h)"
+      }
+    },
+    {
+      "id": "half",
+      "kind": "transformed",
+      "name": "half",
+      "label": "One half",
+      "plate": null,
+      "value": {
+        "expr": "log(2) / 2"
+      }
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "a",
+      "label": "Intercept",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bp",
+      "kind": "parameter",
+      "name": "b_price",
+      "label": "Effect of the log price",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "bq",
+      "kind": "parameter",
+      "name": "b_curve",
+      "label": "Curvature",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "ba",
+      "kind": "parameter",
+      "name": "b_area",
+      "label": "Effect of the log area",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "Spread",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Sales given the price and the shop",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a + b_price * log_price + b_curve * log_price_sq + b_area * half * log_area[g]"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

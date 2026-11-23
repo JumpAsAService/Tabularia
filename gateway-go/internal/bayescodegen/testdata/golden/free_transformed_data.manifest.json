@@ -1,0 +1,78 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "2b458c5720d0b279054fb0963af31621ae3357fb923d08d76efd00d01f0f6a76",
+  "program_sha256": "a9e4ad4c646209533bcdbbf9370b976304d7bdf6c4c46650eef2ed44ee337219",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "h",
+      "kind": "real",
+      "plate": "grp",
+      "node": "h"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "a",
+      "role": "quantity",
+      "node": "a",
+      "dims": []
+    },
+    {
+      "stan": "b_area",
+      "role": "quantity",
+      "node": "ba",
+      "dims": []
+    },
+    {
+      "stan": "b_price",
+      "role": "quantity",
+      "node": "bp",
+      "dims": []
+    },
+    {
+      "stan": "b_curve",
+      "role": "quantity",
+      "node": "bq",
+      "dims": []
+    },
+    {
+      "stan": "s",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    }
+  ]
+}

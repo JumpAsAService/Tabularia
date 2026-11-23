@@ -48,10 +48,19 @@ var statements = func() map[string]bool {
 	return m
 }()
 
+// writer writes the lines of a program, or of one block's body (base 1: optionalBlock).
 type writer struct {
 	b     strings.Builder
 	depth int
+	base  int
 	err   error
+}
+
+// raw appends lines another writer wrote (a block's body), already indented.
+func (w *writer) raw(s string) {
+	if w.err == nil {
+		w.b.WriteString(s)
+	}
 }
 
 // line writes one line at the current depth. A line is one statement or declaration: never empty,
@@ -83,7 +92,7 @@ func (w *writer) openNested() {
 
 // close writes "}" one level out.
 func (w *writer) close() {
-	if w.depth == 0 {
+	if w.depth <= w.base {
 		if w.err == nil {
 			w.err = bug("a block closed that was not open")
 		}
@@ -98,7 +107,7 @@ func (w *writer) text() (string, error) {
 	if w.err != nil {
 		return "", w.err
 	}
-	if w.depth != 0 {
+	if w.depth != w.base {
 		return "", bug("a block left open")
 	}
 	return w.b.String(), nil

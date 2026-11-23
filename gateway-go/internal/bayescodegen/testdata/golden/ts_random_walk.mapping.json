@@ -1,0 +1,98 @@
+[
+  {
+    "stan": "N",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "y",
+    "block": "data",
+    "node_id": "y",
+    "component": null,
+    "name": "y",
+    "label": "Series",
+    "kind": "data",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "N_lag",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "size",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "Rows_lag",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "series",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "Lag1",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "series",
+    "plate": "rows",
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "Mode",
+    "block": "data",
+    "node_id": null,
+    "component": null,
+    "name": null,
+    "label": null,
+    "kind": "mode",
+    "plate": null,
+    "role": null,
+    "renamed": null
+  },
+  {
+    "stan": "delta",
+    "block": "parameters",
+    "node_id": "delta",
+    "component": null,
+    "name": "delta",
+    "label": "Drift: the average step",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  },
+  {
+    "stan": "sigma",
+    "block": "parameters",
+    "node_id": "sigma",
+    "component": null,
+    "name": "sigma",
+    "label": "Spread of a step",
+    "kind": "parameter",
+    "plate": null,
+    "role": "quantity",
+    "renamed": null
+  }
+]
