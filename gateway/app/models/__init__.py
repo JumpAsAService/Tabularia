@@ -45,6 +45,7 @@ from app.models.data_api import DataApi, DataApiKey, DataApiPod, DataApiResource
 from app.models.home import UserFavourite, UserHome
 from app.models.model_group import ModelGroup
 from app.models.bayes_model import BayesModel, BayesModelVersion
+from app.models.bayes_binary import BayesBinary, BayesSettings
 
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
@@ -57,4 +58,5 @@ __all__ = [
     "ShareLink", "ShareLinkSession", "ShareLinkSettings",
     "DataApi", "DataApiVersion", "DataApiResource", "DataApiKey", "DataApiUsage", "DataApiStatus", "DataApiPod",
     "UserHome", "UserFavourite", "ModelGroup", "BayesModel", "BayesModelVersion",
+    "BayesBinary", "BayesSettings",
 ]

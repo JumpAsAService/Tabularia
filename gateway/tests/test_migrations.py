@@ -540,3 +540,26 @@ def test_0046_adds_the_bayes_models_and_leaves_what_was_there(temporary_database
                 "INSERT INTO bayes_model_versions (id, model_id, version, graph, format_version, semantic_hash, findings, "
                 "program, program_sha256, mapping, data_manifest, quantity_manifest, codegen_version, family, catalog_sha256, "
                 "note, created_at) VALUES (2, 1, 1, '{}', 1, '', '[]', '', '', '{}', '{}', '{}', 1, 'free', '', '', now())"))
+
+
+def test_0047_adds_the_bayes_binaries_and_settings_and_leaves_what_was_there(temporary_database):
+    """Only additions: two empty tables, a cache key unique, an attempt that starts at 0, a
+    settings row whose NULL columns are the recipe's defaults; the tables before are untouched."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0046")
+        c.execute(text("INSERT INTO projects (id, name, description, created_at) VALUES (1, 'Sales', '', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("bayes_binaries", "bayes_settings")] == [0, 0]
+        assert c.execute(text("SELECT count(*) FROM projects")).scalar() == 1
+    row = ("INSERT INTO bayes_binaries (cache_key, program_sha256, cmdstan, image_digest, arch, group_version, state, "
+           "queued_at) VALUES (:k, :p, '2.40.0', :d, 'amd64', 1, 'queued', now())")
+    with temporary_database.begin() as c:
+        c.execute(text(row), {"k": "a" * 64, "p": "b" * 64, "d": "sha256:" + "c" * 64})
+        c.execute(text("INSERT INTO bayes_settings (id, updated_at) VALUES (1, now())"))
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT attempt, reason, binary_sha256, requested_by FROM bayes_binaries")).one() == (0, None, None, None)
+        assert c.execute(text("SELECT compile_cpu, compile_slots, cache_max_bytes FROM bayes_settings")).one() == (None, None, None)
+    with pytest.raises(Exception, match="uq_bayes_binary_cache_key"):
+        with temporary_database.begin() as c:
+            c.execute(text(row), {"k": "a" * 64, "p": "d" * 64, "d": "sha256:" + "e" * 64})
