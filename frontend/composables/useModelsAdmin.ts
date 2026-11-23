@@ -136,6 +136,86 @@ export interface ModelAccessInput {
   group_ids: number[]
 }
 
+// The card of the group `bayes` (docs/specs/bayes-stan-compile.md, «The administration card»): the compile limits,
+// «Compiles at once», the cache of binaries and the sampling Job's /tmp, each with its default; the last compiles.
+// Routes: gateway-go/internal/api/models_admin_bayes.go.
+export interface BayesCardValues {
+  compile_cpu: string
+  compile_memory: string
+  compile_seconds: number
+  compile_tmp: string
+  compile_slots: number
+  cache_max: string
+  sampling_tmp: string
+}
+
+export interface BayesCardCache {
+  used_bytes: number
+  binaries: number
+  oldest_use: string | null
+  older_image: { binaries: number; bytes: number }
+}
+
+export type BayesCompileRowState = 'queued' | 'running' | 'ready' | 'failed' | 'timeout'
+
+export interface BayesCardCompile {
+  id: number
+  state: BayesCompileRowState
+  reason: string | null
+  detail: string | null
+  // only for a reader who sees the model
+  model_id: number | null
+  model_name: string | null
+  version: number | null
+  seconds: number | null
+  at: string | null
+  // the limits the compile ran under: what an administrator needs before raising one
+  deadline_seconds: number | null
+  memory_bytes: number | null
+  binary_bytes: number | null
+}
+
+export interface BayesCardAnswer {
+  limits: BayesCardValues
+  defaults: BayesCardValues
+  cache: BayesCardCache
+  compiles: BayesCardCompile[]
+  editable: boolean
+  emptied?: { binaries: number; bytes: number; kept: number }
+}
+
+// what the form keeps: every field as text, an empty field being the default
+export type BayesCardDraft = Record<keyof BayesCardValues, string>
+
+export const BAYES_CARD_FIELDS: (keyof BayesCardValues)[] = ['compile_cpu', 'compile_memory', 'compile_seconds', 'compile_tmp', 'compile_slots', 'cache_max', 'sampling_tmp']
+
+export function bayesCardDraftOf(l: BayesCardValues): BayesCardDraft {
+  return Object.fromEntries(BAYES_CARD_FIELDS.map((k) => [k, String(l[k])])) as BayesCardDraft
+}
+
+/** The body of the save: a field left empty, or equal to its default, is the default (null), so it follows the recipe. */
+export function bayesCardInputOf(d: BayesCardDraft, defaults: BayesCardValues): Record<keyof BayesCardValues, string | number | null> {
+  const out = {} as Record<keyof BayesCardValues, string | number | null>
+  for (const k of BAYES_CARD_FIELDS) {
+    const text = d[k].trim()
+    if (text === '' || text === String(defaults[k])) out[k] = null
+    else out[k] = typeof defaults[k] === 'number' ? Number(text) : text
+  }
+  return out
+}
+
+/**
+ * A size as the card says it: whole GiB or MiB when exact, one decimal otherwise («1.9 GiB», «512 MiB», «2.7 MiB»);
+ * `format` writes a number in the interface's language (the decimal mark).
+ */
+export function bayesBytesLabel(n: number, format: (v: number) => string = (v) => String(v)): string {
+  const unit = (v: number, name: string) => `${format(Number.isInteger(v) ? v : Math.round(v * 10) / 10)} ${name}`
+  if (n >= 2 ** 30) return unit(n / 2 ** 30, 'GiB')
+  if (n >= 2 ** 20) return unit(n / 2 ** 20, 'MiB')
+  if (n >= 2 ** 10) return unit(n / 2 ** 10, 'KiB')
+  return `${n} B`
+}
+
 // a group is being built or checked: the page follows it
 export function groupBusy(g: Pick<ModelGroupAdmin, 'state'>): boolean {
   return g.state === 'building' || g.state === 'checking'
@@ -245,5 +325,9 @@ export function useModelsAdmin() {
     rebuild: (id: string, body?: ModelLicenceInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/rebuild`, { method: 'POST', ...(body ? { body } : {}) }),
     saveLimits: (id: string, body: ModelLimitsInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/settings`, { method: 'PUT', body }),
     saveAccess: (id: string, body: ModelAccessInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/access`, { method: 'PUT', body }),
+    // the card of the group bayes
+    bayesCard: () => apiFetch<BayesCardAnswer>('/admin/models/bayes/compile'),
+    saveBayesCard: (body: Record<keyof BayesCardValues, string | number | null>) => apiFetch<BayesCardAnswer>('/admin/models/bayes/compile', { method: 'PUT', body }),
+    emptyBayesCache: () => apiFetch<BayesCardAnswer>('/admin/models/bayes/cache/empty', { method: 'POST' }),
   }
 }

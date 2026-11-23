@@ -264,6 +264,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'bayes_model.restore': { icon: Sigma, color: u.accent, label: t('audit.bayesModelRestoreAction') },
     'bayes_model.delete': { icon: Sigma, color: u.danger, label: t('audit.bayesModelDeleteAction') },
     'bayes_model.compile': { icon: Sigma, color: u.violet, label: t('audit.bayesModelCompileAction') },
+    'models.bayes_compile_settings': { icon: Sigma, color: u.accent, label: t('audit.bayesCompileSettingsAction') },
+    'models.bayes_cache_empty': { icon: Sigma, color: u.danger, label: t('audit.bayesCacheEmptyAction') },
     'data_api.create': { icon: Braces, color: u.accent, label: t('audit.dataApiCreateAction') },
     'data_api.update': { icon: Braces, color: u.accent, label: t('audit.dataApiUpdateAction') },
     'data_api.delete': { icon: Braces, color: u.danger, label: t('audit.dataApiDeleteAction') },

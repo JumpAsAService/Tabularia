@@ -10,6 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2, CircleDot, Info, LoaderCircle, Power, RotateCcw, ShieldCheck, Sigma, TriangleAlert, XCircle } from 'lucide-vue-next'
+import BayesCardFields from '~/components/admin/BayesCardFields.vue'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import type { GroupOut } from '~/composables/useProjects'
@@ -455,6 +456,9 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
             </div>
           </fieldset>
         </template>
+
+        <!-- the group bayes: its compile limits, its cache of binaries, its sampling /tmp and its last compiles (read when the card is opened) -->
+        <BayesCardFields v-if="g.id === 'bayes' && opened[g.id]" :editable="editable" />
 
         <h5>{{ $t('modelsAdmin.versionsTitle') }}</h5>
         <p v-if="!shown(g).versions.length" class="hint muted small">{{ $t('modelsAdmin.noVersions') }}</p>

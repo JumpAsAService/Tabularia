@@ -91,7 +91,10 @@ var goOnlyRoutes = []struct {
 	{after: "/admin/models/{group_id}/rebuild", route: pyRoute{path: "/admin/models/{group_id}/settings", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/settings$`}},
 	{after: "/admin/models/{group_id}/settings", route: pyRoute{path: "/admin/models/{group_id}/access", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/access$`}},
 	// a Predict node's lists: the experiments and the versions Tabularia registered (api/models_mlflow.go)
-	{after: "/admin/models/{group_id}/access", route: pyRoute{path: "/models/mlflow/{connection_id}/experiments", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/experiments$`}},
+	// the group bayes's card: the compile limits, the cache of binaries, the sampling /tmp (api/models_admin_bayes.go)
+	{after: "/admin/models/{group_id}/access", route: pyRoute{path: "/admin/models/bayes/compile", methods: []string{"GET", "PUT"}, regex: `^/admin/models/bayes/compile$`}},
+	{after: "/admin/models/bayes/compile", route: pyRoute{path: "/admin/models/bayes/cache/empty", methods: []string{"POST"}, regex: `^/admin/models/bayes/cache/empty$`}},
+	{after: "/admin/models/bayes/cache/empty", route: pyRoute{path: "/models/mlflow/{connection_id}/experiments", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/experiments$`}},
 	{after: "/models/mlflow/{connection_id}/experiments", route: pyRoute{path: "/models/mlflow/{connection_id}/versions", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/versions$`}},
 	// the saved Bayesian models: the object, its versions and its uses (api/bayes_models.go)
 	{after: "/models/mlflow/{connection_id}/versions", route: pyRoute{path: "/bayes-models/check", methods: []string{"POST"}, regex: `^/bayes\-models/check$`}},

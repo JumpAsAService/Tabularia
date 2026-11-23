@@ -661,3 +661,41 @@ differ, this section holds.
    for the compile.
 3. The runner fetches the binary from `TABULARIA_BINARY_IN` **before it reads the data** and compares its sha256 before
    `chmod` and exec (`bayes-runner.md`, «The binary»).
+
+## As built — lot C4 (2026-11-24)
+
+- **The routes**: `gateway-go/internal/api/models_admin_bayes.go`, the three of the card, declared Go-only
+  (`server/go_only_routes.go`) and guarded as the models' others (`mgGuarded`: administrators act, observers read, an
+  API token never changes anything). `GET /admin/models/bayes/compile` answers `limits` (in force), `defaults` (the
+  recipe's, «Compiles at once» at `bayescompile.DefaultSlots`), `cache` (`used_bytes`, `binaries`, `oldest_use`,
+  `older_image` {`binaries`, `bytes`}, the older image being any ready row whose digest is not the group's current
+  one), the last 20 `compiles` and `editable`. `PUT` takes the seven settings (`compile_cpu`, `compile_memory`,
+  `compile_seconds`, `compile_tmp`, `compile_slots`, `cache_max`, `sampling_tmp`), a field left out or null being the
+  default; a value equal to the default is stored as NULL, so it keeps following the recipe; the audit
+  `models.bayes_compile_settings` holds the values in force before and after and is written only when they differ.
+  `POST …/cache/empty` answers the card with `emptied` {`binaries`, `bytes`, `kept`} and audits `models.bayes_cache_empty`.
+- **The ranges** (422 with the sentence): CPU a whole number of cores 1–16; compile memory 2 GiB–64 GiB (the sentence
+  quotes the measured 1.3–1.9 GiB); the longest compile 60–3,600 s (11–45 s, the 1,497-node budget 130.5 s); compile
+  `/tmp` 64 MiB–16 GiB; «Compiles at once» 1–16; the cache's limit 64 MiB–1 TiB; the sampling `/tmp` 256 MiB–256 GiB.
+  Quantities are whole Mi or Gi (`bayescompile.QuantityBytes`); the cache's limit is stored in bytes. The loop and the
+  Compiler read the same row with `bcSettings` and `Resolve`; the sampling `/tmp` is stored for `flow-node` and read by
+  nothing yet. A change of limits touches no row (a timeout row queues again by itself, `MayRetry`).
+- **«Empty the cache»**: in one transaction under `pg_advisory_xact_lock(LoopLock)` (it waits for a round, never skips
+  it): every ready row, `MakeRoom` with a limit of 0 and the rows a run is placing (`FOR UPDATE SKIP LOCKED`) left out;
+  the objects are deleted through the engine before the rows, and an engine that fails answers 502 with nothing deleted
+  and nothing audited. Queued, running, timeout and failed rows are not touched.
+- **The compiles' list** names a model and its version only to a reader who sees the model (`bayesmodels.CanSee`);
+  an observer with no grant on the folder reads the state, the seconds and the limits the compile ran under, not the
+  name. A `timeout` row carries `deadline_seconds` and `memory_bytes`.
+- **The card**: `frontend/components/admin/BayesCardFields.vue`, drawn inside the group `bayes`'s «Resources, access and
+  versions» disclosure once it is opened (so the page asks the gateway only then); the fields show their default and a
+  «Reset to default» when they differ, one «Save» for all, «Empty the cache» asks first. Words under
+  `modelsAdmin.bayes.*` in the five languages, the group's own name and description added (`modelsAdmin.group.bayes`),
+  the two audit actions labelled. Tried by hand in Chrome (Chromium) and Firefox against `nuxt dev` with the routes
+  answered by a fake (Playwright interception) in the Italian interface, dark and light at 1440 px: the defaults, a
+  change, a refusal (the gateway's sentence in the toast), the save, the emptying with its confirmation, an observer's
+  card (every fieldset disabled, no action), and the keyboard (Tab from the cache's field reaches its «Reset to
+  default», Enter resets it). Not tried against a real gateway: the routes are tested on a real database.
+- **For lot C5**: nothing on kind needs the card, but to try a timeout without a slow program lower
+  `compile_seconds` to 60 from the card (the deadline the Job gets is the one in force when it starts) and raise it
+  again to see «Compile now» queue the program; the card's list shows each row's limits.
