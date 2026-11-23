@@ -446,6 +446,65 @@ program, or a parse that exhausts time or memory. It runs when lots E0–E2 are 
 calls `Emit`; its findings are corrected and recorded in this spec; the map's step 8 repeats it on the whole
 editor.
 
+## As built — security review (E4)
+
+Run on 2026-11-23 by a fresh agent on the code of `bayesexpr`, its callers in `bayesgraph` (`slots.go`,
+`env.go`, `structure.go`) and `bayescodegen` (`ident.go`, `check.go`, `model.go`, `params.go`, `data.go`,
+`writer.go`), and the catalogue. Every case below was **run**: Go tests outside the committed suite (removed
+after the run), stanc 2.40.0 and g++ from the image of the group `bayes` (`tabularia-bayes-b0:local`), the
+compiles one at a time. Two corrections were already in progress when it ran and are not repeated here: the
+reserved words `return`, `void`, `tuple`, `break`, `continue` added to the catalogue, and node ids equal to a
+reserved suffix (`lpdf`, …) refused by the graph.
+
+### Findings
+
+| # | Severity | Where | Case (run) | Proposed correction |
+|---|---|---|---|---|
+| 1 | **medium** | the limits (`max_expression_nodes` 256, `max_total_expression_nodes` 4,096: catalogue; checked in `bayesgraph/slots.go:425`) against the compile Job's default limits (`bayes-image`: 1 CPU, 3 GiB, 300 s) | Full CmdStan builds of programs Generate wrote from valid graphs: the GLM baseline 12 s; one likelihood mean of 250 nodes `a * x / (x + b) - …` (31 times) **122 s**; `inv_logit(` nested 31 times 37 s; `x * x * …` (126 factors) 18 s. **Three** per-row transformed nodes of that 250-node form (750 of the 4,096 nodes allowed) did **not finish in 330 s** with 1 CPU and 3 GiB (peak 1.46 GB): past the default deadline. Each vector operator nests Eigen's expression templates; the cost is the C++ compile, not the parser. Not an injection: a valid model that never compiles, and a compile Job that runs to its deadline at every save | Bound the compile cost, not only the tree: either a per-program budget of vector operations (the `.*`, `./`, `.^` and vector calls `Emit` writes), measured against the default 300 s / 1 CPU, or `stan-codegen` writing a large vector expression as a sequence of locals (`vector[N] e1 = …;`), which keeps each C++ expression small (to measure: it is the assumption to test). In `stan-compile`: one compile per person at a time, and a program whose sha256 already passed the deadline is not compiled again until its limits change |
+| 2 | low | `bayescodegen/ident.go:29-54` (`reservedNames`); catalogue `stan.renamed_backend_words` | A **data** node named `log_prob` gets the identifier `log_prob` (`vector[N] log_prob;`); stanc 2.40.0 accepts it; g++ refuses: «`log_prob(…)` conflicts with a previous declaration» (a data variable is a member of the model's C++ class). The same for the class's other member functions (`write_array`, `model_name`, `transform_inits`, `unconstrain_array`, `get_dims`, `get_param_names`, `constrained_param_names`, `unconstrained_param_names`, `get_constrained_sizedtypes`, `get_unconstrained_sizedtypes`, `model_compile_info`, `log_prob_impl`, `write_array_impl`, `transform_inits_impl`, `unconstrain_array_impl`, all seen failing) and `emit_transformed_parameters`, `emit_generated_quantities` (a method's parameters); `errno` (an object-like macro of the C library: it expands inside the class). `model_model` is refused by stanc itself («clashes with model name», the compile Job's file being `model.stan`). The same words as **parameters**, and `stdin`, `stdout`, `linux`, `model_model_namespace` as data, compile | A catalogue list of the backend's member words (the lower-case identifiers without `__` of the C++ header stanc 2.40.0 writes for a model, plus `errno` and `model_model`), added to `reservedNames` so such a name is renamed `V_<id>` like any reserved word; a golden program of lot S3 declaring every word of the list as data must compile |
+| 3 | low | `bayescodegen/ident.go:23` (`refusedTokens`), used by `CheckProgram` (`check.go:307`) | `CheckProgram` refuses `target += 1000.0;` but accepts `transformed parameters { real t = mu; jacobian += 1000.0; }`, which stanc 2.40.0 accepts and which adds to the log density as `target +=` does; it also accepts `while` (an unbounded loop). No input reaches either: `jacobian` is a reserved function and `while` a reserved word, so neither is ever an identifier, and `Emit` writes no statement. Defence in depth only | Add `jacobian` and `while` to the words the output check refuses (and to the codegen spec's list) |
+| 4 | info | no caller | No handler of the gateway calls `Decode`, `BuildModel` or `Generate` yet (only tests): «the gateway parses again on every save» cannot be checked today. `Model` has no JSON form, and `Generate` re-checks what it writes (`personName`, `graphID`, `Emit`'s identifier rule, the catalogue's lists, `CheckProgram`), so even a hand-built `Model` cannot put a byte outside the program's alphabet, though it can change the model's meaning | When `model-store` and `flow-node` wire it: `Generate` only on `BuildModel(Decode(stored bytes))`, never on a model, a tree or a text sent by the browser; keep `Model` without a JSON form; a test of the handler that sends a graph the mirror accepts and Go refuses |
+| 5 | info | `bayesexpr/lex.go:278` | `2.5e-324` is accepted and emitted as `5e-324` (subnormal, rounded); `5e-324` and `upper=1e-320` compile with stanc and g++. Only a value read as exactly 0 is `expr.number_underflow`, so «no silent underflow» holds for 0, not for precision | Refuse a non-zero literal below the smallest normal double (2.2250738585072014e-308) as `expr.number_underflow`, in Go and the mirror, or write the exception here |
+| 6 | info | `bayesgraph/graph.go:285` | A wrong JSON type gives `graph.format` with `json: cannot unmarshal string into Go struct field Graph.nodes.0.bounds.lower of type float64`: Go's type names reach the person | A neutral detail (the path and the expected JSON type) |
+| 7 | info | `bayesexpr/check.go:221` | `Check(&Node{Kind: KindNeg}, env)` panics (index out of range): `Check`, `Typed.Interval` trust the shape of a tree. Every caller passes a tree `Parse` made; `Emit` does not trust it (it refuses a node whose operands are not its syntax's) | A shape check at the top of `Check` (operand counts per kind), returning an error |
+
+### Verified closed
+
+- **Injection, comments, strings, `#include`, statements**: through the whole pipeline (`Decode` → `BuildModel` →
+  `Generate`), `a; target += 1`, `a } model {`, `a // b`, `a /* b */`, `#include x`, `"a"`, `print(a)`,
+  `reject(a)`, `target`, `x__`, `lp__`, `V_y`, `N`, `Mode`, `normal(a, 1)`, `to_vector(n)`, `normal_lpdf`,
+  `a.b`, `a .* a` are each refused with their code; a NUL is refused by the JSON decoder before the lexer; a
+  direction control is `expr.non_ascii`.
+- **The output's alphabet**: a 2-minute end-to-end fuzz (the expression of a likelihood's mean, a data node's name,
+  a parameter's bound and a label, all from the fuzzer, through the three steps): 236,677 inputs, no `ErrBug`, no
+  `Emit` error on a valid model, every program passed `CheckProgram`. Labels, notes, JSON keys of `args`, refs and
+  plate ids never reach the program (read: they are map keys or go to the mapping table only).
+- **Names against Stan**: 770 programs written by `Generate` with a data node, then a parameter, named after
+  every function of stanc 2.40.0's signatures and every lower-case word of its C++ header, wherever the rule kept
+  the name: **all accepted by stanc** (Stan lets a variable shadow a library function; the program calls only
+  catalogue names). stanc 2.40.0 refuses as a variable exactly the catalogue's reserved words, type names, block
+  names and reserved functions tried, and the suffixes `_lupdf`, `_lupmf` only (`x_lpdf`, `x_cdf`, `x_lccdf`… are
+  accepted: the catalogue's six other suffixes are a conservative refusal, harmless). The remaining collisions are
+  C++ (finding 2).
+- **Numbers**: no NaN, infinity or negative literal can be written; `-0` is `(-0.0)`, a bound `-0` is `0.0`;
+  `1e15` is `1e+15`; `999999999999999` is `9.99999999999999e+14`; bounds above 1e15 are `graph.bounds`.
+- **Integers**: `a / n`, `n / n`, `n ^ n`, `-n` with `n` integer data are written `(a ./ to_vector(n))`,
+  `(to_vector(n) ./ to_vector(n))`, `(to_vector(n) .^ to_vector(n))`, `(-to_vector(n))`: no integer arithmetic
+  reaches Stan.
+- **Time and memory of the reading**: a graph at `max_graph_bytes` with 11,871 slots validates in 94 ms; 15
+  transformed nodes of 239 nodes each generate in 4 ms; every recursion is bounded by the nesting limit or by the
+  256 nodes of a tree. The cost that is not bounded is the C++ compile (finding 1).
+- **Unicode**: ASCII only, byte by byte, before any token; graph names are `[a-z][a-z0-9_]*`, ids
+  `[a-z][a-z0-9]{0,15}`: no confusable, direction control or normalization can make two names look alike in the
+  program.
+
+**Verdict.** The threats of «Threats and how each is closed» that concern the text a person types are closed:
+no input of the review put a byte of the person's choice into the program outside the identifier and number
+forms, and none reached Stan as a statement, a comment or a call outside the catalogue. Two rows are closed in
+Stan's terms but not in C++'s: **reserved names** (finding 2: a valid model that does not compile) and the
+boundary «a model too big to compile» (finding 1: the graph's limits allow, by a wide margin, programs that the
+default compile limits cannot build). Neither is an injection.
+
 ## Boundaries
 
 - **Always**: the gateway parses again whatever the browser sends; Stan text only from `Emit`; the limits
