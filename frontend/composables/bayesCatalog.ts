@@ -67,7 +67,8 @@ export interface BayesOperator {
 }
 
 export interface BayesHint { token: string, message: string }
-export interface BayesConfusable { codepoint: string, char: string, ascii: string }
+/** A look-alike and the ASCII character meant ("" when invisible); a direction control has neither. */
+export interface BayesConfusable { codepoint: string, char: string, ascii: string, direction?: boolean }
 
 export interface BayesCatalog {
   format_version: number

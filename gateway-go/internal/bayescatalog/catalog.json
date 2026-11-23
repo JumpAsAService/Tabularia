@@ -714,8 +714,20 @@
         "message": "bayes.expr.hint.percent"
       },
       {
+        "token": "%/%",
+        "message": "bayes.expr.hint.percent"
+      },
+      {
+        "token": "=",
+        "message": "bayes.expr.hint.equals"
+      },
+      {
         "token": "==",
-        "message": "bayes.expr.hint.double_equals"
+        "message": "bayes.expr.hint.equals"
+      },
+      {
+        "token": "<-",
+        "message": "bayes.expr.hint.equals"
       },
       {
         "token": ";",
@@ -726,8 +738,56 @@
         "message": "bayes.expr.hint.tilde"
       },
       {
+        "token": "<",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": ">",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": "!",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": "&",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": "|",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": "?",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
+        "token": ":",
+        "message": "bayes.expr.hint.comparison"
+      },
+      {
         "token": ".*",
-        "message": "bayes.expr.hint.dot_star"
+        "message": "bayes.expr.hint.elementwise"
+      },
+      {
+        "token": "./",
+        "message": "bayes.expr.hint.elementwise"
+      },
+      {
+        "token": ".^",
+        "message": "bayes.expr.hint.elementwise"
+      },
+      {
+        "token": "\\",
+        "message": "bayes.expr.hint.backslash"
+      },
+      {
+        "token": "{",
+        "message": "bayes.expr.hint.brace"
+      },
+      {
+        "token": "}",
+        "message": "bayes.expr.hint.brace"
       }
     ],
     "confusables": [
@@ -752,6 +812,21 @@
         "ascii": "*"
       },
       {
+        "codepoint": "U+00B7",
+        "char": "·",
+        "ascii": "*"
+      },
+      {
+        "codepoint": "U+2219",
+        "char": "∙",
+        "ascii": "*"
+      },
+      {
+        "codepoint": "U+22C5",
+        "char": "⋅",
+        "ascii": "*"
+      },
+      {
         "codepoint": "U+00F7",
         "char": "÷",
         "ascii": "/"
@@ -767,24 +842,84 @@
         "ascii": " "
       },
       {
-        "codepoint": "U+FF08",
-        "char": "（",
-        "ascii": "("
+        "codepoint": "U+2009",
+        "char": " ",
+        "ascii": " "
       },
       {
-        "codepoint": "U+FF09",
-        "char": "）",
-        "ascii": ")"
+        "codepoint": "U+202F",
+        "char": " ",
+        "ascii": " "
       },
       {
-        "codepoint": "U+FF0B",
-        "char": "＋",
-        "ascii": "+"
+        "codepoint": "U+200B",
+        "char": "​",
+        "ascii": ""
       },
       {
-        "codepoint": "U+FF0C",
-        "char": "，",
-        "ascii": ","
+        "codepoint": "U+200C",
+        "char": "‌",
+        "ascii": ""
+      },
+      {
+        "codepoint": "U+200D",
+        "char": "‍",
+        "ascii": ""
+      },
+      {
+        "codepoint": "U+FEFF",
+        "char": "﻿",
+        "ascii": ""
+      },
+      {
+        "codepoint": "U+FF10",
+        "char": "０",
+        "ascii": "0"
+      },
+      {
+        "codepoint": "U+FF11",
+        "char": "１",
+        "ascii": "1"
+      },
+      {
+        "codepoint": "U+FF12",
+        "char": "２",
+        "ascii": "2"
+      },
+      {
+        "codepoint": "U+FF13",
+        "char": "３",
+        "ascii": "3"
+      },
+      {
+        "codepoint": "U+FF14",
+        "char": "４",
+        "ascii": "4"
+      },
+      {
+        "codepoint": "U+FF15",
+        "char": "５",
+        "ascii": "5"
+      },
+      {
+        "codepoint": "U+FF16",
+        "char": "６",
+        "ascii": "6"
+      },
+      {
+        "codepoint": "U+FF17",
+        "char": "７",
+        "ascii": "7"
+      },
+      {
+        "codepoint": "U+FF18",
+        "char": "８",
+        "ascii": "8"
+      },
+      {
+        "codepoint": "U+FF19",
+        "char": "９",
+        "ascii": "9"
       },
       {
         "codepoint": "U+0430",
@@ -815,6 +950,75 @@
         "codepoint": "U+0445",
         "char": "х",
         "ascii": "x"
+      },
+      {
+        "codepoint": "U+0443",
+        "char": "у",
+        "ascii": "y"
+      },
+      {
+        "codepoint": "U+03BF",
+        "char": "ο",
+        "ascii": "o"
+      },
+      {
+        "codepoint": "U+03B1",
+        "char": "α",
+        "ascii": "a"
+      },
+      {
+        "codepoint": "U+202A",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+202B",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+202C",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+202D",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+202E",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+2066",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+2067",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+2068",
+        "char": "",
+        "ascii": "",
+        "direction": true
+      },
+      {
+        "codepoint": "U+2069",
+        "char": "",
+        "ascii": "",
+        "direction": true
       }
     ]
   },

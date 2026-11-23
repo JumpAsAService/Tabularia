@@ -219,11 +219,14 @@ type Hint struct {
 	Message string `json:"message"`
 }
 
-// Confusable is a non-ASCII character that looks like an ASCII one, and the one meant.
+// Confusable is a non-ASCII character that looks like an ASCII one, and the one meant: ASCII is
+// empty for an invisible character. A direction control (Direction) has neither Char nor ASCII:
+// it is named by its code point alone.
 type Confusable struct {
 	CodePoint string `json:"codepoint"`
 	Char      string `json:"char"`
 	ASCII     string `json:"ascii"`
+	Direction bool   `json:"direction,omitempty"`
 }
 
 // Language is what the expression language may accept and emit.

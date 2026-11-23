@@ -133,9 +133,16 @@ func TestCatalogueVocabulary(t *testing.T) {
 		}
 	}
 	for _, c := range lang.Confusables {
-		e := parseErr(t, "a"+c.Char+"b")
-		if e.Code != CodeNonASCII || e.Pos != 1 || e.Len != 1 || e.Args["codepoint"] != c.CodePoint ||
-			e.Args["char"] != c.Char || e.Args["ascii"] != c.ASCII {
+		v, err := strconv.ParseUint(strings.TrimPrefix(c.CodePoint, "U+"), 16, 32)
+		if err != nil {
+			t.Fatalf("%s: %v", c.CodePoint, err)
+		}
+		e := parseErr(t, "a"+string(rune(v))+"b")
+		want := map[string]string{"codepoint": c.CodePoint, "char": c.Char, "ascii": c.ASCII}
+		if c.Direction {
+			want = map[string]string{"codepoint": c.CodePoint, "direction": "true"}
+		}
+		if e.Code != CodeNonASCII || e.Pos != 1 || e.Len != 1 || !sameArgs(e.Args, want) {
 			t.Errorf("confusable %s: %v", c.CodePoint, e)
 		}
 	}

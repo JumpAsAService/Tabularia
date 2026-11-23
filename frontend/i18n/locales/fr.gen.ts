@@ -7676,11 +7676,14 @@ export default {
     "expr": {
       "hint": {
         "double_star": "Écrivez ^ pour une puissance ; ** n’est pas utilisé ici.",
-        "percent": "Il n’y a pas d’opérateur de reste ici ; % n’est pas disponible.",
-        "double_equals": "Une expression est une valeur, pas une comparaison ; == n’est pas disponible.",
+        "percent": "Il n’y a ni reste ni division entière ici ; % et %/% ne sont pas disponibles.",
+        "equals": "Une expression n’a pas de = : son nom est celui du nœud.",
         "semicolon": "Ne terminez pas une expression par ;.",
         "tilde": "~ appartient au modèle, pas à une expression : la distribution d’un nœud se choisit sur le nœud.",
-        "dot_star": "Écrivez * pour un produit : la forme élément par élément est choisie pour vous.",
+        "comparison": "Une expression n’a ni comparaisons, ni conditions, ni intervalles.",
+        "elementwise": "Écrivez *, / ou ^ : la forme élément par élément est choisie pour vous.",
+        "backslash": "Il n’y a pas de division à gauche ici : écrivez la division avec /.",
+        "brace": "Une expression n’a pas de blocs : les accolades ne sont pas disponibles.",
       },
     },
   },

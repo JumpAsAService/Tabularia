@@ -7676,11 +7676,14 @@ export default {
     "expr": {
       "hint": {
         "double_star": "Schreiben Sie ^ für eine Potenz; ** wird hier nicht verwendet.",
-        "percent": "Einen Rest-Operator gibt es hier nicht; % ist nicht verfügbar.",
-        "double_equals": "Ein Ausdruck ist ein Wert, kein Vergleich; == ist nicht verfügbar.",
+        "percent": "Einen Rest und eine ganzzahlige Division gibt es hier nicht; % und %/% sind nicht verfügbar.",
+        "equals": "Ein Ausdruck hat kein =: sein Name ist der des Knotens.",
         "semicolon": "Beenden Sie einen Ausdruck nicht mit ;.",
         "tilde": "~ gehört zum Modell, nicht zu einem Ausdruck: die Verteilung eines Knotens wird am Knoten gewählt.",
-        "dot_star": "Schreiben Sie * für ein Produkt: die elementweise Form wird für Sie gewählt.",
+        "comparison": "Ein Ausdruck hat keine Vergleiche, Bedingungen oder Bereiche.",
+        "elementwise": "Schreiben Sie *, / oder ^: die elementweise Form wird für Sie gewählt.",
+        "backslash": "Eine Division von links gibt es hier nicht: schreiben Sie die Division mit /.",
+        "brace": "Ein Ausdruck hat keine Blöcke: geschweifte Klammern sind nicht verfügbar.",
       },
     },
   },

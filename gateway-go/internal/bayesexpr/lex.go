@@ -20,12 +20,13 @@ var (
 	confusables   = confusableRunes(bayescatalog.Declared().Language.Confusables)
 )
 
+// confusableRunes keys the catalogue's confusables by their code point (a direction control has
+// no Char).
 func confusableRunes(list []bayescatalog.Confusable) map[rune]bayescatalog.Confusable {
 	m := make(map[rune]bayescatalog.Confusable, len(list))
 	for _, c := range list {
-		r, size := utf8.DecodeRuneInString(c.Char)
-		if r != utf8.RuneError && size == len(c.Char) {
-			m[r] = c
+		if v, err := strconv.ParseUint(strings.TrimPrefix(c.CodePoint, "U+"), 16, 32); err == nil {
+			m[rune(v)] = c
 		}
 	}
 	return m
@@ -59,9 +60,15 @@ func precheck(src string, lim *bayescatalog.Limits) *Error {
 			// sequence is U+FFFD, the character Go's JSON decoder gives for a lone surrogate.
 			r, _ := utf8.DecodeRuneInString(src[i:])
 			args := map[string]string{"codepoint": codePoint(r)}
+			// A look-alike gives the character meant ("" for an invisible one); a direction
+			// control is named by its code point alone, never written into a message.
 			if conf, ok := confusables[r]; ok {
-				args["char"] = conf.Char
-				args["ascii"] = conf.ASCII
+				if conf.Direction {
+					args["direction"] = "true"
+				} else {
+					args["char"] = conf.Char
+					args["ascii"] = conf.ASCII
+				}
 			}
 			return &Error{Code: CodeNonASCII, Pos: i, Len: 1, Args: args}
 		}

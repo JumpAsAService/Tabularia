@@ -7676,11 +7676,14 @@ export default {
     "expr": {
       "hint": {
         "double_star": "Write ^ for a power; ** is not used here.",
-        "percent": "There is no remainder operator here; % is not available.",
-        "double_equals": "An expression is a value, not a comparison; == is not available.",
+        "percent": "There is no remainder or integer division here; % and %/% are not available.",
+        "equals": "An expression has no =: its name is the node’s name.",
         "semicolon": "Do not end an expression with ;.",
         "tilde": "~ belongs to the model, not to an expression: the distribution of a node is chosen on the node.",
-        "dot_star": "Write * for a product: the elementwise form is chosen for you.",
+        "comparison": "An expression has no comparisons, conditions or ranges.",
+        "elementwise": "Write *, / or ^: the elementwise form is chosen for you.",
+        "backslash": "There is no left division here: write the division with /.",
+        "brace": "An expression has no blocks: curly braces are not available.",
       },
     },
   },

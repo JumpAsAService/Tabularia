@@ -10,7 +10,7 @@ type Code string
 const (
 	// Before the lexer.
 	CodeTooLong  Code = "expr.too_long"  // more than max_expression_bytes; at 0, of length 0
-	CodeNonASCII Code = "expr.non_ascii" // a byte >= 0x80; args: codepoint, and char, ascii for a confusable
+	CodeNonASCII Code = "expr.non_ascii" // a byte >= 0x80; args: codepoint, and char, ascii for a confusable or direction for a direction control
 	CodeControl  Code = "expr.control"   // a control byte other than tab, line feed, carriage return; args: codepoint
 
 	// The lexer.

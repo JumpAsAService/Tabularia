@@ -3,10 +3,13 @@ package bayescatalog
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -195,10 +198,39 @@ func TestLanguage(t *testing.T) {
 			t.Errorf("operator %+v is incomplete", o)
 		}
 	}
+	codepoints := map[string]bool{}
 	for _, x := range c.Language.Confusables {
-		if len([]rune(x.Char)) != 1 || x.Char == x.ASCII || len(x.ASCII) != 1 || x.ASCII[0] > 127 {
-			t.Errorf("confusable %+v: one non-ASCII character for one ASCII one", x)
+		if codepoints[x.CodePoint] {
+			t.Errorf("confusable %s twice", x.CodePoint)
 		}
+		codepoints[x.CodePoint] = true
+		r, err := strconv.ParseUint(strings.TrimPrefix(x.CodePoint, "U+"), 16, 32)
+		if !strings.HasPrefix(x.CodePoint, "U+") || len(x.CodePoint) < 6 || err != nil || r < 0x80 ||
+			x.CodePoint != fmt.Sprintf("U+%04X", r) {
+			t.Errorf("confusable %+v: not a non-ASCII code point written U+XXXX", x)
+			continue
+		}
+		if x.Direction {
+			// Named by its code point alone: no such character in a file or a message.
+			if x.Char != "" || x.ASCII != "" {
+				t.Errorf("confusable %+v: a direction control has neither char nor ascii", x)
+			}
+			continue
+		}
+		if string(rune(r)) != x.Char || len(x.ASCII) > 1 || (x.ASCII != "" && x.ASCII[0] > 127) {
+			t.Errorf("confusable %+v: one non-ASCII character for one ASCII one (or none, when invisible)", x)
+		}
+	}
+	tokens := map[string]bool{}
+	for _, h := range c.Language.Hints {
+		ascii := h.Token != ""
+		for i := 0; i < len(h.Token); i++ {
+			ascii = ascii && h.Token[i] > ' ' && h.Token[i] < 0x7f
+		}
+		if !ascii || tokens[h.Token] || !strings.HasPrefix(h.Message, "bayes.expr.hint.") {
+			t.Errorf("hint %+v: an ASCII token once, and a message of bayes.expr.hint", h)
+		}
+		tokens[h.Token] = true
 	}
 	if len(c.Language.Hints) == 0 || len(c.InternalFunctions) == 0 {
 		t.Error("hints and internal functions are not empty")

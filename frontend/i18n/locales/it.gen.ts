@@ -7676,11 +7676,14 @@ export default {
     "expr": {
       "hint": {
         "double_star": "Scrivi ^ per la potenza; ** qui non si usa.",
-        "percent": "Qui non esiste l’operatore resto; % non è disponibile.",
-        "double_equals": "Un’espressione è un valore, non un confronto; == non è disponibile.",
+        "percent": "Qui non esistono il resto e la divisione intera; % e %/% non sono disponibili.",
+        "equals": "Un’espressione non ha =: il suo nome è quello del nodo.",
         "semicolon": "Non terminare un’espressione con ;.",
         "tilde": "~ appartiene al modello, non a un’espressione: la distribuzione di un nodo si sceglie sul nodo.",
-        "dot_star": "Scrivi * per un prodotto: la forma elemento per elemento viene scelta per te.",
+        "comparison": "Un’espressione non ha confronti, condizioni o intervalli.",
+        "elementwise": "Scrivi *, / o ^: la forma elemento per elemento viene scelta per te.",
+        "backslash": "Qui non esiste la divisione a sinistra: scrivi la divisione con /.",
+        "brace": "Un’espressione non ha blocchi: le parentesi graffe non sono disponibili.",
       },
     },
   },
