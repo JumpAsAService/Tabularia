@@ -180,11 +180,11 @@ minikube addons enable ingress
 
 ## Step 3 — Download Tabularia
 
-1. Download [Tabularia 1.4.7 as a zip file](https://github.com/JumpAsAService/Tabularia/archive/refs/tags/v1.4.7.zip).
+1. Download [Tabularia 1.5.0 as a zip file](https://github.com/JumpAsAService/Tabularia/archive/refs/tags/v1.5.0.zip).
    A newer version, when there is one, is at the top of
    [the list of versions](https://github.com/JumpAsAService/Tabularia/tags): click its **zip**.
 2. Unzip it, for example in your Documents folder. You get a folder such as
-   `Tabularia-1.4.7`, with a folder `infrastructure` inside.
+   `Tabularia-1.5.0`, with a folder `infrastructure` inside.
 3. Open your terminal **in that folder**, as below for your system.
 
 #### Windows
@@ -480,16 +480,7 @@ apps](../capabilities/notebooks.md) explains them, and why the separate address.
 
 ## Step 11 — Optional: statistical models
 
-> [!IMPORTANT]
-> **Release 1.4.7, which this guide installs, has no statistical models.** There is no
-> **Models** group in the flow editor and no **Administration → Statistical models**. They
-> are in the code of `main` and will be in the release that follows 1.4.7: when it is
-> published, redo step 3 and the image version of your `my-values.yaml` with that release
-> and upgrade as in [Upgrading Tabularia](upgrading.md). Until then, the way to try them is
-> [the kind guide](kind.md), whose step 6 has a note, «The code of a branch instead of a
-> release», that builds the images from the clone.
-
-With a version that has them, the models need what step 10 set up (the registry, the
+The models need what step 10 set up (the registry, the
 scripts block and the scripts bucket). Then, as an administrator, open **Administration →
 Statistical models**, choose one group (start with *Survival* or *Regression*) and press
 **Enable**. The cluster builds the group's image and runs a self-test: the state goes from

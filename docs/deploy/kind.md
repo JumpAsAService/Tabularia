@@ -18,8 +18,7 @@ use there:
   and run through it;
 - images of your own run as steps of a flow (the Container node), from that registry;
 - if you like, the sample data of the Docker Compose stack, to play with (step 13), the
-  statistical models and a tracking server for them (step 14). The models are not in
-  release 1.4.7, the one this guide installs by default: see the first note of step 14.
+  statistical models and a tracking server for them (step 14).
 
 It is meant for people who know a terminal and want to try Tabularia as it will run in
 production, or test a change of the chart before a customer does. To simply try
@@ -115,18 +114,13 @@ Run every command in **the same terminal**: the steps keep values in shell varia
 ## 1. Get Tabularia and a working folder
 
 ```bash
-git clone --branch v1.4.7 https://github.com/JumpAsAService/Tabularia.git
+git clone --branch v1.5.0 https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia
-export VERSION=1.4.7 WORK="$HOME/tabularia-kind"
+export VERSION=1.5.0 WORK="$HOME/tabularia-kind"
 mkdir -p "$WORK"
 ```
 
 > [!NOTE]
-> **Statistical models.** Release 1.4.7 has no statistical models and no MLflow support
-> (step 14). To try them, take the code of a branch instead of this release: the note
-> «The code of a branch instead of a release» in step 6 says how, and replaces the
-> `--branch v1.4.7` above.
-
 Every later command runs from the `Tabularia` folder. `$WORK` holds what the cluster
 needs outside of it: certificates, passwords, the settings. Choose now the first
 administrator of Tabularia:
@@ -791,15 +785,6 @@ on `Sample`, and CONNECT too to import from its two connections.
   and the flows that read them then fail.
 
 ## 14. Optional: the statistical models, and a tracking server for them (MLflow)
-
-> [!IMPORTANT]
-> **A version that has the models.** Release 1.4.7, which step 1 clones and step 6 copies,
-> has no statistical models: no **Models** group in the palette, no **Administration →
-> Statistical models**, no MLflow connection. They are in the code of `main`. Until a
-> release holds them, do this step with the note «The code of a branch instead of a
-> release» of step 6: clone without `--branch`, build the five images from the clone and
-> let `VERSION` come from the chart. If you installed 1.4.7 first, follow
-> [Upgrade it](#upgrade-it) with those images.
 
 ### Turn on a group of models
 

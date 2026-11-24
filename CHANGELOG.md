@@ -5,8 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-Development on `main` for the next minor version. The stable line stays 1.4.x
-([long-term support](docs/lts.md)), which takes fixes only.
+Development on `main` for the next release. 1.5 is the current line; the long-term support
+line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
+
+## 1.5.0 «Augustus» — 2026-11-24
+
+Sixth release, named «Augustus» after the first emperor, who found Rome a city of brick and
+left it a city of marble. The first release after the long-term support line: a home page
+each person arranges, hypothesis tests, statistical models, volatility and risk, pre-trained
+forecasts and Bayesian models in the flow editor. Five database migrations (0043 to 0047) and
+chart 2.9.0: take the backup first, as [upgrading](docs/deploy/upgrading.md) says.
 
 - **Tabularia opens on a home page each person arranges.** Under a greeting and the day in
   four numbers (runs today, failed, running now, due in 24 hours), a grid of widgets on the
@@ -200,6 +208,29 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   month's orders exceed 1,000?**; the assistants and the MCP tools know the nodes.
   [Volatility (GARCH)](docs/capabilities/models.md#volatility-garch-r),
   [Risk simulation](docs/capabilities/models.md#risk-simulation-r), [the spec](docs/specs/garch-risk.md).
+- **Bayesian models.** A space of its own, **Scripting → Bayesian models** (`g` `y`), to draw a
+  model as a graph (data, parameters with their priors and a chart of each, a likelihood, boxes for
+  the groups of a hierarchical model, series and latent states) from ten templates (four GLMs, three
+  hierarchical, three time series) or from an empty canvas, with typed expressions for the free
+  model, the Stan program written from the drawing and shown read only, a check of every graph,
+  versions with restore, and a glossary. A **Bayesian model** node in the **Models** section of the
+  flow editor's palette pins a saved version, binds the model's variables to the columns of its
+  input, samples it with Stan (CmdStan 2.40.0, in a Job of the administrator-enabled group `bayes`
+  with no internet access; the model is compiled in its own Job and kept in a cache an administrator
+  can read and empty, each binary checked by its SHA-256 before it runs) and returns the summary, the
+  draws or replicated data, with the posterior predictive checks and a prior predictive check as a
+  trial. The **Report** tab, in PDF and Excel, gives the sampler's measures and facts (R-hat,
+  effective sample sizes, divergences, tree depth, E-BFMI, prior-to-posterior contraction), charts of
+  the draws and the predictive checks as charts, each with a sentence that says what it measures and
+  no verdict; a coefficient of a linear predictor is also given on the column's own scale. A model
+  with correlated group effects runs without the posterior checks and the replicated data (Stan
+  reads the draws back at 8 significant digits, which its check on the correlations cannot meet), and
+  the panel says so. A run can be recorded in MLflow (parameters, summary metrics, the report and the
+  model's card and program, never a draw) and registered; Predict refuses a Bayesian model. An
+  assistant in the editor explains the model and proposes changes to its nodes, checked by the
+  gateway before they apply. The draws are written to Parquet while the chains sample, never held
+  in memory. Database migrations 0046 and 0047. [Bayesian models](docs/capabilities/bayesian-models.md),
+  [the licences of CmdStan and what it bundles](docs/licences.md).
 - **Every test's and every model's report explains its method in words.** The 21 hypothesis tests and the ten
   models (linear and logistic, also penalized; Kaplan–Meier, Cox, parametric survival; ARIMA; XGBoost and CatBoost;
   customer lifetime value and BG/BB) read their result in one to three sentences in italics under each block, with the

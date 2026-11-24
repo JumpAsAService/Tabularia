@@ -209,6 +209,14 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    **New in 1.4.7:** images only (chart 2.8.2), and of the five only the interface
    behaves differently from 1.4.6. No migration, no new variable. The first preview of each step after
    the upgrade computes again, once.
+   **New in 1.5.0 «Augustus»** (chart 2.9.0), the first release after the long-term support
+   line: revisions 0043 to 0047 (the home page's layouts, the statistical models, their
+   re-check, the Bayesian models and the cache of their compiled programs). Take the backup
+   of step 2 before upgrading from 1.4: a migration of a minor release may do more than add,
+   so going back to 1.4 means restoring it ([upgrading.md](upgrading.md#when-something-goes-wrong)). The statistical and Bayesian models are
+   off until an administrator enables each group in **Administration → Statistical models**,
+   and run only on Kubernetes with scripting on ([kind.md](kind.md), step 14). The first
+   preview of each step after the upgrade computes again, once.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the

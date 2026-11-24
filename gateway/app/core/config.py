@@ -311,7 +311,7 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "1.4.7"  # the release: exposed by /system/info and in the app's menu
+    version: str = "1.5.0"  # the release: exposed by /system/info and in the app's menu
     # the release's name. 1.0–1.2 were «Appio»: Appius Claudius Caecus, censor in 312 BC,
     # who rewrote the lists of the citizens and built the first aqueduct. 1.3 is «Catone»:
     # Marcus Porcius Cato, censor in 184 BC, remembered for the rigour of his census: he
@@ -319,7 +319,9 @@ class AppSettings(BaseModel):
     # numbers, read closely and accounted for. The release of reports and dashboards.
     # 1.4 is «Romulus», who founded Rome: the first release built on the gateway in Go, the
     # ground the rest now stands on.
-    codename: str = "Romulus"
+    # 1.5 is «Augustus», the first emperor, who found Rome a city of brick and left it a city of
+    # marble: the release that builds on that ground the statistical and Bayesian models.
+    codename: str = "Augustus"
     env_name: str = "development"
     # What THIS process does. The gateway has two jobs: answering the requests, and
     # carrying on the background work (schedules, running the flows, cleanups). `all` does
