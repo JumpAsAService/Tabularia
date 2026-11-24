@@ -354,3 +354,15 @@ test('the keys of the code tab: arrows walk the table, Esc leaves the code, noth
     }
   }
 })
+
+test('the code tab opens at its top: only a node chosen while it is open scrolls the table into sight, never the mounting of the editor', () => {
+  const source = readFileSync(new URL('../components/bayes/BayesCodePanel.vue', import.meta.url), 'utf8')
+  const code = source.replace(/^\s*\/\/.*$/gm, '')
+  const calls = [...code.matchAll(/scrollIntoView/g)].length
+  assert.equal(calls, 1, 'one scroll into sight, in the watch of the selected node')
+  const watcher = code.slice(code.indexOf('watch(() => props.selected'))
+  assert.ok(watcher.slice(0, watcher.indexOf('})')).includes('scrollIntoView'))
+  // a scroll on opening moved the panel by a few pixels and left the title half under the tab bar (1440 px, dark theme)
+  const mount = code.slice(code.indexOf('markUses(true)'), code.indexOf('function disposeEditor'))
+  assert.ok(!mount.includes('scrollIntoView'), mount)
+})

@@ -130,7 +130,7 @@ function onRowKeys (e: KeyboardEvent, at: number) {
 function leaveToTab () {
   document.getElementById('bt-code')?.focus()
 }
-// a node chosen on the canvas brings its first row into sight
+// a node chosen on the canvas while the tab is open brings its first row into sight (never on opening: the panel starts at its top)
 watch(() => props.selected, async () => {
   await nextTick()
   tableEl.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -240,8 +240,9 @@ function createEditor (el: HTMLElement, m: MonacoApi) {
   decorations = editor.createDecorationsCollection()
   // Esc leaves the code for the tab's button (the find widget's own Esc stays its own)
   editor.addCommand(m.KeyCode.Escape, () => leaveToTab(), '!findWidgetVisible && !suggestWidgetVisible')
+  // no scrollIntoView here: the panel opens at its top, with its title under the tabs. A scroll on opening moved the whole panel by
+  // the few pixels a selected row below the fold needed, and left the title half under the tab bar.
   markUses(true)
-  nextTick(() => tableEl.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }))
 }
 function disposeEditor () {
   decorations?.clear()
