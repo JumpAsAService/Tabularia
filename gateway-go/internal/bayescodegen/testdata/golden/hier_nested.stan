@@ -20,11 +20,11 @@ parameters {
 }
 model {
   vector[N] eta = ((u_s[s]) + (b_x * x));
-  b_x ~ normal(0.0, (2.5 * 300.0));
-  mu ~ normal(1200.0, (2.5 * 300.0));
-  sigma ~ exponential((1.0 / 300.0));
-  tau_d ~ normal(0.0, 300.0);
-  tau_s ~ normal(0.0, 300.0);
+  b_x ~ normal(0.0, 2.5);
+  mu ~ normal(0.0, 2.5);
+  sigma ~ exponential(1.0);
+  tau_d ~ normal(0.0, 1.0);
+  tau_s ~ normal(0.0, 1.0);
   u_d ~ normal(mu, tau_d);
   u_s ~ normal((u_d[Up_d_sch]), tau_s);
   y ~ normal(eta, sigma);

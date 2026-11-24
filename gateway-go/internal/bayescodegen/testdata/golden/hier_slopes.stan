@@ -25,11 +25,11 @@ transformed parameters {
   }
 }
 model {
-  mu_a ~ normal(1200.0, (2.5 * 300.0));
-  mu_b ~ normal(0.0, (2.5 * 300.0));
-  sigma ~ exponential((1.0 / 300.0));
-  tau_a ~ normal(0.0, 300.0);
-  tau_b ~ normal(0.0, 300.0);
+  mu_a ~ normal(0.0, 2.5);
+  mu_b ~ normal(0.0, 2.5);
+  sigma ~ exponential(1.0);
+  tau_a ~ normal(0.0, 1.0);
+  tau_b ~ normal(0.0, 1.0);
   to_vector(Z_eff) ~ std_normal();
   L_eff ~ lkj_corr_cholesky(2.0);
   y ~ normal(((a_g[g]) + ((b_g[g]) .* x)), sigma);

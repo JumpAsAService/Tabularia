@@ -11,7 +11,7 @@ parameters {
   real<lower=0.0> sigma;
 }
 model {
-  delta ~ normal(0.0, 300.0);
-  sigma ~ exponential((1.0 / 300.0));
+  delta ~ normal(0.0, 1.0);
+  sigma ~ exponential(1.0);
   y[Rows_lag] ~ normal(((y[Lag1]) + delta), sigma);
 }

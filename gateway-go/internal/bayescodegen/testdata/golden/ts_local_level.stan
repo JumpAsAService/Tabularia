@@ -15,14 +15,14 @@ parameters {
 }
 transformed parameters {
   vector[N] level;
-  level[Rows_first] = (1200.0 + ((2.5 * 300.0) * Z_level[Rows_first]));
+  level[Rows_first] = (0.0 + (2.5 * Z_level[Rows_first]));
   for (I in 1:N_next) {
     level[Rows_next[I]] = (level[Prev[I]] + (sigma_level * Z_level[Rows_next[I]]));
   }
 }
 model {
-  sigma_level ~ normal(0.0, 300.0);
+  sigma_level ~ normal(0.0, 1.0);
   Z_level ~ std_normal();
-  sigma_obs ~ exponential((1.0 / 300.0));
+  sigma_obs ~ exponential(1.0);
   y ~ normal(level, sigma_obs);
 }

@@ -2,17 +2,22 @@ package bayestemplates
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayeschecks"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescodegen"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -503,5 +508,105 @@ func TestRawIsACopy(t *testing.T) {
 	a[0] = 'X'
 	if bytes.Equal(a, Raw()) {
 		t.Error("Raw must return a copy")
+	}
+}
+
+// goldenCase is the codegen golden case a template is the graph of (docs/specs/bayes-templates.md):
+// the template's id, but for the AR template, whose golden case is written for its default order.
+func goldenCase(tpl Template) string {
+	if tpl.Order != nil {
+		return fmt.Sprintf("%s%d", tpl.ID, tpl.Order.Default)
+	}
+	return tpl.ID
+}
+
+const goldenDir = "../bayescodegen/testdata/golden/"
+
+// templateGraphFile is the template's graph as the golden graph files hold it.
+func templateGraphFile(t *testing.T, tpl Template) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := json.Indent(&b, tpl.Graph, "", "  "); err != nil {
+		t.Fatal(err)
+	}
+	b.WriteByte('\n')
+	return b.Bytes()
+}
+
+// TestTemplatesGolden (lot T1): each template, validated and generated, gives the golden program
+// of its case byte for byte, both as the generator writes it alone (<case>.stan, the one the
+// codegen's golden test pins) and with the predictive checks' extension (<case>.checks.stan, what a
+// save stores); the golden case's graph file IS the template's graph, so the two cannot drift.
+// BAYES_TEMPLATES_GOLDEN_WRITE=1 rewrites the graph files and the .checks.stan files (then
+// BAYES_GOLDEN_WRITE=1 in bayescodegen rewrites the rest, and every program is reviewed by hand).
+func TestTemplatesGolden(t *testing.T) {
+	write := os.Getenv("BAYES_TEMPLATES_GOLDEN_WRITE") == "1"
+	stanc := os.Getenv("BAYES_STANC")
+	if stanc == "" && os.Getenv("BAYES_STANC_REQUIRED") == "1" {
+		t.Fatal("BAYES_STANC_REQUIRED=1 and BAYES_STANC is not set")
+	}
+	dir := t.TempDir()
+	for _, tpl := range List() {
+		t.Run(tpl.ID, func(t *testing.T) {
+			g := decodeGraph(t, tpl.ID, tpl.Graph)
+			m := requireClean(t, tpl.ID, g)
+			plain, err := bayescodegen.Generate(m, nil)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			checked, err := bayescodegen.Generate(m, bayeschecks.Extension{})
+			if err != nil {
+				t.Fatalf("Generate with the checks: %v", err)
+			}
+			base := goldenDir + goldenCase(tpl)
+			if write {
+				for ext, b := range map[string][]byte{".graph.json": templateGraphFile(t, tpl), ".checks.stan": checked.Text} {
+					if err := os.WriteFile(base+ext, b, 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			gold, err := os.ReadFile(base + ".graph.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := canonical(t, decodeGraph(t, "golden graph", gold)), canonical(t, g); got != want {
+				t.Errorf("%s.graph.json is not the template's graph (BAYES_TEMPLATES_GOLDEN_WRITE=1, then review)", goldenCase(tpl))
+			}
+			if !bytes.Equal(gold, templateGraphFile(t, tpl)) {
+				t.Errorf("%s.graph.json is the template's graph written otherwise (BAYES_TEMPLATES_GOLDEN_WRITE=1)", goldenCase(tpl))
+			}
+			for ext, p := range map[string]*bayescodegen.Program{".stan": plain, ".checks.stan": checked} {
+				want, err := os.ReadFile(base + ext)
+				if err != nil {
+					t.Fatalf("no golden program: %v", err)
+				}
+				if !bytes.Equal(p.Text, want) {
+					t.Errorf("the program is not the golden %s%s (BAYES_GOLDEN_WRITE=1 in bayescodegen, reviewed)\n--- golden\n%s--- generated\n%s", goldenCase(tpl), ext, want, p.Text)
+				}
+				if stanc == "" {
+					continue
+				}
+				file := filepath.Join(dir, tpl.ID+ext)
+				if err := os.WriteFile(file, p.Text, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, stanc, "--info", file)
+				cmd.Dir = dir
+				cmd.Env = []string{"PATH=/usr/bin:/bin"}
+				var stderr bytes.Buffer
+				cmd.Stderr = &stderr
+				out, err := cmd.Output()
+				if err != nil {
+					t.Errorf("stanc refuses %s%s: %v\n%s", goldenCase(tpl), ext, err, stderr.String())
+					continue
+				}
+				for _, mm := range bayescodegen.CrossCheck(out, p) {
+					t.Errorf("%s%s: %s", goldenCase(tpl), ext, mm)
+				}
+			}
+		})
 	}
 }

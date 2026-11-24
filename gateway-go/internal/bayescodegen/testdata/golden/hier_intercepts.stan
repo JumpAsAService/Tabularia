@@ -15,10 +15,10 @@ parameters {
 }
 model {
   vector[N] eta = ((a_g[g]) + (b_x * x));
-  b_x ~ normal(0.0, (2.5 * 300.0));
-  mu_a ~ normal(1200.0, (2.5 * 300.0));
-  sigma ~ exponential((1.0 / 300.0));
-  tau_a ~ normal(0.0, 300.0);
+  b_x ~ normal(0.0, 2.5);
+  mu_a ~ normal(0.0, 2.5);
+  sigma ~ exponential(1.0);
+  tau_a ~ normal(0.0, 1.0);
   a_g ~ normal(mu_a, tau_a);
   y ~ normal(eta, sigma);
 }

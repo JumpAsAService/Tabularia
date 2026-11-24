@@ -41,7 +41,7 @@
             "expr": "0"
           },
           "sigma": {
-            "expr": "300"
+            "expr": "1"
           }
         }
       },
@@ -59,7 +59,7 @@
         "dist": "exponential",
         "args": {
           "beta": {
-            "expr": "1 / 300"
+            "expr": "1"
           }
         }
       }
@@ -75,10 +75,10 @@
         "dist": "normal",
         "args": {
           "mu": {
-            "expr": "1200"
+            "expr": "0"
           },
           "sigma": {
-            "expr": "2.5 * 300"
+            "expr": "2.5"
           }
         }
       },

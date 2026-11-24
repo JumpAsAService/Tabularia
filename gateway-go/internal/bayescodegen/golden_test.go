@@ -25,9 +25,11 @@ import (
 // them (to be reviewed by hand), and refuses to when a program changes while neither its graph nor
 // CodegenVersion does: «bump CodegenVersion».
 //
-// The four glm_* graphs are copies of the templates' graphs (gateway-go/internal/bayestemplates,
-// lot T0) at their default numbers. Lot T1 replaces the copies by the templates themselves (a test
-// of that module compares them), so that the two cannot drift.
+// The ten template cases (the four glm_*, hier_intercepts, hier_slopes, hier_nested, ts_ar2,
+// ts_random_walk, ts_local_level) have the templates' graphs at their default numbers
+// (gateway-go/internal/bayestemplates, lot T1: TestTemplatesGolden compares the graph files and the
+// programs, alone and with the predictive checks' extension, <case>.checks.stan), so that the two
+// cannot drift. The other cases stay: they are not templates.
 
 const goldenDir = "testdata/golden"
 
@@ -37,13 +39,11 @@ var goldenCases = []string{
 	"names_reserved", "names_unnamed",
 	// E4, finding 2: every name of the model's C++ class, as data; the program compiles with g++.
 	"names_backend",
-	// Lot S1: the plates. The two hier_* graphs are the templates opened with example numbers
-	// (centre 1200, spread 300: bayestemplates/testdata/opened/*.c1200-s300.json, byte for byte).
+	// Lot S1: the plates. The two hier_* graphs are the templates' (lot T1).
 	"hier_intercepts", "hier_nested",
 	"free_truncated_hyper", "free_category", "free_explicit_noncentred", "free_binomial", "free_int_predictor",
 	// Lot S2: correlated effects, states, lag, transformed data, the extension point. hier_slopes,
-	// ts_ar2 (p = 2), ts_random_walk and ts_local_level are the templates opened with example
-	// numbers, byte for byte; the two *_centred are the same graphs with the form "centred".
+	// ts_ar2 (p = 2), ts_random_walk and ts_local_level are the templates' graphs (lot T1); the two *_centred are the same graphs with the form "centred".
 	"hier_slopes", "hier_slopes_centred",
 	"ts_ar2", "ts_random_walk", "ts_local_level", "ts_local_level_centred",
 	"free_transformed_data",
@@ -216,7 +216,8 @@ func TestGoldenFilesListed(t *testing.T) {
 			return err
 		}
 		base := d.Name()
-		for _, ext := range []string{".graph.json", ".stan", ".mapping.json", ".manifest.json"} {
+		// <case>.checks.stan: the template cases' program with the checks' extension (bayestemplates)
+		for _, ext := range []string{".checks.stan", ".graph.json", ".stan", ".mapping.json", ".manifest.json"} {
 			if c, ok := strings.CutSuffix(base, ext); ok {
 				if !listed[c] {
 					t.Errorf("%s belongs to no listed case", base)
