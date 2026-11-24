@@ -114,6 +114,19 @@ class TestThePriorPredictiveJob(PriorCase):
         for q, prior in (("alpha", "Prior_d_1"), ("b_x", "Prior_d_2"), ("sigma", "Prior_d_3")):
             self.assertAlmostEqual(rows[f"summary|{q}||mean"][0], expected[prior], delta=0.6, msg=q)
 
+    def test_a_state_on_the_rows_plate_has_one_summary_row_a_row(self):
+        # found on the image (lot R6): ts_local_level's `level` has a value a row and no unit; its elements were one key written 30 times
+        rng = np.random.default_rng(3)
+        columns = {"y": np.cumsum(rng.normal(size=30)).tolist()}
+        code, header = self.prior_job(prior_task("ts_local_level"), columns)
+        self.assertEqual(code, 0)
+        cols, rows = self.results()
+        keys = set(cols["key"])
+        for row in (1, 2, 30):
+            self.assertIn(f"summary|level|{row}|mean", keys)
+        self.assertNotIn("summary|level||mean", keys)
+        self.assertIn("summary|sigma_obs||mean", keys)
+
     def test_a_quantity_without_a_prior_draw_is_left_out_and_said(self):
         columns = hier_input()
         raw = prior_task("hier_slopes")

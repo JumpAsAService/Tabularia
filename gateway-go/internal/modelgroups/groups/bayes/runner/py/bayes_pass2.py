@@ -132,6 +132,15 @@ def check_order(pf: pq.ParquetFile, layout: Layout, first_count: int) -> None:
 
 
 # ── the scope ─────────────────────────────────────────────────────────────────
+def summary_unit(element: Any) -> str | None:
+    """`level_2` of an element's `summary` rows: its unit's text. An element with no unit (a state on the rows plate, a `size`
+    dimension) has its position instead, the row's number the contract gives as its `index` («i,j» for a matrix): the section's key is
+    one row a quantity, and without it the 200 elements of a series' state would be one key, written 200 times."""
+    if element.unit is not None or element.index is None:
+        return element.unit
+    return str(element.index) if element.index_2 is None else f"{element.index},{element.index_2}"
+
+
 def scope_positions(layout: Layout, limits: Mapping[str, int]) -> list[int]:
     """The positions (in `layout.draws`) of the report's scope, in the report's order, up to `bayes_max_summary_quantities`."""
     cap = limit(limits, "bayes_max_summary_quantities")
@@ -344,7 +353,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                     if position in scope_set:
                         for name in numbers:
                             v = float(m[name][j])
-                            writer.number("summary", name, v if math.isfinite(v) else None, level=element.node, level_2=element.unit)
+                            writer.number("summary", name, v if math.isfinite(v) else None, level=element.node, level_2=summary_unit(element))
                     if k in unit_store:
                         unit_store[k][position - entry.first] = (m["q5"][j], m["q50"][j], m["q95"][j])
                     if position in chart_set:
@@ -362,7 +371,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                 if position in scope_set:
                     for name in ORIGINAL_NUMBERS:
                         v = float(m[name[5:]][j])
-                        writer.number("summary", name, v if math.isfinite(v) else None, level=element.node, level_2=element.unit)
+                        writer.number("summary", name, v if math.isfinite(v) else None, level=element.node, level_2=summary_unit(element))
                 report.original += 1
             bayes_scale.original_scale(scale, read, groups, p_all, chains, draws, per_block, per_sub, emit)
             report.original_capped = scale.capped

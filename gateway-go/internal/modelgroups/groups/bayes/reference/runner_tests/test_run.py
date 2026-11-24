@@ -278,6 +278,25 @@ class TestTheSampleMode(RunCase):
         self.assertIsNone(rows["summary|alpha||contraction"][0])
         self.assertRegex(rows["model|||note_contraction_null"][1], r" not_decided=[1-9]")
 
+    def test_a_state_on_the_rows_plate_has_one_summary_row_a_row(self):
+        # found on the image (lot R6): ts_local_level's `level` has a value a row and no unit, so its 200 elements were one key,
+        # `summary|level||mean`, written 200 times and the Job crashed; the row's number (the contract's `index`) is its `level_2`
+        rng = np.random.default_rng(3)
+        columns = {"y": np.cumsum(rng.normal(size=30)).tolist()}
+        self.assertEqual(self.job(golden_task("ts_local_level"), columns, means=means_by_name), 0)
+        cols = engine_check(self.out / "results" / "results.parquet")
+        keys = set(cols["key"])
+        for row in (1, 2, 30):
+            self.assertIn(f"summary|level|{row}|mean", keys)
+            self.assertIn(f"summary|level|{row}|sd", keys)
+        self.assertNotIn("summary|level||mean", keys)
+        self.assertIn("summary|sigma_obs||mean", keys)          # a scalar keeps no level_2
+        summary = pq.read_table(self.out / "output" / "output.parquet").to_pydict()
+        rows = [i for i, q in enumerate(summary["quantity"]) if q.startswith("level[")]
+        self.assertEqual(len(rows), 30)
+        self.assertEqual(sorted(summary["index"][i] for i in rows), list(range(1, 31)))
+        self.assertTrue(all(summary["unit"][i] is None for i in rows))     # the output keeps «unit» null and the position in `index`
+
     def test_the_output_results_writes_no_output_and_cmdstan_runs_with_path_alone(self):
         started = []
         real = bayes_follow.start
