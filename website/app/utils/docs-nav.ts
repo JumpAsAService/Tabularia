@@ -3,7 +3,7 @@
 // so a new file in docs/ is never lost. A route listed here that does not exist at build
 // time (a doc not committed yet) is simply not shown.
 
-export type DocsIcon = 'start' | 'capabilities' | 'sources' | 'connections' | 'integrations' | 'governance' | 'operate' | 'reference'
+export type DocsIcon = 'start' | 'capabilities' | 'sources' | 'connections' | 'integrations' | 'governance' | 'statistics' | 'operate' | 'reference'
 
 export interface DocsNavItem { path: string, title: string }
 export interface DocsNavGroup { title: string, icon: DocsIcon, intro: string, items: DocsNavItem[] }
@@ -30,8 +30,6 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities', 'All capabilities'],
       ['/docs/capabilities/home', 'The home page'],
       ['/docs/capabilities/flows', 'Low-code flows'],
-      ['/docs/capabilities/statistics', 'Statistics: hypothesis tests'],
-      ['/docs/capabilities/models', 'Statistical models'],
       ['/docs/capabilities/preview-and-analysis', 'Preview and analysis'],
       ['/docs/capabilities/lineage', 'Lineage'],
       ['/docs/capabilities/ask-your-data', 'Ask your data with AI'],
@@ -50,6 +48,17 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/placeholders', 'Dynamic dates'],
       ['/docs/capabilities/engines', 'Engines'],
       ['/docs/engines/engine-differences', 'Engine differences'],
+    ],
+  },
+  {
+    title: 'Statistics',
+    icon: 'statistics',
+    intro: 'Hypothesis tests on every engine and statistical models on Kubernetes: regression, survival, time series, experiments, customer lifetime and forecasting, each with a report that explains its method.',
+    items: [
+      ['/docs/capabilities/statistics-overview', 'Statistics: the whole picture'],
+      ['/docs/capabilities/statistics', 'Hypothesis tests'],
+      ['/docs/capabilities/models', 'Statistical models'],
+      ['/docs/connections/mlflow', 'MLflow connections'],
     ],
   },
   {

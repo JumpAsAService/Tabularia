@@ -123,7 +123,7 @@ every engine, with the exceptions listed in [Engine differences](../engines/engi
 
 ### Statistics
 
-Eighteen hypothesis tests, one node each, in the palette's **Statistics** group, in six
+Twenty-one hypothesis tests, one node each, in the palette's **Statistics** group, in six
 families: means, variances, proportions and categories, correlation, ranks, distributions.
 Drop one after any step, choose its columns and options, and the step outputs a table of
 results (statistic, degrees of freedom, p-value, confidence interval, effect size, the
@@ -137,25 +137,29 @@ them, on the rows that reach it.
 |---|---|
 | **Means** | **One-sample t test**, **Two-sample t test** (Welch or Student), **Paired t test**, **One-way ANOVA** (classic or Welch, with Tukey's HSD, Games–Howell or a t test per pair) |
 | **Variances** | **F test of two variances**, **Levene's test** |
-| **Proportions and categories** | **One-sample proportion**, **Two-sample proportion**, **Chi-square test of independence** (with post-hoc on the cells or the pairs), **Chi-square goodness of fit**, **Fisher's exact test** (2 × 2, or r × c with the Freeman–Halton test), **McNemar's test** (Bowker's on larger tables), **Cochran–Mantel–Haenszel test**, **G test** |
-| **Correlation** | **Pearson's correlation**, **Spearman's correlation** |
-| **Ranks** | **Mann–Whitney test**, **Wilcoxon signed-rank test**, **Kruskal–Wallis test** (with Dunn's comparisons) |
-| **Distributions** | **Two-sample Kolmogorov–Smirnov test**, **Normality test** |
+| **Proportions and categories** | **Test of one proportion**, **Test of two proportions**, **Chi-square test of independence** (with post-hoc on the cells or the pairs), **Chi-square goodness-of-fit test**, **Fisher's exact test** (2 × 2, or r × c with the Freeman–Halton test), **McNemar's test** (Bowker's on larger tables), **Cochran–Mantel–Haenszel test**, **G test of independence** |
+| **Correlation** | **Pearson's correlation**, **Spearman's rank correlation** |
+| **Ranks** | **Mann–Whitney U test**, **Wilcoxon signed-rank test**, **Kruskal–Wallis test** (with Dunn's comparisons) |
+| **Distributions** | **Two-sample Kolmogorov–Smirnov test**, **Test of normality** |
 
 Every test, its options, its output and its report are in [Statistics](statistics.md). A
 flow with a statistics node cannot be exported to dbt.
 
 ### Models
 
-Ten statistical models, in the palette's **Models** group, under one subtitle for each group an
+Sixteen statistical models, in the palette's **Models** group, under one subtitle for each group an
 administrator enabled and you may use: **Regression** (**Linear regression**, **Logistic
 regression**, both with ridge, lasso or elastic-net penalties), **Survival** (**Kaplan–Meier**,
-**Cox**, and **Parametric survival**, which describes the time to an event with a Weibull or
+**Cox proportional hazards**, and **Parametric survival**, which describes the time to an event with a Weibull or
 another distribution and predicts how long), **Time series** (**ARIMA**, also dropped as AR, MA,
-ARMA, ARIMA, SARIMA or SARIMAX with the orders set), **Boosting** (**XGBoost** and **CatBoost**,
-for a number, a yes-or-no or a class, with the importance of each predictor) and **Customer
+ARMA, ARIMA, SARIMA or SARIMAX with the orders set; **Decomposition**, which splits a series into trend, seasons and
+remainder; **Volatility (GARCH)**; and **Risk simulation**, the value at risk and the expected shortfall of a series),
+**Boosting** (**XGBoost** and **CatBoost**,
+for a number, a yes-or-no or a class, with the importance of each predictor), **Customer
 lifetime** (**Customer lifetime value** and **BG/BB**, which read one row per customer and give the
-purchases to expect, the probability that the customer is still active and the discounted value).
+purchases to expect, the probability that the customer is still active and the discounted value),
+**Experiments** (**A/B test** and **A/B test planning**) and **Pre-trained forecasting**
+(**Forecast (Timestral)**).
 **Predict** applies a model registered in MLflow to the rows
 that reach it. A model is a step node like **Script**: it is not an operation of the engine
 but a Job on Kubernetes, with one input and one output. Choose its columns and options in the

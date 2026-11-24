@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The icon of a documentation section (sidebar and index).
-import { BookOpen, Blocks, Database, Plug, Rocket, Server, ShieldCheck, Workflow } from 'lucide-vue-next'
+import { BookOpen, Blocks, Database, Plug, Rocket, Server, ShieldCheck, Sigma, Workflow } from 'lucide-vue-next'
 import type { DocsIcon } from '~/utils/docs-nav'
 
 const props = defineProps<{ name: DocsIcon, size?: number }>()
@@ -11,6 +11,7 @@ const ICONS = {
   connections: Plug,
   integrations: Blocks,
   governance: ShieldCheck,
+  statistics: Sigma,
   operate: Server,
   reference: BookOpen,
 } as const

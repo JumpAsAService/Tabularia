@@ -415,6 +415,7 @@ Every number is checked against R 4.6. Two differences are R's, not Tabularia's:
 
 ## Related
 
+- [Statistics in Tabularia](statistics-overview.md): the whole picture, with the models and how to choose
 - [Flows](flows.md#statistics): the nodes and the editor
 - [Engine differences](../engines/engine-differences.md#statistics): what is computed where, and the guarantee
 - [Preview and analysis](preview-and-analysis.md): the Table and Chart tabs
