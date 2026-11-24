@@ -1,8 +1,8 @@
 # AI in Tabularia
 
-Tabularia can use a language model in five places: a chat that answers questions on the
+Tabularia can use a language model in six places: a chat that answers questions on the
 datasources, an assistant that builds flows in the editor, one that writes Python and R
-scripts, the naming of conversations, and the descriptions and SQL translations of the
+scripts, one that reads a Bayesian model's graph and its runs in that model's editor, the naming of conversations, and the descriptions and SQL translations of the
 dbt export. All of it is optional, off until an administrator adds a model provider,
 and limited to the models the administrator enables. This page says,
 for each use, what goes to the model and what does not, and how to configure, cap and
@@ -16,7 +16,7 @@ audit it.
 | Who talks to them | the gateway only; the engine and the workers never call a provider |
 | On | when a provider is added in Administration → AI models, or `AI__BASE_URL` and `AI__SECRET_KEY` are set, and at least one model is enabled |
 | Models | chosen by the administrator from each provider's catalog: a provider added in the panel starts with all its chat models enabled, the environment's with none |
-| Instructions | six system prompts, editable in Administration → AI models → **Agent instructions** |
+| Instructions | eight system prompts, editable in Administration → AI models → **Agent instructions** |
 | Costs | estimated per answer; caps per answer, per person per day, per installation per day |
 | Audit | every query on data, every provider changed, every model enabled or disabled, every instruction changed |
 | Sending no data | [metadata-only mode](#metadata-only-mode): two switches, one for these uses and one for MCP |
@@ -28,6 +28,7 @@ audit it.
 | **Data assistant** | **Assistant** page ([Ask your data](../capabilities/ask-your-data.md)) | the question and the conversation; names, folders, row counts and descriptions of the datasources the person can read; columns, types and field descriptions; 5 sample rows of each datasource it describes; the rows its queries return, up to `AI__MAX_RESULT_ROWS` (200), text cut at 300 characters; when it builds, what the flow assistant gets (the first rows of every step) and the names, types and folders of the connections the person may use | datasources the person cannot read; storage paths and credentials; a connection's address, user or secret |
 | **Flow assistant** | flow editor, right panel, **Assistant** tab | the request; the flow on the canvas (its nodes and their settings) and the selected node; the same catalogue tools as the data assistant (sample rows included); the first 5 rows of every step it adds or changes, and up to 30 rows when it previews a node | data the person cannot read; the flow's saved versions |
 | **Script assistant** | Script node and saved script editor, **Assistant** (Kubernetes only) | the request; the code; the environment's language, version and packages; the **names** of the variables the script finds; names and types of its inputs' columns; after a failed run, **only the error of its log** (the Python traceback, the R error) | any row of data; the values of variables; what the script printed |
+| **Bayesian model assistant** | the Bayesian model editor, **Assistant** tab | the request; the model's graph as the editor holds it (at most 256 KiB), with its names, labels, notes, units, columns and expressions as data and never as instructions; the findings of the editor's check; the selected node; the numbers of the prior preview; and, when the person picks a run, the sampler's facts and the largest R-hat and smallest effective sample sizes of each node | any row of data (the editor holds none); the posterior summary of a run; the draws |
 | **Conversation titles** | data assistant | the first question of a conversation (up to 1,000 characters), once | anything else |
 | **dbt descriptions** | the dbt export dialog, when ticked ([dbt export](../dbt-export.md)) | each flow's structure (sources, steps with their settings cut at 300 characters, outputs); the columns without a description, with their type and up to 3 sample values of up to 40 characters each | full rows; columns that already have a description |
 | **dbt SQL translations** | the dbt export, when a query does not translate to the target dialect | the query (up to 20,000 characters), the two dialects and the output columns; on a second attempt, why the engine rejected the first | data |
@@ -56,7 +57,8 @@ with its «Confirm» button (or on the plan's page); the assistant has no way to
 and the person's permissions are checked again when it is applied. The flow
 assistant changes only the canvas in the browser: what it built comes back as one Undo
 step, and it never saves, runs or schedules the flow. The script assistant proposes
-whole files that the person applies or discards; it never saves or runs the script.
+whole files that the person applies or discards; it never saves or runs the script. The Bayesian model assistant proposes changes of the graph
+that the person applies as one Undo step; it never adds or deletes a node, and never saves or runs.
 
 ![A plan card on the Assistant page: create a flow with its steps and first rows, then schedule it, with Confirm, Change and Cancel](../media/guide/ai/agent-plan-card.png)
 
@@ -272,13 +274,14 @@ Administration → Settings, without a restart.
 ### The agents' instructions
 
 Administration → AI models → **Agent instructions** shows the system prompt of each of
-the seven agents:
+the eight agents:
 
 | Agent | Purpose |
 |---|---|
 | Data assistant | the chat on the Assistant page |
 | Flow assistant | builds and changes steps in the flow editor |
 | Script assistant | writes and fixes Python or R in the script editor |
+| Bayesian model assistant | reads a model's graph and its runs in the Bayesian model editor and proposes changes the person applies |
 | Conversation titles | names every new conversation |
 | dbt export descriptions | writes the descriptions of flows and columns in the dbt project |
 | dbt export SQL translations | translates the queries the engine does not convert |

@@ -169,7 +169,7 @@ runs `apt-get install` against the default Ubuntu archives (`archive.ubuntu.com`
 setting for an APT mirror, unlike CRAN (`SCRIPTS__CRAN_URL`) and PyPI (`SCRIPTS__PYPI_INDEX_URL`). On a
 cluster with no internet the build of that group must therefore be able to reach those archives (let
 the builder's egress through to them, or through a transparent proxy or mirror of your own that
-answers for the same host names); the other groups install no system package. Once built, the image
+answers for the same host names); the other groups install no system package, except the Bayesian group's compiler ([below](#statistical-models)). Once built, the image
 carries the library and nothing is fetched at run time: a model Job at run time has no internet and reaches the scripts bucket
 through the egress proxy only. The images are large (an R image with compiled packages
 weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node
@@ -211,7 +211,7 @@ CmdStan from its release tarball, pinned by URL and sha256 for x86-64 and for ar
 `github.com` **with the storage host it redirects release downloads to** (allow the redirect, not only the first host),
 PyPI or your mirror for `numpy` and `pyarrow`, and the Debian mirror of the base image for the toolchain. **An air-gapped
 cluster** points `MODELS__SOURCES_BASE_URL` at a mirror of GitHub's release downloads that holds the same paths
-(`stan-dev/cmdstan/releases/download/v2.40.0/…`); the sha256 stays the recipe's. The build runs CmdStan's own `make` with one
+(`stan-dev/cmdstan/releases/download/v2.40.0/…`); the sha256 stays the recipe's. The licences of what the group ships are listed, with their texts quoted and never interpreted, in [Licences](../licences.md). The build runs CmdStan's own `make` with one
 compiler at a time, which fits the default build Pod (`SCRIPTS__BUILD_MEMORY` 4 GiB; two compilers at once were killed there
 for memory), and took about ten minutes on a modest 2018 laptop CPU with the default 2 CPUs and 4 GiB (seven and a half of
 them CmdStan's `make`, peak 3.2 GiB); the image weighs about 1.8 GB, half of it CmdStan's precompiled header, which saves about

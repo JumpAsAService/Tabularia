@@ -7,14 +7,14 @@ the model after any step, choose its columns and options in the panel, press **R
 the answer in the same place as any other step, as a **table of results** the next nodes can
 use and a **Report** of a few pages whose first page says whether the model's assumptions hold.
 
-Ten models are in the first release, in five groups: **regression** (linear, logistic, both
+Tabularia ships seventeen models in eight groups. The first five groups are: **regression** (linear, logistic, both
 with ridge, lasso and elastic-net penalties), **survival** (Kaplan–Meier, Cox, and parametric
 survival: the time to an event described by a Weibull, log-normal or another distribution, chosen
 or searched for), **time series** (ARIMA, from AR to SARIMAX, with the orders given or searched
 for), **boosting** (XGBoost and CatBoost: gradient-boosted trees to predict a number or a class,
 with the importance of each predictor) and **customer lifetime** (customer lifetime value and
 BG/BB: for customers who leave without saying so, the purchases to expect, the probability of
-still being active and the discounted value of each customer). An eleventh node, **Predict**,
+still being active and the discounted value of each customer). Another node, **Predict**,
 applies a model you registered in MLflow to new rows.
 
 The time series group also has **Decomposition**, which splits a series into a trend, seasons and a remainder and
@@ -29,6 +29,9 @@ others, and have no model card and no Predict.
 
 A seventh group, **pre-trained forecasting**, forecasts series with a model trained in advance, **Forecast (Timestral)**. Its weights
 come under a licence of their own, which an administrator accepts when enabling the group ([below](#pre-trained-forecasting-timestral)).
+
+An eighth group, **Bayesian models**, holds one node of its own, **Bayesian model**: you draw the model as a graph, Tabularia
+writes its Stan program, and the node returns the draws of its posterior ([below](#bayesian-model)).
 
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
 cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
@@ -51,7 +54,7 @@ statistics that works everywhere.
 
 ## Turning a group on (administrators)
 
-**Administration → Statistical models** lists the seven groups Tabularia ships, each with its
+**Administration → Statistical models** lists the eight groups Tabularia ships, each with its
 models, the number of packages its image pins and its state. Only an administrator acts, and
 not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
@@ -1721,12 +1724,16 @@ palette»). It has two variants, `sample` (the draws of the posterior, by Stan's
 from the priors alone, before the data are seen), and it hands on its summary, its draws or its replicated data, or the ten
 columns alone.
 
-Its report is drawn from the ten columns the run wrote and nothing else: the first page says the saved model and its version, the
-rows used and left out, the draws and the facts of the sampler; then the posterior summary of each quantity (mean, standard
-deviation, three quantiles, R-hat, effective sample sizes, the standard error of the mean and the contraction of the prior),
-the data the model bound (with the mean and the standard deviation of a standardized column) and the notes. Every diagnostic is a
-measure or a fact with what it measures: the report gives no verdict. The charts of the diagnostics and of the predictive checks
-come with the next lots of the module.
+Its report is drawn from the ten columns the run wrote and nothing else. The first page says the saved model and its version, the
+rows used and left out, the draws and the facts of the sampler; then come the posterior summary of each quantity (mean, standard
+deviation, three quantiles, R-hat, effective sample sizes, the standard error of the mean and the contraction of the prior), the
+data the model bound (with the mean and the standard deviation of a standardized column) and the notes. The diagnostics have
+their own pages and charts, and so do the predictive checks: the posterior predictive check after a `sample` run, and the prior
+predictive check of the `prior_predictive` variant, both drawn on the original scale of a response the model standardized.
+Every diagnostic is a measure or a fact with what it measures: the report gives no verdict.
+
+The node records in [MLflow](#mlflow) without the draws, and **Predict** does not apply a Bayesian model: a version that names
+one is refused.
 
 ## The output
 

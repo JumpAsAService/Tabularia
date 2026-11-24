@@ -59,6 +59,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/statistics', 'Hypothesis tests'],
       ['/docs/capabilities/models', 'Statistical models'],
       ['/docs/connections/mlflow', 'MLflow connections'],
+      ['/docs/licences', 'Licences of the components'],
     ],
   },
   {

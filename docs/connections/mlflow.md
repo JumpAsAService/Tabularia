@@ -72,7 +72,8 @@ coefficients, the report as PDF and the model with its card (for XGBoost and Cat
 model's own file, `xgboost.json` or `catboost.cbm`, never a pickle; the learning curves are
 recorded as metric histories, one point a tree; the distributions of an automatic parametric
 survival fit and the purchase models of a customer lifetime fit are recorded as `candidate.*` metrics). With **Register the model as**, each
-run adds a version of that registered model, which the **Predict** node can apply. The editor's
+run adds a version of that registered model, which the **Predict** node can apply. The Bayesian model node records the sampler's facts and the summary of its quantities, never the draws, and Predict does not apply
+its registered versions. The editor's
 **Run** logs nothing. The connection's secret is used only by the gateway: it never reaches the
 Job that fits the model. The details, and **Continue without MLflow**, are in
 [Statistical models: MLflow](../capabilities/models.md#mlflow).
