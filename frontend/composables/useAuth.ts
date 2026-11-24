@@ -79,6 +79,7 @@ function forgetPerUserCaches() {
   resetRegistriesEditor()
   resetHomeFavourites()
   resetFolderPaths()
+  resetBayesPins()
   resetFlowClipboard()
   resetReportClipboard()
 }

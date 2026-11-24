@@ -3,10 +3,10 @@
 // travels in the dataTransfer (application/tabularia), read by FlowEditor's drop handler.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, Sparkles, StickyNote, Search } from 'lucide-vue-next'
+import { ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, Sigma, Sparkles, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 import { statHintKey, statIsOp, statNameKey, statPalette } from '~/composables/statTests'
-import { MODEL_COLOR, modelGroupKey, modelPalette, modelShownGroups, predictAvailable } from '~/composables/modelCatalog'
+import { MODEL_COLOR, bayesUsable, modelGroupKey, modelPalette, modelShownGroups, predictAvailable } from '~/composables/modelCatalog'
 import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 
@@ -76,8 +76,12 @@ const modelShown = computed(() => modelShownGroups(modelGroups.state.value))
 const modelEntries = computed(() => (props.readOnly ? [] : modelPalette(modelShown.value, query.value, t)))
 const showPredict = computed(() => !props.readOnly && predictAvailable(modelGroups.state.value, props.mlflowConnections ?? 0)
   && match(t('models.predict.title'), 'predict', 'prediction', 'mlflow'))
-const modelCount = computed(() => modelEntries.value.reduce((n, g) => n + g.items.length, 0) + (showPredict.value ? 1 : 0))
-const showModels = computed(() => modelEntries.value.length > 0 || showPredict.value)
+// «Bayesian model» is an item of its own (its group is left out of the catalogue's entries): offered to whoever may use the group
+// `bayes`, and greyed out on Compose with the reason, as the other models
+const showBayes = computed(() => !props.readOnly && (bayesUsable(modelGroups.state.value) || modelsOff.value)
+  && match(t('models.bayes_model.name'), t('models.groups.bayes'), 'bayes', 'bayesian', 'stan', 'posterior'))
+const modelCount = computed(() => modelEntries.value.reduce((n, g) => n + g.items.length, 0) + (showPredict.value ? 1 : 0) + (showBayes.value ? 1 : 0))
+const showModels = computed(() => modelEntries.value.length > 0 || showPredict.value || showBayes.value)
 const modelOpen = computed(() => searching.value || modelOpenSaved.value)
 function toggleModels() {
   modelOpenSaved.value = !modelOpenSaved.value
@@ -245,6 +249,27 @@ function onDragStart(ev: DragEvent, kind: string) {
           >
             <component :is="modelIconOf(item.model)" :size="15" class="item-icon" aria-hidden="true" />
             <span>{{ $t(item.nameKey) }}</span>
+            <GripVertical :size="13" class="grip" aria-hidden="true" />
+          </div>
+        </div>
+        <div v-if="showBayes" class="stat-family" role="group" aria-labelledby="palette-model-bayes">
+          <div id="palette-model-bayes" class="family-title">{{ $t(modelGroupKey('bayes')) }}</div>
+          <div
+            class="item"
+            :class="{ off: modelsOff }"
+            :draggable="!modelsOff"
+            role="button"
+            tabindex="0"
+            :title="modelsOff ? $t('scripting.kubernetesOnly') : $t('models.palette.itemTitle', { hint: $t('models.bayes_model.hint') })"
+            :aria-disabled="modelsOff ? 'true' : undefined"
+            :style="{ '--item-color': MODEL_COLOR }"
+            @dragstart="!modelsOff && onDragStart($event, 'bayes_model')"
+            @click="!modelsOff && emit('add', 'bayes_model')"
+            @keydown.enter.prevent="!modelsOff && emit('add', 'bayes_model')"
+            @keydown.space.prevent="!modelsOff && emit('add', 'bayes_model')"
+          >
+            <Sigma :size="15" class="item-icon" aria-hidden="true" />
+            <span>{{ $t('models.bayes_model.name') }}</span>
             <GripVertical :size="13" class="grip" aria-hidden="true" />
           </div>
         </div>

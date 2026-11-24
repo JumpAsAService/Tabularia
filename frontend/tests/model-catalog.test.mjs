@@ -1081,11 +1081,13 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
   assert.ok(inside.includes('Experiments A/B test A/B test planning'), inside)
   assert.ok(inside.includes('Pre-trained forecasting Forecast (Timestral)'), inside)
-  // 1 Predict + 2 + 3 + 10 + 2 + 2 + 2 + 1
-  assert.match(html, /class="group-count"[^>]*>23</)
+  // the Bayesian model is an item of its own under its group (its group is not in the catalogue's entries)
+  assert.ok(inside.includes('Bayesian models Bayesian model'), inside)
+  // 1 Predict + 2 + 3 + 10 + 2 + 2 + 2 + 1 + 1 Bayesian model
+  assert.match(html, /class="group-count"[^>]*>24</)
   // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
   const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
-  assert.equal(items.length, 23)
+  assert.equal(items.length, 24)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
 })

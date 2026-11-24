@@ -25,7 +25,9 @@ import ScriptNode from '~/components/nodes/ScriptNode.vue'
 import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import ModelNode from '~/components/nodes/ModelNode.vue'
 import PredictNode from '~/components/nodes/PredictNode.vue'
+import BayesModelNode from '~/components/nodes/BayesModelNode.vue'
 import { MODEL_COLOR, MODEL_NODE_TYPE, modelCodeTitle, modelColumnsAfterStep, modelFromKind, modelNameKey, modelNodeData, modelOf, modelOutputColumns, modelRiskFrom, predictNodeData } from '~/composables/modelCatalog'
+import { bayesNodeData } from '~/composables/bayesNode'
 import { modelActionsOf, type ModelActionId } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
@@ -1446,6 +1448,8 @@ function revealNode(id: string) {
 /** The node a Models palette item makes («model:linear», «model:arima:sarima», «model_predict»), or null. */
 function modelStepOf(kind: string): { type: string; data: Record<string, any> } | null {
   if (kind === 'model_predict') return { type: 'model_predict', data: predictNodeData() }
+  // a Bayesian model: its seed is drawn here, once, and written into the node (the same seed gives the same numbers)
+  if (kind === 'bayes_model') return { type: 'bayes_model', data: bayesNodeData() }
   const pick = modelFromKind(kind)
   if (!pick) return null
   return { type: 'model', data: modelNodeData(pick.model, pick.preset) }
@@ -2408,6 +2412,7 @@ function nodeFullName(id: string | null): string {
     if (model) return modelCodeTitle(model.id, n.data?.params) ?? t(modelNameKey(model.id))
   }
   if (n.type === 'model_predict' && !given) return t('models.predict.title')
+  if (n.type === 'bayes_model' && !given) return t('models.bayes_model.name')
   return String(given || n.data?.name || n.type || '')
 }
 function nodeName(id: string | null): string {
@@ -3684,6 +3689,9 @@ async function pollTask(id: string) {
         </template>
         <template #node-model_predict="props">
           <PredictNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-bayes_model="props">
+          <BayesModelNode :id="props.id" :data="props.data" />
         </template>
         <template #node-comment="props">
           <CommentNode :id="props.id" :data="props.data" />

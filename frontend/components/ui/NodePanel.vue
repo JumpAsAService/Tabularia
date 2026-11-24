@@ -17,6 +17,7 @@ import PlaceholderCheat from '~/components/ui/PlaceholderCheat.vue'
 import ScriptNodePanel from '~/components/scripting/ScriptNodePanel.vue'
 import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
 import ModelNodePanel from '~/components/models/ModelNodePanel.vue'
+import BayesNodePanel from '~/components/bayes/BayesNodePanel.vue'
 
 const props = defineProps<{
   node: Node | null
@@ -795,6 +796,22 @@ function pickDatasource(id: number | null) {
         :columns-loading="columnsLoading"
         :fetch-distinct="fetchDistinct"
         :connections="connections"
+        :read-only="!!readOnly"
+        :outputs="scriptOutputs?.[node.id] ?? null"
+        :trial="scriptTrials?.[node.id] ?? null"
+        :flow-dirty="!!flowDirty"
+        @update="emit('update', $event)"
+        @delete="emit('delete')"
+        @run="emit('script-run', node.id)"
+      />
+    </template>
+
+    <!-- Bayesian model node: a saved model, pinned at a version, sampled on the rows that reach it -->
+    <template v-else-if="node.type === 'bayes_model'">
+      <BayesNodePanel
+        :node="node"
+        :input-columns="inputColumns"
+        :columns-loading="columnsLoading"
         :read-only="!!readOnly"
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"
