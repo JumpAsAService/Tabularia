@@ -464,7 +464,7 @@ def test_the_method_s_paragraphs_follow_the_rows_and_the_formulas_the_scale():
                    ("method", "method_program")]
 
 
-NOTES = json.loads((Path(__file__).parent / "fixtures" / "models" / "bayes_model-notes.json").read_text())["notes"]
+NOTES = json.loads((Path(__file__).parent / "fixtures" / "bayes_runner_notes.json").read_text())["notes"]
 # (the lines bayes_task.note_line writes: the runner's own tests check that it still writes these, so the engine's
 # image, which holds only the backend, reads them without the runner's files)
 

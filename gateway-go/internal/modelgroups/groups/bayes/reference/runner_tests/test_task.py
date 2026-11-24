@@ -261,7 +261,7 @@ class TheNotesTheEngineReads(unittest.TestCase):
     must still write exactly those lines."""
 
     def test_note_line_writes_the_fixture_s_lines(self):
-        fixture = HERE.parents[6] / "backend" / "tests" / "fixtures" / "models" / "bayes_model-notes.json"
+        fixture = HERE.parents[6] / "backend" / "tests" / "fixtures" / "bayes_runner_notes.json"
         if not fixture.exists():
             self.skipTest("the backend's fixtures are not in this tree")
         for note in json.loads(fixture.read_text())["notes"]:
