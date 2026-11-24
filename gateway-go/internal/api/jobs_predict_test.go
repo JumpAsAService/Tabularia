@@ -427,6 +427,30 @@ func TestAVersionThatCannotBeAppliedIsRefusedBeforeAnyRun(t *testing.T) {
 	}
 }
 
+// A registered version of a Bayesian model is refused at planning with its sentence, before any run or Job, even when
+// everything else about it is in order (docs/specs/bayes-mlflow.md, lot M2).
+func TestAVersionOfABayesianModelIsRefusedBeforeAnyRun(t *testing.T) {
+	w := newPredictWorld(t)
+	w.register("Pasta/price elasticity", "bayes", w.card, map[string]string{"tabularia.model": "bayes_model", "tabularia.group": "bayes"})
+	for what, data := range map[string]string{
+		"a numbered version": `"registeredModel": "bayes", "version": "1"`,
+		"the latest":         `"registeredModel": "bayes", "version": "latest"`,
+	} {
+		_, _, err := w.predict(data)
+		want := "Predict «Next month»: the version 1 of «bayes» holds a Bayesian model, which Predict does not apply: " +
+			"a Bayesian model's draws are read in its report and its summary"
+		if err == nil || err.Error() != want {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	if n := w.runsMade(); n != 0 || len(w.attempts) != 0 {
+		t.Errorf("%d runs and %d Jobs made by the refusals", n, len(w.attempts))
+	}
+	if strings.Contains(w.enginePaths(), "/scripts/") {
+		t.Errorf("the engine was asked: %s", w.enginePaths())
+	}
+}
+
 func TestAPredictedColumnTheModelReadsIsRefused(t *testing.T) {
 	w := newPredictWorld(t)
 	card := []byte(strings.Replace(predictCardText, `{"name": "price", "type": "number"}`, `{"name": "prediction_low", "type": "number"}`, 1))

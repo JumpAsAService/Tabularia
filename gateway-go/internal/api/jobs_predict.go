@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
@@ -215,6 +216,9 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 	switch {
 	case s.model == "":
 		return refuse("%s was not registered by Tabularia (it has no tag tabularia.model): Predict applies only Tabularia's models", name)
+	case s.model == bayescontract.Model:
+		// no Predict for a Bayesian model (docs/specs/bayes-mlflow.md, «Predict»): refused here, never in a Job
+		return refuse("%s holds a Bayesian model, which Predict does not apply: a Bayesian model's draws are read in its report and its summary", name)
 	case s.cardSHA == "":
 		return refuse("%s has no fingerprint of its model card (the tag tabularia.card_sha256): it is not applied", name)
 	}
