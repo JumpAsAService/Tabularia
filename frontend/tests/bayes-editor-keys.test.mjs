@@ -12,7 +12,7 @@ const K = await import('~/composables/bayesEditorKeys.ts')
 const kinds = ['walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'save', 'zoomIn', 'zoomOut', 'fit']
 
 test('the table lists every action of the spec, each with a way on both keyboards', () => {
-  assert.deepEqual(K.BAYES_KEY_TABLE.map(r => r.id), ['into', 'walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'save', 'zoomIn', 'zoomOut', 'fit', 'tabs', 'escape', 'help'])
+  assert.deepEqual(K.BAYES_KEY_TABLE.map(r => r.id), ['into', 'walk', 'move', 'add', 'menu', 'remove', 'duplicate', 'undo', 'redo', 'save', 'zoomIn', 'zoomOut', 'fit', 'codeRows', 'tabs', 'escape', 'help'])
   for (const k of kinds) assert.ok(K.BAYES_KEY_TABLE.some(r => r.action === k), k)
   for (const r of K.BAYES_KEY_TABLE) {
     for (const [name, ways] of [['pc', r.pc], ['mac', r.mac]]) {

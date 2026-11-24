@@ -80,6 +80,22 @@ export function bayesKeyAction (e: BayesKeyEvent, mac: boolean): BayesKeyAction 
   return null
 }
 
+/** What a key asks of the Stan code tab (lot G4): the mapping table's rows are walked, the code is left. */
+export type BayesCodeKey = 'prev' | 'next' | 'leave'
+
+/**
+ * The keys of the Stan code tab, with no modifier: ↑ and ↓ walk the mapping table's rows (one tab stop for
+ * the whole table, a laptop has the arrows), Esc leaves the code (Monaco keeps the focus otherwise) for the
+ * tab's own button. Tab and Shift+Tab are the browser's: they go on from the code to the table.
+ */
+export function bayesCodeKey (e: BayesKeyEvent): BayesCodeKey | null {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return null
+  if (e.key === 'ArrowUp') return 'prev'
+  if (e.key === 'ArrowDown') return 'next'
+  if (e.key === 'Escape') return 'leave'
+  return null
+}
+
 /** Whether an action is the page's (it works from anywhere but a field) or the canvas'. */
 export function bayesKeyScope (kind: BayesKeyKind): 'page' | 'canvas' {
   return kind === 'undo' || kind === 'redo' || kind === 'duplicate' || kind === 'save' ? 'page' : 'canvas'
@@ -121,6 +137,7 @@ export const BAYES_KEY_TABLE: readonly BayesKeyRow[] = [
   { id: 'zoomIn', action: 'zoomIn', ...same({ key: '+' }) },
   { id: 'zoomOut', action: 'zoomOut', ...same({ key: '-' }) },
   { id: 'fit', action: 'fit', ...same({ key: '0' }) },
+  { id: 'codeRows', ...same({ key: 'ArrowUp' }, { key: 'ArrowDown' }), elsewhere: 'the Stan code tab’s mapping table (bayesCodeKey)' },
   { id: 'tabs', ...same({ key: ',' }, { key: '.' }), elsewhere: 'the app’s rule for the main row of tabs' },
   { id: 'escape', ...same({ key: 'Escape' }), elsewhere: 'the fields and the menus, back to the node' },
   { id: 'help', ...same({ key: '?' }), elsewhere: 'the app’s list of keys' },

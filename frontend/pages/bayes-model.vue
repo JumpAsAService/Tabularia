@@ -21,13 +21,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, type LocationQuery } from 'vue-router'
 import {
-  ArrowLeft, CircleAlert, Eye, FolderClosed, History, Info, LayoutTemplate, LoaderCircle, Redo2, RotateCcw, Save, SlidersHorizontal, TriangleAlert, Undo2,
+  ArrowLeft, CircleAlert, Code, Eye, FolderClosed, History, Info, LayoutTemplate, LoaderCircle, Redo2, RotateCcw, Save, SlidersHorizontal, TriangleAlert, Undo2,
 } from 'lucide-vue-next'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import GridKeys from '~/components/ui/GridKeys.vue'
 import Modal from '~/components/ui/Modal.vue'
 import Select from '~/components/ui/Select.vue'
 import BayesCanvas from '~/components/bayes/BayesCanvas.vue'
+import BayesCodePanel from '~/components/bayes/BayesCodePanel.vue'
 import BayesGlossary from '~/components/bayes/BayesGlossary.vue'
 import BayesInspector from '~/components/bayes/BayesInspector.vue'
 import BayesPalette from '~/components/bayes/BayesPalette.vue'
@@ -36,6 +37,8 @@ import BayesTemplateDialog from '~/components/bayes/BayesTemplateDialog.vue'
 import BayesTemplateGallery from '~/components/bayes/BayesTemplateGallery.vue'
 import BayesVersions from '~/components/bayes/BayesVersions.vue'
 import { bayesKeyAction, bayesKeyScope } from '~/composables/bayesEditorKeys'
+import { bayesStanKey, bayesStanView } from '~/composables/bayesStanCode'
+import { bayesStanProgramOf, createBayesStanProgram, type BayesStanProgram } from '~/composables/bayesStanProgram'
 import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { useToast } from '~/composables/useToast'
 import { useFormat } from '~/composables/useFormat'
@@ -64,6 +67,9 @@ const folderPaths = useFolderPaths()
 const modelGroups = useModelGroups()
 
 const editor = useBayesEditor()
+// the Stan program of the graph on the canvas, and the last saved version's (the tab's two sources)
+const stan = createBayesStanProgram({ check: g => api.check(g) })
+const storedProgram = ref<BayesStanProgram | null>(null)
 const { doc, selected, model, findings, plan, canUndo, canRedo, restored, readonly, dirty: graphDirty, fromGateway } = editor
 onBeforeUnmount(() => editor.dispose())
 
@@ -114,6 +120,8 @@ function reset () {
   savedProjectId.value = null
   loadError.value = ''
   openedTemplate.value = null
+  storedProgram.value = null
+  stan.reset()
   origin.value = null
   dialogTemplate.value = null
   galleryDismissed.value = false
@@ -167,6 +175,8 @@ async function loadModel (id: number, version: number | null) {
     }
     shownVersion.value = v.version
     editor.load(v.graph as BayesDoc)
+    storedProgram.value = bayesStanProgramOf(v)
+    stan.adopt(bayesStanKey(doc.value), storedProgram.value)
     // the stored version's findings (warnings only) are the gateway's word on this graph
     editor.answer(editor.text.value, bayesGatewayFindings(v.findings))
     galleryDismissed.value = true
@@ -301,6 +311,8 @@ async function save (): Promise<boolean> {
       name.value = savedName.value = d.name
       projectId.value = savedProjectId.value = d.project_id
       baseVersion.value = shownVersion.value = d.current_version
+      storedProgram.value = bayesStanProgramOf(d.version)
+      if (!graphDirty.value) stan.adopt(bayesStanKey(doc.value), storedProgram.value)
       if (out.created) {
         mode.value = 'model'
         modelId.value = d.id
@@ -344,6 +356,8 @@ async function reloadStale () {
     savedName.value = d.name
     savedProjectId.value = d.project_id
     editor.adopt(d.version.graph as BayesDoc)
+    storedProgram.value = bayesStanProgramOf(d.version)
+    stan.adopt(bayesStanKey(doc.value), storedProgram.value)
     editor.markSaved(editor.text.value)
     editor.answer(editor.text.value, bayesGatewayFindings(d.version.findings))
     refused.value = 0
@@ -535,16 +549,20 @@ function redo () { editor.redo() }
 
 // ---------------------------------------------------------------- the panel
 
-type PanelTab = 'inspector' | 'problems' | 'versions' | 'glossary'
+type PanelTab = 'inspector' | 'code' | 'problems' | 'versions' | 'glossary'
 const tab = ref<PanelTab>('inspector')
 const errorCount = computed(() => findings.value.filter(f => f.severity === 'error').length)
 const problemCount = computed(() => findings.value.length)
-watch(() => mode.value, (m) => { if (m !== 'model' && tab.value === 'versions') tab.value = 'inspector' })
+watch(() => mode.value, (m) => {
+  if (m !== 'model' && tab.value === 'versions') tab.value = 'inspector'
+  if (m === 'preview' && tab.value === 'code') tab.value = 'inspector'
+})
 watch(tab, (v) => { if (v === 'versions' && !versions.value.length) loadVersions() })
 /** A node selected on the canvas opens its inspector. */
 function selectFromCanvas (id: string | null) {
   selected.value = id
-  if (id) tab.value = 'inspector'
+  // on the Stan code tab a node chosen finds its rows and its lines there
+  if (id && tab.value !== 'code') tab.value = 'inspector'
 }
 /** «Show in the graph»: the node selected and brought into sight; the list stays open. */
 function showInGraph (id: string) {
@@ -569,7 +587,8 @@ const wide = computed(() => tab.value === 'inspector' && CHARTED.includes(select
 const PANEL_MIN = 320
 const PANEL_MAX = 640
 const setWidth = ref<number | null>(null)
-const panelWidth = computed(() => setWidth.value ?? (wide.value ? 600 : 420))
+const codeWide = computed(() => tab.value === 'code' && roomy.value)
+const panelWidth = computed(() => setWidth.value ?? (codeWide.value ? 640 : wide.value ? 600 : 420))
 const clampPanel = (w: number) => Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, w)))
 function startPanelResize (ev: MouseEvent) {
   ev.preventDefault()
@@ -591,6 +610,24 @@ function panelKeys (e: KeyboardEvent) {
   e.preventDefault()
   setWidth.value = clampPanel(panelWidth.value + d * (e.shiftKey ? 5 : 1))
 }
+
+// ---------------------------------------------------------------- the Stan code
+
+const stanKey = computed(() => bayesStanKey(doc.value))
+/** The gateway's program is asked for while the tab is open: at once on opening, 600 ms after a change, never for a graph with an error. */
+function askProgram (now: boolean) {
+  if (tab.value !== 'code' || !doc.value || mode.value === 'none' || mode.value === 'preview' || readonly.value) return
+  if (errorCount.value > 0) stan.hold()
+  else stan.want(doc.value as Record<string, any>, stanKey.value, now)
+}
+watch(tab, (v) => { if (v === 'code') askProgram(true); else stan.hold() })
+watch([stanKey, errorCount, readonly], () => askProgram(false))
+// an error the gateway finds and the mirror did not stands where a save's findings stand
+watch(() => stan.refusal.value, (r) => {
+  if (r && r.key === stanKey.value && tab.value === 'code') editor.answer(editor.text.value, bayesGatewayFindings(r.findings as any))
+})
+const stanView = computed(() => bayesStanView({ errors: errorCount.value, readonly: readonly.value, hasLive: !!stan.program.value, hasStored: !!storedProgram.value }))
+const stanShown = computed(() => (stanView.value === 'live' ? stan.program.value : stanView.value === 'stored' ? storedProgram.value : null))
 
 // ---------------------------------------------------------------- the keys
 
@@ -620,6 +657,7 @@ useKeyGroups(() => {
       [saveKeys.value, t('bayes.editor.keys.save')],
       ['+ · - · 0', t('bayes.editor.keys.zoom')],
       [', · .', t('bayes.editor.keys.tabs')],
+      ['↑ · ↓', t('bayes.editor.keys.codeRows')],
       ['Esc', t('bayes.editor.keys.escape')],
     ],
   }]
@@ -794,6 +832,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             <button id="bt-inspector" type="button" role="tab" class="tab" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
               <SlidersHorizontal :size="13" aria-hidden="true" />{{ t('bayes.editor.inspector.title') }}
             </button>
+ <button v-if="mode !== 'preview'" id="bt-code" type="button" role="tab" class="tab" :aria-selected="tab === 'code'" aria-controls="bp-code" @click="tab = 'code'">
+              <Code :size="13" aria-hidden="true" />{{ t('bayes.editor.stan.tab') }}
+            </button>
             <button id="bt-problems" type="button" role="tab" class="tab" :aria-selected="tab === 'problems'" aria-controls="bp-problems" @click="tab = 'problems'">
               <TriangleAlert :size="13" aria-hidden="true" />{{ t('bayes.editor.problems.title') }}
               <span v-if="problemCount" class="cnt" :class="{ e: errorCount > 0 }" :aria-label="t('bayes.editor.problems.count', { n: problemCount })">{{ problemCount }}</span>
@@ -831,6 +872,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
               :restoring="restoring"
               @open="openVersion"
               @restore="(v: number) => (restoreAsk = v)"
+            />
+          </div>
+          <div v-else-if="tab === 'code' && mode !== 'preview'" id="bp-code" class="sbody" role="tabpanel" aria-labelledby="bt-code">
+            <BayesCodePanel
+              :doc="doc"
+              :view="stanView"
+              :program="stanShown"
+              :current="stan.key.value === stanKey"
+              :status="stan.status.value"
+              :failure="stan.failure.value"
+              :findings="findings"
+              :selected="selected"
+              :stored-version="storedProgram?.version ?? null"
+              @select="(id: string) => (selected = id)"
+              @problems="toProblems"
             />
           </div>
           <div v-else-if="tab === 'glossary'" id="bp-glossary" class="sbody" role="tabpanel" aria-labelledby="bt-glossary">
@@ -1009,7 +1065,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .tab {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted);
   border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: none;
-  transition: color var(--dur-1), background var(--dur-1), border-color var(--dur-1);
+  transition: color var(--dur-1), background var(--dur-1), border-color var(--dur-1); white-space: nowrap;
 }
 .tab[aria-selected="true"] { color: var(--text); border-color: var(--border); border-bottom-color: var(--accent); background: var(--tint-accent); }
 @media (hover: hover) and (pointer: fine) { .tab:not([aria-selected="true"]):hover { color: var(--text); } }
@@ -1036,6 +1092,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .mbody { margin: 0 0 8px; line-height: 1.5; }
 .mbody.m { color: var(--muted); font-size: 12.5px; }
 @media (max-width: 1399px) {
+  /* five tabs in 420 px: closer, so none breaks its words */
+  .tabs { gap: 2px; padding-inline: 8px; }
+  .tab { padding: 5px 7px; gap: 5px; }
   .namein { flex-basis: 170px; width: 170px; }
   .folder { flex-basis: 190px; width: 190px; }
 }
