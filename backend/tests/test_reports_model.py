@@ -849,7 +849,7 @@ def test_the_checks_of_an_xy_chart():
     assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "band_high"}],
                 options={"target_x": [1, "AVG([qty])"], "mirror": True, "diagonal": True}, split_by="[kind]") == []
     assert said(series=[{"value": "[amount]"}]) == [("series[0].as", (
-        "a series of an xy chart says how it is drawn («as»): one of point, line, step, stem, band_low, band_high"))]
+        "a series of an xy chart says how it is drawn («as»): one of point, line, dashed, step, stem, band_low, band_high"))]
     assert said(series=[{"value": "[amount]", "as": "bar"}])[0][0] == "series[0].as"
     assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "point"}]) == [("series[0].as", (
         "a band is two series side by side, its low edge then its high edge: this band_low has no band_high after it"))]

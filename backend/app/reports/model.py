@@ -380,6 +380,7 @@ class _Builder:
         # the detail rows the whole output may hold (an Excel file: render.XLSX_MAX_ROWS), and
         # how many the tables wrote so far
         self.max_rows_out = max_rows_out
+        self.workbook = max_rows_out is not None  # the output is the Excel file (`only` of a table)
         self.rows_out = 0
         self.comments = comments or {}
         self.data = data
@@ -780,6 +781,8 @@ class _Builder:
 
     def _visible_table(self, it: rd.TableItem) -> TableOut | None:
         self.ctx.dataset = it.dataset
+        if it.only and (it.only == "sheet") != self.workbook:  # a table of the Excel file only, or of the pages only
+            return None
         return self.table(it) if self.visible(it) else None
 
     # ── the body ──

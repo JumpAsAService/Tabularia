@@ -675,7 +675,8 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
         elif s.mark == "stem":
             entry.update(type="bar", barWidth=2, barGap="-100%", data=[[days(x), y] for x, y, _ in pts])
         else:
-            entry.update(type="line", showSymbol=False, smooth=False, connectNulls=False, lineStyle={"width": 1.5, "color": c},
+            entry.update(type="line", showSymbol=False, smooth=False, connectNulls=False,
+                         lineStyle={"width": 1.5, "color": c, **({"type": "dashed"} if s.mark == "dashed" else {})},
                          data=[[days(x), y] for x, y, _ in pts], **({"step": "end"} if s.mark == "step" else {}))
         lines.append(entry)
     series = lines + bands

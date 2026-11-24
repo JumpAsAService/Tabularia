@@ -8,7 +8,10 @@
     "sections": {
       "posterior": "Posterior summary",
       "prior": "Summary of the prior draws",
-      "data": "Data"
+      "data": "Data",
+      "groups": "Groups",
+      "charts": "Charts of the draws",
+      "pairs": "Pairs"
     },
     "kpi": {
       "rows": "Rows used",
@@ -69,7 +72,26 @@
       "standardized": "Standardized",
       "count": "Units or levels",
       "reference": "Reference level",
-      "missing": "Left out"
+      "missing": "Left out",
+      "posterior_sheet": "Posterior summary",
+      "prior_sheet": "Summary of the prior draws",
+      "sampler": "Sampler's measures by chain",
+      "nodes": "Measures by node",
+      "chain": "Chain",
+      "all_chains": "All chains",
+      "divergences": "Divergences",
+      "treedepth_hits": "At largest depth",
+      "treedepth_max": "Deepest tree",
+      "e_bfmi": "E-BFMI",
+      "stepsize": "Step size",
+      "accept_stat_mean": "Mean acceptance",
+      "n_leapfrog_mean": "Mean leapfrog steps",
+      "seconds_warmup": "Warm-up (s)",
+      "seconds_sampling": "Sampling (s)",
+      "rhat_max": "Largest R-hat",
+      "ess_bulk_min": "Smallest ESS bulk",
+      "ess_tail_min": "Smallest ESS tail",
+      "plate": "Group"
     },
     "stats": {
       "model": {
@@ -90,6 +112,8 @@
         "seconds_sampling": "Sampling (s)",
         "seconds_conversion": "Converting the draws (s)",
         "seconds_pass_2": "Measuring the draws (s)",
+        "seconds_checks": "Predictive checks (s)",
+        "seconds_replicated": "Replicated data (s)",
         "bayes_model": "Saved model",
         "bayes_version": "Version",
         "semantic_hash": "Semantic hash",
@@ -118,6 +142,67 @@
       "precision": {
         "8 significant digits": "8 significant digits"
       }
+    },
+    "groups": {
+      "note": "A group's quantities, one for each of its units: the median of each unit's posterior draws with its 5 % to 95 % interval, units in the order of their medians.",
+      "sampled": "A sample of {shown} of the {total} units: the ten whose medians are furthest from the middle one, and a seeded random sample of the others."
+    },
+    "charts": {
+      "how": {
+        "trace": "Trace: one line for each chain, the quantity's value at each kept iteration (thinned), in the order drawn.",
+        "rank": "Rank histogram: for each chain, the number of its draws in each of 20 equal bins of the ranks of all the chains' draws pooled.",
+        "density": "Density: the posterior density of the draws (solid) and the prior's density (dashed) on the same axis; the draws outside the drawn range are counted in the notes.",
+        "pairs": "Each point is a draw: the first quantity on the horizontal axis, the second on the vertical axis; the divergent draws have their own colour.",
+        "units": "Each dot is a unit's posterior median, the line its 5 % to 95 % interval."
+      },
+      "trace": "Trace",
+      "rank": "Ranks by chain",
+      "density": "Posterior and prior",
+      "pairs": "Pairs of draws",
+      "units": "Median and 90 % interval",
+      "chain": "Chain",
+      "posterior": "Posterior",
+      "prior": "Prior",
+      "draws": "Draws",
+      "divergent": "Divergent draws",
+      "median": "Median",
+      "low": "5 %",
+      "high": "95 %"
+    },
+    "diagnostics": {
+      "note": "Measures and facts of the run, as they are. The table gives the sampler's figures for each chain; under it, what each measure is.",
+      "divergences_fact": "{n} of the {total} draws after the warm-up were divergent transitions.",
+      "treedepth_fact": "{n} of the draws ended at the largest tree depth allowed ({depth}).",
+      "measures": {
+        "rhat": {
+          "name": "R-hat",
+          "says": "Compares the spread between the chains with the spread within them (each chain split in two halves, on the ranks of the draws, for the bulk and for the tails of the distribution): the more the chains differ from one another, the further it is from 1."
+        },
+        "ess": {
+          "name": "ESS, bulk and tail",
+          "says": "The effective sample size says how many independent draws the chains are worth: the bulk ESS for the centre of the distribution (its mean and median), the tail ESS for its 5 % and 95 % quantiles."
+        },
+        "mcse": {
+          "name": "MCSE of the mean",
+          "says": "The Monte Carlo standard error of the mean: how far the mean of the draws may be from the mean of the posterior because the number of independent draws is finite, in the unit of the quantity."
+        },
+        "divergences": {
+          "name": "Divergences",
+          "says": "A divergent transition is an iteration where the simulated trajectory leaves the path the exact dynamics would follow; the count is of the draws after the warm-up, and the pairs charts mark where they happened."
+        },
+        "treedepth": {
+          "name": "Tree depth",
+          "says": "The number of times the trajectory was doubled in an iteration. «At largest depth» counts the iterations that stopped at the largest depth the node allows, «deepest tree» is the largest depth reached."
+        },
+        "ebfmi": {
+          "name": "E-BFMI",
+          "says": "The estimated Bayesian fraction of missing information of a chain: how the changes of the energy between iterations compare with the energy's total variation."
+        },
+        "adaptation": {
+          "name": "Step size and acceptance",
+          "says": "The step size the warm-up settled on, the mean acceptance statistic of the iterations and the mean number of leapfrog steps an iteration took: what the sampler did, in numbers."
+        }
+      }
     }
   },
   "it": {
@@ -129,7 +214,10 @@
     "sections": {
       "posterior": "Riepilogo a posteriori",
       "prior": "Riepilogo delle estrazioni a priori",
-      "data": "Dati"
+      "data": "Dati",
+      "groups": "Gruppi",
+      "charts": "Grafici delle estrazioni",
+      "pairs": "Coppie"
     },
     "kpi": {
       "rows": "Righe usate",
@@ -190,7 +278,26 @@
       "standardized": "Standardizzata",
       "count": "Unità o livelli",
       "reference": "Livello di riferimento",
-      "missing": "Escluse"
+      "missing": "Escluse",
+      "posterior_sheet": "Sintesi a posteriori",
+      "prior_sheet": "Sintesi delle estrazioni a priori",
+      "sampler": "Misure del campionatore per catena",
+      "nodes": "Misure per nodo",
+      "chain": "Catena",
+      "all_chains": "Tutte le catene",
+      "divergences": "Divergenze",
+      "treedepth_hits": "Alla massima profondità",
+      "treedepth_max": "Albero più profondo",
+      "e_bfmi": "E-BFMI",
+      "stepsize": "Passo",
+      "accept_stat_mean": "Accettazione media",
+      "n_leapfrog_mean": "Passi leapfrog medi",
+      "seconds_warmup": "Riscaldamento (s)",
+      "seconds_sampling": "Campionamento (s)",
+      "rhat_max": "R-hat massimo",
+      "ess_bulk_min": "ESS centro minimo",
+      "ess_tail_min": "ESS code minimo",
+      "plate": "Gruppo"
     },
     "stats": {
       "model": {
@@ -211,6 +318,8 @@
         "seconds_sampling": "Campionamento (s)",
         "seconds_conversion": "Conversione delle estrazioni (s)",
         "seconds_pass_2": "Misura delle estrazioni (s)",
+        "seconds_checks": "Controlli predittivi (s)",
+        "seconds_replicated": "Dati replicati (s)",
         "bayes_model": "Modello salvato",
         "bayes_version": "Versione",
         "semantic_hash": "Hash semantico",
@@ -239,6 +348,67 @@
       "precision": {
         "8 significant digits": "8 cifre significative"
       }
+    },
+    "groups": {
+      "note": "Le quantità di un gruppo, una per ciascuna unità: la mediana delle estrazioni a posteriori di ogni unità con il suo intervallo dal 5 % al 95 %, le unità in ordine di mediana.",
+      "sampled": "Un campione di {shown} unità su {total}: le dieci le cui mediane sono più lontane da quella centrale e un campione casuale (con seme fisso) delle altre."
+    },
+    "charts": {
+      "how": {
+        "trace": "Traccia: una linea per ogni catena, il valore della quantità a ogni iterazione conservata (diradata), nell'ordine di estrazione.",
+        "rank": "Istogramma dei ranghi: per ogni catena, il numero delle sue estrazioni in ciascuno dei 20 intervalli uguali dei ranghi di tutte le estrazioni delle catene messe insieme.",
+        "density": "Densità: la densità a posteriori delle estrazioni (linea continua) e quella a priori (tratteggiata) sullo stesso asse; le estrazioni fuori dall'intervallo disegnato sono contate nelle note.",
+        "pairs": "Ogni punto è un'estrazione: la prima quantità sull'asse orizzontale, la seconda su quello verticale; le estrazioni divergenti hanno un colore a parte.",
+        "units": "Ogni punto è la mediana a posteriori di un'unità, la linea il suo intervallo dal 5 % al 95 %."
+      },
+      "trace": "Traccia",
+      "rank": "Ranghi per catena",
+      "density": "A posteriori e a priori",
+      "pairs": "Coppie di estrazioni",
+      "units": "Mediana e intervallo al 90 %",
+      "chain": "Catena",
+      "posterior": "A posteriori",
+      "prior": "A priori",
+      "draws": "Estrazioni",
+      "divergent": "Estrazioni divergenti",
+      "median": "Mediana",
+      "low": "5 %",
+      "high": "95 %"
+    },
+    "diagnostics": {
+      "note": "Misure e fatti dell'esecuzione, così come sono. La tabella dà i numeri del campionatore per ogni catena; sotto, che cos'è ciascuna misura.",
+      "divergences_fact": "{n} delle {total} estrazioni dopo il riscaldamento sono state transizioni divergenti.",
+      "treedepth_fact": "{n} delle estrazioni si sono fermate alla massima profondità dell'albero consentita ({depth}).",
+      "measures": {
+        "rhat": {
+          "name": "R-hat",
+          "says": "Confronta la variabilità tra le catene con quella dentro le catene (ogni catena divisa in due metà, sui ranghi delle estrazioni, per il centro e per le code della distribuzione): più le catene differiscono tra loro, più si allontana da 1."
+        },
+        "ess": {
+          "name": "ESS, centro e code",
+          "says": "La dimensione campionaria efficace dice a quante estrazioni indipendenti equivalgono le catene: l'ESS del centro per il centro della distribuzione (media e mediana), l'ESS delle code per i suoi quantili al 5 % e al 95 %."
+        },
+        "mcse": {
+          "name": "MCSE della media",
+          "says": "L'errore standard di Monte Carlo della media: di quanto la media delle estrazioni può distare dalla media a posteriori perché le estrazioni indipendenti sono in numero finito, nell'unità della quantità."
+        },
+        "divergences": {
+          "name": "Divergenze",
+          "says": "Una transizione divergente è un'iterazione in cui la traiettoria simulata si allontana dal percorso che seguirebbe la dinamica esatta; il conteggio riguarda le estrazioni dopo il riscaldamento e i grafici delle coppie segnano dove sono avvenute."
+        },
+        "treedepth": {
+          "name": "Profondità dell'albero",
+          "says": "Il numero di volte in cui la traiettoria è stata raddoppiata in un'iterazione. «Alla massima profondità» conta le iterazioni fermate alla massima profondità che il nodo consente, «albero più profondo» è la massima profondità raggiunta."
+        },
+        "ebfmi": {
+          "name": "E-BFMI",
+          "says": "La frazione bayesiana stimata di informazione mancante di una catena: come le variazioni dell'energia tra un'iterazione e l'altra si confrontano con la variazione totale dell'energia."
+        },
+        "adaptation": {
+          "name": "Passo e accettazione",
+          "says": "Il passo su cui si è assestato il riscaldamento, la statistica di accettazione media delle iterazioni e il numero medio di passi leapfrog di un'iterazione: ciò che il campionatore ha fatto, in numeri."
+        }
+      }
     }
   },
   "de": {
@@ -250,7 +420,10 @@
     "sections": {
       "posterior": "Posterior-Zusammenfassung",
       "prior": "Zusammenfassung der Prior-Ziehungen",
-      "data": "Daten"
+      "data": "Daten",
+      "groups": "Gruppen",
+      "charts": "Diagramme der Ziehungen",
+      "pairs": "Paare"
     },
     "kpi": {
       "rows": "Verwendete Zeilen",
@@ -311,7 +484,26 @@
       "standardized": "Standardisiert",
       "count": "Einheiten oder Stufen",
       "reference": "Referenzstufe",
-      "missing": "Ausgelassen"
+      "missing": "Ausgelassen",
+      "posterior_sheet": "Posterior-Zusammenfassung",
+      "prior_sheet": "Zusammenfassung der Prior-Ziehungen",
+      "sampler": "Maße des Samplers je Kette",
+      "nodes": "Maße je Knoten",
+      "chain": "Kette",
+      "all_chains": "Alle Ketten",
+      "divergences": "Divergenzen",
+      "treedepth_hits": "Bei größter Tiefe",
+      "treedepth_max": "Tiefster Baum",
+      "e_bfmi": "E-BFMI",
+      "stepsize": "Schrittweite",
+      "accept_stat_mean": "Mittlere Akzeptanz",
+      "n_leapfrog_mean": "Mittlere Leapfrog-Schritte",
+      "seconds_warmup": "Warm-up (s)",
+      "seconds_sampling": "Sampling (s)",
+      "rhat_max": "Größtes R-hat",
+      "ess_bulk_min": "Kleinste ESS Mitte",
+      "ess_tail_min": "Kleinste ESS Ränder",
+      "plate": "Gruppe"
     },
     "stats": {
       "model": {
@@ -332,6 +524,8 @@
         "seconds_sampling": "Sampling (s)",
         "seconds_conversion": "Ziehungen umwandeln (s)",
         "seconds_pass_2": "Ziehungen vermessen (s)",
+        "seconds_checks": "Prädiktive Prüfungen (s)",
+        "seconds_replicated": "Replizierte Daten (s)",
         "bayes_model": "Gespeichertes Modell",
         "bayes_version": "Version",
         "semantic_hash": "Semantischer Hash",
@@ -360,6 +554,67 @@
       "precision": {
         "8 significant digits": "8 signifikante Stellen"
       }
+    },
+    "groups": {
+      "note": "Die Größen einer Gruppe, eine je Einheit: der Median der Posterior-Ziehungen jeder Einheit mit ihrem Intervall von 5 % bis 95 %, die Einheiten nach ihrem Median geordnet.",
+      "sampled": "Eine Stichprobe von {shown} der {total} Einheiten: die zehn, deren Mediane am weitesten vom mittleren entfernt sind, und eine Zufallsstichprobe der übrigen (mit festem Startwert)."
+    },
+    "charts": {
+      "how": {
+        "trace": "Trace: eine Linie je Kette, der Wert der Größe bei jeder behaltenen Iteration (ausgedünnt), in der Reihenfolge der Ziehung.",
+        "rank": "Rang-Histogramm: für jede Kette die Zahl ihrer Ziehungen in jedem von 20 gleich breiten Intervallen der Ränge aller Ziehungen der Ketten zusammen.",
+        "density": "Dichte: die Posterior-Dichte der Ziehungen (durchgezogen) und die Prior-Dichte (gestrichelt) auf derselben Achse; die Ziehungen außerhalb des gezeichneten Bereichs sind in den Hinweisen gezählt.",
+        "pairs": "Jeder Punkt ist eine Ziehung: die erste Größe auf der waagerechten, die zweite auf der senkrechten Achse; die divergenten Ziehungen haben eine eigene Farbe.",
+        "units": "Jeder Punkt ist der Posterior-Median einer Einheit, die Linie ihr Intervall von 5 % bis 95 %."
+      },
+      "trace": "Trace",
+      "rank": "Ränge je Kette",
+      "density": "Posterior und Prior",
+      "pairs": "Paare von Ziehungen",
+      "units": "Median und 90-%-Intervall",
+      "chain": "Kette",
+      "posterior": "Posterior",
+      "prior": "Prior",
+      "draws": "Ziehungen",
+      "divergent": "Divergente Ziehungen",
+      "median": "Median",
+      "low": "5 %",
+      "high": "95 %"
+    },
+    "diagnostics": {
+      "note": "Maße und Fakten des Laufs, so wie sie sind. Die Tabelle gibt die Zahlen des Samplers je Kette; darunter, was jedes Maß ist.",
+      "divergences_fact": "{n} der {total} Ziehungen nach dem Warm-up waren divergente Übergänge.",
+      "treedepth_fact": "{n} der Ziehungen endeten bei der größten erlaubten Baumtiefe ({depth}).",
+      "measures": {
+        "rhat": {
+          "name": "R-hat",
+          "says": "Vergleicht die Streuung zwischen den Ketten mit der Streuung innerhalb der Ketten (jede Kette in zwei Hälften geteilt, auf den Rängen der Ziehungen, für die Mitte und für die Ränder der Verteilung): je mehr sich die Ketten voneinander unterscheiden, desto weiter liegt es von 1 entfernt."
+        },
+        "ess": {
+          "name": "ESS, Mitte und Ränder",
+          "says": "Die effektive Stichprobengröße sagt, wie vielen unabhängigen Ziehungen die Ketten entsprechen: die ESS der Mitte für die Mitte der Verteilung (Mittelwert und Median), die ESS der Ränder für ihre 5-%- und 95-%-Quantile."
+        },
+        "mcse": {
+          "name": "MCSE des Mittelwerts",
+          "says": "Der Monte-Carlo-Standardfehler des Mittelwerts: wie weit der Mittelwert der Ziehungen vom Posterior-Mittelwert entfernt sein kann, weil die Zahl unabhängiger Ziehungen endlich ist, in der Einheit der Größe."
+        },
+        "divergences": {
+          "name": "Divergenzen",
+          "says": "Ein divergenter Übergang ist eine Iteration, in der die simulierte Trajektorie vom Pfad der exakten Dynamik abweicht; gezählt werden die Ziehungen nach dem Warm-up, und die Paar-Diagramme markieren, wo sie auftraten."
+        },
+        "treedepth": {
+          "name": "Baumtiefe",
+          "says": "Wie oft die Trajektorie in einer Iteration verdoppelt wurde. «Bei größter Tiefe» zählt die Iterationen, die bei der größten Tiefe endeten, die der Knoten erlaubt; «tiefster Baum» ist die größte erreichte Tiefe."
+        },
+        "ebfmi": {
+          "name": "E-BFMI",
+          "says": "Der geschätzte bayessche Anteil fehlender Information einer Kette: wie die Änderungen der Energie zwischen den Iterationen im Vergleich zur gesamten Variation der Energie ausfallen."
+        },
+        "adaptation": {
+          "name": "Schrittweite und Akzeptanz",
+          "says": "Die Schrittweite, auf die sich das Warm-up eingestellt hat, die mittlere Akzeptanzstatistik der Iterationen und die mittlere Zahl der Leapfrog-Schritte je Iteration: was der Sampler getan hat, in Zahlen."
+        }
+      }
     }
   },
   "es": {
@@ -371,7 +626,10 @@
     "sections": {
       "posterior": "Resumen a posteriori",
       "prior": "Resumen de las muestras a priori",
-      "data": "Datos"
+      "data": "Datos",
+      "groups": "Grupos",
+      "charts": "Gráficos de las extracciones",
+      "pairs": "Pares"
     },
     "kpi": {
       "rows": "Filas usadas",
@@ -432,7 +690,26 @@
       "standardized": "Estandarizada",
       "count": "Unidades o niveles",
       "reference": "Nivel de referencia",
-      "missing": "Excluidas"
+      "missing": "Excluidas",
+      "posterior_sheet": "Resumen a posteriori",
+      "prior_sheet": "Resumen de las extracciones a priori",
+      "sampler": "Medidas del muestreador por cadena",
+      "nodes": "Medidas por nodo",
+      "chain": "Cadena",
+      "all_chains": "Todas las cadenas",
+      "divergences": "Divergencias",
+      "treedepth_hits": "En la mayor profundidad",
+      "treedepth_max": "Árbol más profundo",
+      "e_bfmi": "E-BFMI",
+      "stepsize": "Paso",
+      "accept_stat_mean": "Aceptación media",
+      "n_leapfrog_mean": "Pasos leapfrog medios",
+      "seconds_warmup": "Calentamiento (s)",
+      "seconds_sampling": "Muestreo (s)",
+      "rhat_max": "R-hat máximo",
+      "ess_bulk_min": "ESS centro mínima",
+      "ess_tail_min": "ESS colas mínima",
+      "plate": "Grupo"
     },
     "stats": {
       "model": {
@@ -453,6 +730,8 @@
         "seconds_sampling": "Muestreo (s)",
         "seconds_conversion": "Conversión de las muestras (s)",
         "seconds_pass_2": "Medida de las muestras (s)",
+        "seconds_checks": "Comprobaciones predictivas (s)",
+        "seconds_replicated": "Datos replicados (s)",
         "bayes_model": "Modelo guardado",
         "bayes_version": "Versión",
         "semantic_hash": "Hash semántico",
@@ -481,6 +760,67 @@
       "precision": {
         "8 significant digits": "8 cifras significativas"
       }
+    },
+    "groups": {
+      "note": "Las cantidades de un grupo, una por cada unidad: la mediana de las extracciones a posteriori de cada unidad con su intervalo del 5 % al 95 %, las unidades en el orden de sus medianas.",
+      "sampled": "Una muestra de {shown} de las {total} unidades: las diez cuyas medianas están más lejos de la central y una muestra aleatoria (con semilla fija) de las demás."
+    },
+    "charts": {
+      "how": {
+        "trace": "Traza: una línea por cada cadena, el valor de la cantidad en cada iteración conservada (aclarada), en el orden de extracción.",
+        "rank": "Histograma de rangos: para cada cadena, el número de sus extracciones en cada uno de los 20 intervalos iguales de los rangos de todas las extracciones de las cadenas juntas.",
+        "density": "Densidad: la densidad a posteriori de las extracciones (continua) y la a priori (discontinua) sobre el mismo eje; las extracciones fuera del rango dibujado se cuentan en las notas.",
+        "pairs": "Cada punto es una extracción: la primera cantidad en el eje horizontal, la segunda en el vertical; las extracciones divergentes tienen su propio color.",
+        "units": "Cada punto es la mediana a posteriori de una unidad, la línea su intervalo del 5 % al 95 %."
+      },
+      "trace": "Traza",
+      "rank": "Rangos por cadena",
+      "density": "A posteriori y a priori",
+      "pairs": "Pares de extracciones",
+      "units": "Mediana e intervalo del 90 %",
+      "chain": "Cadena",
+      "posterior": "A posteriori",
+      "prior": "A priori",
+      "draws": "Extracciones",
+      "divergent": "Extracciones divergentes",
+      "median": "Mediana",
+      "low": "5 %",
+      "high": "95 %"
+    },
+    "diagnostics": {
+      "note": "Medidas y hechos de la ejecución, tal como son. La tabla da las cifras del muestreador por cadena; debajo, qué es cada medida.",
+      "divergences_fact": "{n} de las {total} extracciones tras el calentamiento fueron transiciones divergentes.",
+      "treedepth_fact": "{n} de las extracciones terminaron en la mayor profundidad de árbol permitida ({depth}).",
+      "measures": {
+        "rhat": {
+          "name": "R-hat",
+          "says": "Compara la dispersión entre las cadenas con la dispersión dentro de ellas (cada cadena partida en dos mitades, sobre los rangos de las extracciones, para el centro y para las colas de la distribución): cuanto más difieren las cadenas entre sí, más se aleja de 1."
+        },
+        "ess": {
+          "name": "ESS, centro y colas",
+          "says": "El tamaño de muestra efectivo dice a cuántas extracciones independientes equivalen las cadenas: la ESS del centro para el centro de la distribución (su media y su mediana), la ESS de las colas para sus cuantiles del 5 % y del 95 %."
+        },
+        "mcse": {
+          "name": "MCSE de la media",
+          "says": "El error estándar de Monte Carlo de la media: cuánto puede distar la media de las extracciones de la media a posteriori porque el número de extracciones independientes es finito, en la unidad de la cantidad."
+        },
+        "divergences": {
+          "name": "Divergencias",
+          "says": "Una transición divergente es una iteración en la que la trayectoria simulada se aparta del camino que seguiría la dinámica exacta; el recuento es de las extracciones tras el calentamiento y los gráficos de pares marcan dónde ocurrieron."
+        },
+        "treedepth": {
+          "name": "Profundidad del árbol",
+          "says": "Las veces que se duplicó la trayectoria en una iteración. «En la mayor profundidad» cuenta las iteraciones que se detuvieron en la mayor profundidad que el nodo permite, «árbol más profundo» es la mayor profundidad alcanzada."
+        },
+        "ebfmi": {
+          "name": "E-BFMI",
+          "says": "La fracción bayesiana estimada de información faltante de una cadena: cómo se comparan los cambios de la energía entre iteraciones con la variación total de la energía."
+        },
+        "adaptation": {
+          "name": "Paso y aceptación",
+          "says": "El paso en el que se estabilizó el calentamiento, la estadística de aceptación media de las iteraciones y el número medio de pasos leapfrog por iteración: lo que hizo el muestreador, en números."
+        }
+      }
     }
   },
   "fr": {
@@ -492,7 +832,10 @@
     "sections": {
       "posterior": "Résumé a posteriori",
       "prior": "Résumé des tirages a priori",
-      "data": "Données"
+      "data": "Données",
+      "groups": "Groupes",
+      "charts": "Graphiques des tirages",
+      "pairs": "Paires"
     },
     "kpi": {
       "rows": "Lignes utilisées",
@@ -553,7 +896,26 @@
       "standardized": "Standardisée",
       "count": "Unités ou niveaux",
       "reference": "Niveau de référence",
-      "missing": "Écartées"
+      "missing": "Écartées",
+      "posterior_sheet": "Résumé a posteriori",
+      "prior_sheet": "Résumé des tirages a priori",
+      "sampler": "Mesures de l'échantillonneur par chaîne",
+      "nodes": "Mesures par nœud",
+      "chain": "Chaîne",
+      "all_chains": "Toutes les chaînes",
+      "divergences": "Divergences",
+      "treedepth_hits": "À la plus grande profondeur",
+      "treedepth_max": "Arbre le plus profond",
+      "e_bfmi": "E-BFMI",
+      "stepsize": "Pas",
+      "accept_stat_mean": "Acceptation moyenne",
+      "n_leapfrog_mean": "Pas leapfrog moyens",
+      "seconds_warmup": "Réchauffement (s)",
+      "seconds_sampling": "Échantillonnage (s)",
+      "rhat_max": "R-hat maximal",
+      "ess_bulk_min": "ESS centre minimale",
+      "ess_tail_min": "ESS queues minimale",
+      "plate": "Groupe"
     },
     "stats": {
       "model": {
@@ -574,6 +936,8 @@
         "seconds_sampling": "Échantillonnage (s)",
         "seconds_conversion": "Conversion des tirages (s)",
         "seconds_pass_2": "Mesure des tirages (s)",
+        "seconds_checks": "Contrôles prédictifs (s)",
+        "seconds_replicated": "Données répliquées (s)",
         "bayes_model": "Modèle enregistré",
         "bayes_version": "Version",
         "semantic_hash": "Empreinte sémantique",
@@ -601,6 +965,67 @@
       },
       "precision": {
         "8 significant digits": "8 chiffres significatifs"
+      }
+    },
+    "groups": {
+      "note": "Les quantités d'un groupe, une par unité : la médiane des tirages a posteriori de chaque unité avec son intervalle de 5 % à 95 %, les unités dans l'ordre de leurs médianes.",
+      "sampled": "Un échantillon de {shown} unités sur {total} : les dix dont les médianes sont les plus éloignées de la médiane centrale et un échantillon aléatoire (à graine fixe) des autres."
+    },
+    "charts": {
+      "how": {
+        "trace": "Trace : une ligne par chaîne, la valeur de la quantité à chaque itération conservée (éclaircie), dans l'ordre du tirage.",
+        "rank": "Histogramme des rangs : pour chaque chaîne, le nombre de ses tirages dans chacun des 20 intervalles égaux des rangs de tous les tirages des chaînes réunies.",
+        "density": "Densité : la densité a posteriori des tirages (trait plein) et celle a priori (tirets) sur le même axe ; les tirages hors de la plage dessinée sont comptés dans les notes.",
+        "pairs": "Chaque point est un tirage : la première quantité sur l'axe horizontal, la seconde sur l'axe vertical ; les tirages divergents ont leur propre couleur.",
+        "units": "Chaque point est la médiane a posteriori d'une unité, le trait son intervalle de 5 % à 95 %."
+      },
+      "trace": "Trace",
+      "rank": "Rangs par chaîne",
+      "density": "A posteriori et a priori",
+      "pairs": "Paires de tirages",
+      "units": "Médiane et intervalle à 90 %",
+      "chain": "Chaîne",
+      "posterior": "A posteriori",
+      "prior": "A priori",
+      "draws": "Tirages",
+      "divergent": "Tirages divergents",
+      "median": "Médiane",
+      "low": "5 %",
+      "high": "95 %"
+    },
+    "diagnostics": {
+      "note": "Mesures et faits de l'exécution, tels quels. Le tableau donne les chiffres de l'échantillonneur par chaîne ; dessous, ce qu'est chaque mesure.",
+      "divergences_fact": "{n} des {total} tirages après le réchauffement étaient des transitions divergentes.",
+      "treedepth_fact": "{n} des tirages se sont arrêtés à la plus grande profondeur d'arbre permise ({depth}).",
+      "measures": {
+        "rhat": {
+          "name": "R-hat",
+          "says": "Compare la dispersion entre les chaînes à la dispersion à l'intérieur de chacune (chaque chaîne coupée en deux moitiés, sur les rangs des tirages, pour le centre et pour les queues de la distribution) : plus les chaînes diffèrent entre elles, plus il s'éloigne de 1."
+        },
+        "ess": {
+          "name": "ESS, centre et queues",
+          "says": "La taille d'échantillon effective dit à combien de tirages indépendants les chaînes équivalent : l'ESS du centre pour le centre de la distribution (sa moyenne et sa médiane), l'ESS des queues pour ses quantiles à 5 % et à 95 %."
+        },
+        "mcse": {
+          "name": "MCSE de la moyenne",
+          "says": "L'erreur standard de Monte Carlo de la moyenne : de combien la moyenne des tirages peut s'écarter de la moyenne a posteriori parce que le nombre de tirages indépendants est fini, dans l'unité de la quantité."
+        },
+        "divergences": {
+          "name": "Divergences",
+          "says": "Une transition divergente est une itération où la trajectoire simulée s'écarte du chemin que suivrait la dynamique exacte ; le décompte porte sur les tirages après le réchauffement et les graphiques de paires marquent où elles ont eu lieu."
+        },
+        "treedepth": {
+          "name": "Profondeur de l'arbre",
+          "says": "Le nombre de fois où la trajectoire a été doublée dans une itération. «À la plus grande profondeur» compte les itérations arrêtées à la plus grande profondeur que le nœud permet, «arbre le plus profond» est la plus grande profondeur atteinte."
+        },
+        "ebfmi": {
+          "name": "E-BFMI",
+          "says": "La fraction bayésienne estimée d'information manquante d'une chaîne : comment les variations de l'énergie d'une itération à l'autre se comparent à la variation totale de l'énergie."
+        },
+        "adaptation": {
+          "name": "Pas et acceptation",
+          "says": "Le pas sur lequel le réchauffement s'est fixé, la statistique d'acceptation moyenne des itérations et le nombre moyen de pas leapfrog par itération : ce que l'échantillonneur a fait, en chiffres."
+        }
       }
     }
   }

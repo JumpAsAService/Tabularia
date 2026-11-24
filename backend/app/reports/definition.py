@@ -40,7 +40,7 @@ SERIES_OF = {
 _SERIES_COUNT = {"boxplot": 5, "interval": 3, "density": 1}
 # The marks of an `xy` chart (docs/specs/statistical-models.md, «Charts»): its series' `as`. A
 # band is a pair, its low edge then its high edge, the area between them filled.
-XY_MARKS = ("point", "line", "step", "stem", "band_low", "band_high")
+XY_MARKS = ("point", "line", "dashed", "step", "stem", "band_low", "band_high")
 MAX_XY_TARGETS_X = 4  # the vertical lines of an `xy` chart (a cross-validation's two λ)
 _NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
 
@@ -256,13 +256,17 @@ class TableItem(_Item):
     # where it is laid out); a longer one breaks as any table. Set by the engine's own layouts on their short tables (the
     # models' GARCH and risk reports), as keep_with_next; the designer does not offer it
     keep_whole: bool = False
+    # which outputs hold the table: `pages` (the pdf, the screen and the email: not the Excel file), `sheet` (the Excel file only: its
+    # sheet holds what the pages would print in part, as the full posterior summary of a Bayesian model's report). Set by the
+    # engine's own layouts; the designer does not offer it, and a table without it is in every output
+    only: Literal["pages", "sheet"] | None = None
 
 
 class Series(_Model):
     value: Expr
     name: str = Field("", max_length=200)
     # bar and line for a combo; the marks of XY_MARKS for an `xy` chart only
-    as_: Literal["bar", "line", "point", "step", "stem", "band_low", "band_high"] | None = Field(None, alias="as")
+    as_: Literal["bar", "line", "point", "dashed", "step", "stem", "band_low", "band_high"] | None = Field(None, alias="as")
     axis: Literal["left", "right"] = "left"
     format: Pattern | None = None  # its values', and its axis's; none: the chart's
     label: Expr | None = None  # `xy` only: the text written beside a point (a row's number), none for most

@@ -1,7 +1,8 @@
-"""The report of the node «Bayesian model», first lot (docs/specs/bayes-report.md, lot Q1): the pages that need no chart and no reading,
+"""The report of the node «Bayesian model» (docs/specs/bayes-report.md, lots Q1 and Q2: the pages that need no reading, the groups, the
+diagnostics and the charts),
 drawn from the two fixtures (`bayes_model-sample.json`, `bayes_model-prior_predictive.json`, made by the runner's writers on fake draws:
 gateway-go/internal/modelgroups/groups/bayes/reference/make_report_fixtures.py), in the five languages and the three formats.
-The diagnostics' page and charts, the predictive checks and the readings are the next lots' tests."""
+The predictive checks and the readings are the next lots' tests."""
 from __future__ import annotations
 
 import json
@@ -48,8 +49,8 @@ def test_the_posterior_table_holds_the_scalars_and_the_correlations_with_their_l
                   "Correlation of the intercepts and the slopes"):
         assert label in texts, label
     assert "b_g,a_g" in texts and "—" in texts  # the correlation's unit, the contraction the run left empty
-    # a plate's quantities are the groups' page: not here
-    assert "Intercept of the school" not in texts and "Liceo Galilei" not in texts
+    # a plate's quantities are the groups' page (and the Excel sheet's): not in this table (the groups' page names them as charts' captions)
+    assert not [t for t in texts if t == "Liceo Galilei"]
     for column in ("Mean", "Sd", "5 %", "Median", "95 %", "R-hat", "ESS bulk", "ESS tail", "MCSE of the mean", "Contraction"):
         assert column in texts, column
 
@@ -136,3 +137,108 @@ def test_the_node_is_a_model_of_the_catalogue_with_a_report_and_the_title_says_t
         keys = {r["key"] for r in rows}
         assert {"model|||n", "model|||chains", "model|||draws"} <= keys
         assert ("sampler|all||divergences" in keys) == (case == SAMPLE)
+
+
+# ── lot Q2: the charts' places, the groups, the diagnostics, the charts, the Excel sheet ────────────────────────────────────────
+def _row(section, level, level_2, stat, value=None, text=None, ord_=0, x0=None):
+    return {"section": section, "level": level, "level_2": level_2, "stat": stat, "value": value, "text": text, "x0": x0, "x1": None, "ord": ord_,
+            "key": f"{section}|{level}|{level_2 or ''}|{stat}|{ord_}"}
+
+
+def test_the_slots_give_each_chart_its_place_in_the_scope_and_say_what_the_place_holds():
+    _, _, rows = fixture(SAMPLE)
+    out = common.SLOTS["bayes_model"](rows)
+    levels = {r["level"] for r in out if r["section"] in ("curve", "hist", "point")}
+    # the places: 12 quantities (trace, rank, density the same k), pairs 1…6, units 1…
+    n = len({r["level"] for r in rows if r["section"] == "curve" and r["level"].startswith("trace:")})
+    assert {f"{k}:{i}" for k in ("trace", "rank", "density") for i in range(1, min(n, 12) + 1)} <= levels
+    assert {f"pairs:{i}" for i in range(1, 7)} <= levels and {"units:1"} <= levels
+    assert not [lv for lv in levels if lv.count(":") > 1 or "[" in lv or lv in ("trace:mu_a",)]
+    slot = {r["level"] + "|" + r["stat"]: r for r in out if r["section"] == "slot"}
+    assert slot["trace:1|label"]["text"] == "Mean of the intercepts" and slot["trace:1|label"]["key"] == "slot|trace:1||label"
+    assert slot["pairs:1|label"]["text"] == "Mean of the intercepts × Spread of the intercepts"
+    assert slot["units:1|label"]["text"] == "Intercept of the school (School)" and slot["units:1|total"]["value"] == 6
+    # the chart's rows keep everything else; the key follows the id
+    [first] = [r for r in out if r["level"] == "trace:1" and r["level_2"] == "1" and r["x0"] == 1.0]
+    assert first["key"].startswith("curve|trace:1|1|value|")
+    # an element of a plate says its unit after the quantity's label
+    assert any(r["text"].startswith("Intercept of the school — ") for r in out if r["section"] == "slot" and r["stat"] == "label")
+
+
+def test_a_chart_beyond_the_places_keeps_its_id_and_a_name_with_a_colon_is_a_pair_all_the_same():
+    rows = [_row("quantity", "a:b", None, "label", text="Alpha"), _row("quantity", "c", None, "label", text="Gamma")]
+    ordn = 1
+    for k in range(14):
+        rows.append(_row("curve", f"trace:q{k}", "1", "value", 1.0, ord_=ordn, x0=1.0))
+        ordn += 1
+    rows.append(_row("curve", "trace:a:b", "1", "value", 1.0, ord_=ordn, x0=1.0))
+    rows.append(_row("curve", "trace:c", "1", "value", 1.0, ord_=ordn + 1, x0=1.0))
+    rows.append(_row("curve", "pairs:a:b:c", "draw", "value", 1.0, ord_=ordn + 2, x0=1.0))
+    out = common.SLOTS["bayes_model"](rows)
+    assert {r["level"] for r in out if r["section"] == "curve" and r["level"].startswith("trace:")} >= {"trace:12", "trace:a:b", "trace:c"}
+    [pair] = [r for r in out if r["section"] == "slot" and r["level"] == "pairs:1"]
+    assert pair["text"] == "Alpha × Gamma"
+    assert not [r for r in out if r["section"] == "slot" and r["level"] == "trace:13"]
+
+
+def test_the_groups_the_diagnostics_and_the_charts_are_pages_of_the_report(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    texts = said(tmp_path, chart_service, monkeypatch, SAMPLE)
+    w = common.words("bayes_model", "sample", "en")
+    for text in (w["sections"]["groups"], w["groups"]["note"], w["sections"]["diagnostics"], w["diagnostics"]["note"],
+                 "2 of the 1,000 draws after the warm-up were divergent transitions.", w["sections"]["charts"], w["sections"]["pairs"],
+                 w["charts"]["how"]["trace"], w["charts"]["how"]["rank"], w["charts"]["how"]["density"], w["charts"]["how"]["pairs"],
+                 w["charts"]["how"]["units"], "Intercept of the school (School)", "Mean of the intercepts"):
+        assert text in texts, text
+    for measure in w["diagnostics"]["measures"].values():
+        assert measure["name"] in texts and measure["says"] in texts
+    # the sampler's table: a row a chain and the whole run, the measures as numbers
+    for header in ("Chain", "Divergences", "At largest depth", "Deepest tree", "E-BFMI", "Step size", "Mean acceptance", "Mean leapfrog steps"):
+        assert header in texts, header
+    assert "All chains" in texts and "0.88" not in texts  # (a number is a cell of its own: 0.880)
+    # nothing of the diagnostics is compared with a reference value
+    assert not [t for t in texts if re.search(r"1\.01|\b400\b|0\.3\b", t) and t in strings(w["diagnostics"])]
+
+
+def test_the_charts_are_drawn_a_line_a_chain_the_prior_dashed_and_the_divergent_draws_in_their_own_colour(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    model, params, rows = fixture(SAMPLE)
+    # two draws of the pair are divergent (the fixture's pairs carry none)
+    pair = [r for r in rows if r["section"] == "curve" and r["level"] == "pairs:mu_a:tau_a" and r["level_2"] == "draw"]
+    divergent = [{**r, "level_2": "divergent", "key": r["key"].replace("|draw|", "|divergent|")} for r in pair[:2]]
+    monkeypatch.setattr(me, "fixture", lambda case: (model, params, [*rows, *divergent]))
+    draw(tmp_path, chart_service, monkeypatch, SAMPLE, fmt="svg")
+    options = [c["option"] for c in chart_service[1]]
+    series = lambda o: [x for x in o.get("series", []) if x.get("data")]  # noqa: E731
+    traces = [o for o in options if len(series(o)) == 4 and all(x["type"] == "line" for x in series(o))]
+    assert len(traces) >= 12  # a line a chain (the rank histograms are steps, also a line a chain)
+    dashed = [o for o in options if any(x.get("lineStyle", {}).get("type") == "dashed" for x in series(o))]
+    assert len(dashed) >= 1  # the prior on the density
+    names = [{x.get("name") for x in o.get("series", [])} for o in options]
+    assert any({"Draws", "Divergent draws"} <= n for n in names)
+    assert any(o.get("series") and o["series"][0].get("type") == "boxplot" for o in options)  # the caterpillar of the units
+
+
+def test_a_plate_s_quantities_are_in_the_excel_sheet_and_the_pages_table_is_not(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    xlsx, _ = draw(tmp_path, chart_service, monkeypatch, SAMPLE, fmt="xlsx")
+    with zipfile.ZipFile(xlsx.path) as z:
+        book = z.read("xl/workbook.xml").decode()
+        strings_ = " ".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/"))
+    sheets = re.findall(r'<sheet name="([^"]+)"', book)
+    w = common.words("bayes_model", "sample", "en")["tables"]
+    assert w["posterior_sheet"] in sheets and w["posterior"][:31] not in sheets
+    assert "Liceo Galilei" in strings_ and "Istituto Marconi" in strings_  # every quantity of the scope, with its unit
+    assert w["sampler"][:31] in sheets and w["nodes"][:31] in sheets
+    # the pages' PDF and the screen have the other table
+    texts = said(tmp_path / "svg", chart_service, monkeypatch, SAMPLE)
+    assert not [t for t in texts if t == "Liceo Galilei"]
+
+
+def test_the_layout_places_the_pages_in_their_order(tmp_path):
+    body = layouts.definition("bayes_model", {}, "en", None, None)["sections"]["body"]["items"]
+    first = {it["id"]: i for i, it in enumerate(body)}
+    assert first["s_summary"] < first["s_posterior"] < first["s_groups"] < first["s_data"] < first["s_diagnostics"] < first["s_charts"] \
+        < first["s_pairs"] < first["s_how"] < first["s_notes"]
+    # a place with no rows takes no room: every item of a place says so
+    hidden = [it for it in body if it["id"].startswith(("quantity_label_", "trace_", "rank_", "density_", "pairs_", "units_"))]
+    assert hidden and all(it.get("collapse_hidden") for it in hidden)
+    prior = layouts.definition("bayes_model", {"mode": "prior_predictive"}, "en", None, None)["sections"]["body"]["items"]
+    assert not {"s_groups", "s_diagnostics", "s_charts"} & {it["id"] for it in prior}

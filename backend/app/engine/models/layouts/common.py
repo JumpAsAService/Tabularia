@@ -139,6 +139,8 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     chosen = READINGS.get(model)
     if chosen is not None:  # the explanation a layout chooses from the rows the runner wrote (docs/specs/report-explanations.md)
         rows = [*rows, *reading_rows(chosen(rows, checked), rows)]
+    if model in SLOTS:  # the charts whose ids are data, by their slot
+        rows = SLOTS[model](rows)
     model_numbers = {r["stat"]: r["value"] for r in rows if r["section"] == "model" and isinstance(r.get("value"), (int, float))}
     verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
                 if r["section"] == "assumption" and r["stat"] == "verdict"}
@@ -947,6 +949,12 @@ ReadingLine = tuple[str, str | None, str, Mapping[str, Any]]
 # (`READINGS["linear"] = readings`) for a runner that does not write its explanation itself (the A/B test's and the
 # decomposition's do: they register nothing). `with_labels` adds the lines as rows of the section `reading`.
 READINGS: dict[str, Callable[[list[dict], Mapping[str, Any]], list[ReadingLine]]] = {}
+# model → slots(rows) → the rows with each chart's place: a chart whose id is data (the Bayesian model's `trace:alpha[Liceo Galilei]`: a
+# quantity's name, a unit's text) cannot be addressed by a definition written before the rows are seen, so the hook gives each chart's
+# rows the id of its slot in the scope (`trace:3`) and adds a row of the section `slot` for each, `slot|<id>||label`, that says what the
+# slot holds (docs/specs/bayes-report.md, «The charts' rows»). How a row is said, never a computation: `with_labels` calls it after the
+# readings, so that a reading sees the ids as the runner wrote them.
+SLOTS: dict[str, Callable[[list[dict]], list[dict]]] = {}
 
 
 def encoded(v: Any) -> str:

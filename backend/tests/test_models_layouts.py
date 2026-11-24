@@ -198,7 +198,8 @@ def test_a_layout_is_a_definition_the_report_engine_accepts(case, locale):
             assert body[0]["id"] in ("s_decision", "s_plan") and first["reading"] > first["s_how"]
             assert ("assumptions" in first) == (model == "ab_test")
         elif model == "bayes_model":  # no assumption and no check: measures and facts (docs/specs/bayes-report.md): the summary first
-            assert body[0]["id"] == "s_summary" and "assumptions" not in first and first["s_summary"] < first["s_posterior"] < first["s_data"] < first["s_how"]
+            assert body[0]["id"] == "s_summary" and "assumptions" not in first and first["s_summary"] < first["s_posterior"] < first["s_data"] < first["s_how"] and \
+                (variant := catalog.variant(model, catalog.check_params(model, params))) and ("s_diagnostics" in first) == (variant == "sample")
         else:  # the assumptions come before every coefficient, number of the fit and chart: the first page
             assert first["assumptions"] < min(i for i, it in enumerate(body) if it["type"] == "chart")
             assert first["assumptions"] < first["fit"] and first["assumptions"] < first.get("coef", 10**6)
