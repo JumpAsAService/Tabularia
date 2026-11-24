@@ -514,6 +514,16 @@ func TestTheChecksOfATask(t *testing.T) {
 			nope := "nope"
 			b.ScalePairs = []bayescontract.ScalePair{{Intercept: &bayescontract.InterceptPair{Intercept: &nope, LP: []string{"mu_a"}, Data: []string{"x"}}}}
 		}},
+		// lot F2 of flow-node: the series
+		{"a series by a plate without a group index", "sample", "summary", func(b *bayescontract.Task) {
+			nope := "nope"
+			b.Series = &bayescontract.Series{By: &nope}
+		}},
+		{"a series' time without a name", "sample", "summary", func(b *bayescontract.Task) {
+			empty := ""
+			b.Series = &bayescontract.Series{Time: &empty}
+		}},
+		{"a series in the compile mode", "compile", "", func(b *bayescontract.Task) { b.Series = &bayescontract.Series{} }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -560,6 +570,22 @@ func TestTheChecksOfATask(t *testing.T) {
 	var back []bayescontract.ScalePair
 	if err := json.Unmarshal(text, &back); err != nil || len(back) != 3 || back[0].Term == nil || back[2].Intercept == nil || back[2].Intercept.Intercept != nil {
 		t.Errorf("scale pairs read back: %v %+v", err, back)
+	}
+	// a series by the group plate, its time a column; one series with its time unchecked
+	grp, week := "grp", "week"
+	for _, series := range []*bayescontract.Series{{By: &grp, Time: &week}, {}} {
+		b.Series = series
+		if err := b.Check("sample", "replicated"); err != nil {
+			t.Error(err)
+		}
+	}
+	text, _ = json.Marshal(bayescontract.Series{By: &grp, Time: &week})
+	if string(text) != `{"by":"grp","time":"week"}` {
+		t.Errorf("series: %s", text)
+	}
+	b.Series = nil
+	if text, _ = json.Marshal(b); strings.Contains(string(text), "series") {
+		t.Errorf("a task without a series names none: %s", text)
 	}
 }
 

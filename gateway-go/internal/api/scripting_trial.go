@@ -87,14 +87,22 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	var label string
 	var detail pyjson.Object
 	if nodeType == bayesNodeType {
-		// refused here, with its sentence, before any run exists (docs/specs/bayes-flow-node.md)
-		if err := newQueue(d).planBayes(q.ctx, &p.User, node); err != nil {
+		// refused here, with its sentence, before any run exists; the compile asked for now, with the person's
+		// authority (docs/specs/bayes-flow-node.md, «From the node to the Job»)
+		qq := newQueue(d)
+		if _, err := qq.planBayes(q.ctx, &p.User, node); err != nil {
 			var sf *scriptFailed
 			if !errors.As(err, &sf) {
 				q.fail(err)
 				return
 			}
-			q.refuse(http.StatusUnprocessableEntity, upperFirst(sf.msg))
+			status := http.StatusUnprocessableEntity
+			if modelsOff(qq.sc) != "" {
+				status = http.StatusConflict
+			} else if strings.Contains(sf.msg, " may not use the model group ") || strings.Contains(sf.msg, " is not available to ") {
+				status = http.StatusForbidden
+			}
+			q.refuse(status, upperFirst(sf.msg))
 			return
 		}
 		label, detail = modelLabel(node), pyjson.Object{{Key: "model", Value: bayesNodeType}}

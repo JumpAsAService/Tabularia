@@ -708,7 +708,7 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 	r.io()
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
 	out, err := func() (*flowresolver.Source, error) {
-		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, nil, s.what())
+		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, nil, nil, s.what())
 		if err != nil {
 			return nil, err
 		}

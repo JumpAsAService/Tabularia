@@ -391,3 +391,60 @@ Applied on the owner's approval of 2026-11-24, each marked «Correction of 2026-
 ## Open questions
 
 None.
+
+## As built — lot F2 (2026-11-24)
+
+- **`planBayes`** (`internal/api/jobs_bayes.go`) returns a `*bayesStep` (the model step's `*modelStep` — label, group,
+  `{mode, output}` checked by the catalogue's `bayes_model`, image, timeout, retries, budget — and the stored version, its
+  decoded graph and manifests, the bound data, the sampler, the series, the input's columns and sort, the compile's request
+  and state), refusing in this order: the models off; the group `bayes` (`checkModelGroup`: ready, usable by the run's
+  authority); no model or version named («choose a saved model in its panel»); the model absent, unseen or not runnable
+  (`CanRun`, one sentence: «the Bayesian model of «School scores» is not available to <email>»); the version gone (F1's
+  sentence); a stored graph that no longer validates; an unbound variable («bind «Predictor» to a column», the graph's label);
+  the sampler (the contract's ranges, the defaults for an absent key, **the seed required**: «its seed is missing: draw one
+  in its panel»), the initial values (a radius ≥ 0, or values by a parameter's Stan identifier: a number for a single value,
+  a list for a vector), the output, the replicated thinning (1 … draws, default 50), the timeout within the group's, the
+  retries; then `Binaries.Need` with the run's authority (`ErrRefused` fails with the state's sentence). The editor's trial
+  route calls it before inserting its run (409 models off, 403 the group's use or the model not available, 422 the rest), so
+  the compile is queued from the moment the person presses Run.
+- **`runBayes`**: the child run (kind `model`, its `info` the model step's plus `bayes_model {id, version, name}` and
+  `compile {state, detail, waiting[, seconds]}`), the input (`modelPrepareInput` gained `then []any`, the operations after the
+  `select`: nil for the model and Predict nodes, whose requests keep their bytes — `modelInputRequest`, tested; for a series
+  the engine's `sort` `{"by": [<the group index's column of series.by>, <the time column>]}`, or the time alone for one
+  series), the rows against `max_rows`, then the binary: asked again every 2 s (`bayesWaitTick`, on `bayesNow`/`bayesSleep`,
+  played by the tests) while the step's timeout lasts, `info.compile` saved when the state changes; `Place` at
+  `<prefix>/model`; `ErrAltered`/`ErrGone` forget it and ask again. The whole seconds waited (rounded up) are taken from the
+  timeout the Job's deadline and `time_budget_seconds` receive. A step still compiling when its timeout ends fails («the model
+  was still compiling when the step's timeout (N s) ended»), with no Job.
+- **The task**: `modelgroups.Task` mode `sample`, `params {mode, output}`, `write_output` when the node has nodes after it or
+  is tried and the output is not `results`; the limits `max_result_rows`, `max_chart_points` (MODELS__MAX_CHART_POINTS), every
+  `bayescontract.Limits` key (the catalogue's caps from the catalogue, the others their defaults), then `bayesSetRunLimits`
+  (`/tmp` the card's sampling `/tmp`); `bayes.model` with `cmdstan` from the recipe, `program_bytes` the stored program's
+  length, `image` the group image's reference by digest; `plates` from the stored graph; `data` with `column` on the four
+  kinds; `checks` = `TaskChecks(true)` when the stored manifest holds `checks_on`; `finite_variance` and `scale_pairs` passed
+  as `bayeschecks` returns them; `bayes.series` `{by, time}` (**added to `bayescontract.Task`**, `omitempty`, checked: `by` a
+  group plate with a group index, `time` a name or null; refused in the compile mode). `Task.Check` before the ConfigMap; a
+  failure is «a fault of Tabularia». Golden: `internal/api/testdata/bayes_task_hier_slopes.json` (the run's ids, start,
+  hashes of the recipe and runner and the model's id as placeholders; `BAYES_TASK_WRITE=1` rewrites it).
+- **The Job**: `bayesJobManifest` with the sampling `/tmp`, `bayesEnvironment` (`TABULARIA_BINARY_IN`, the allocator's
+  variables), `TABULARIA_INPUT`, `TABULARIA_RESULTS`, `TABULARIA_ARTIFACTS`, and `TABULARIA_OUTPUT` only when the output is
+  written; `modelAttempts` (the files deleted between attempts never include the input nor the binary); `importModel`
+  against `bayes_model` with `{mode, output}` (its sentences now name the step by `what()`: «Bayesian model «…»», unchanged
+  for a model node); `bayesStepKeys` deleted at the end, the binary's included, also on a failure.
+- **«Not up to date»**: `bayesFingerprint` = `chainFingerprint` with the model, the version, the bindings, the sampler, the
+  output (`summary` when absent) and, only with the output `replicated`, the thinning, written with sorted keys;
+  `scripting_runtime.go` puts it for every `bayes_model` node.
+- **A partial init file**, checked on the image of B0 (CmdStan 2.40.0, `diagnose` with `init={"mu": 0.5}` on a program with
+  `mu`, `sigma`, `b[2]`, two seeds): `mu` starts at 0.5 under both seeds, the others are drawn within CmdStan's default
+  radius; `sample` with the same file exits 0. The panel's choice («Decisions of 2026-11-24») holds.
+- **Left to F4**: the prior predictive check (`mode` `prior_predictive`: the sampler `{4, 0, 250, seed}`, output `results`,
+  checks on, `latestOutputs` leaving its runs out), the Report tab's switch and the run page's words for `info.compile`.
+  Until the runner's R2 and R3 are committed it refuses `not_built` a task with the checks on (every version stored by
+  codegen 2 and later), the output `replicated` and the prior predictive.
+- Tests (`jobs_bayes_test.go`, on TEST_DATABASE_URL, the model tests' fake cluster and engine, a fake `Binaries`, a played
+  clock): the whole step (Need before the input, three questions = 6 s off the deadline, the binary placed where the Job
+  fetches it, the golden task, the import, the files with the binary's, «up to date» after it); every refusal with the
+  person or the setting that lacks exactly it (a schedule's author included), with no run and no input; an altered and a gone
+  binary compiled again; a compile longer than the timeout and a refusal during the wait; the trial route (403 without RUN on
+  the model, a `model` run in the trials' namespace); the fingerprint's keys; the series' sort (one series, a series by a
+  group plate).

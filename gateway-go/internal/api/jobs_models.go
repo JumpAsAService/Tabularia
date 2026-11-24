@@ -88,12 +88,17 @@ type modelStep struct {
 	budget  int64
 	mlflow  *mlflowPlan // a flow run's MLflow block, nil when it logs nothing (always for a trial)
 	predict bool        // a Predict step's (jobs_predict.go): its sentences name it so
+	bayes   bool        // a Bayesian model step's (jobs_bayes.go): likewise
 }
 
-// what names the step in its sentences: «model «Elasticity»», «Predict «Prices next month»».
+// what names the step in its sentences: «model «Elasticity»», «Predict «Prices next month»»,
+// «Bayesian model «School scores»».
 func (s *modelStep) what() string {
 	if s.predict {
 		return "Predict «" + s.label + "»"
+	}
+	if s.bayes {
+		return "Bayesian model «" + s.label + "»"
 	}
 	return "model «" + s.label + "»"
 }
@@ -349,10 +354,12 @@ type modelInput struct {
 }
 
 // modelPrepareInput writes the chain before a model or Predict node, ended by the `select` of the
-// columns it reads (nil: all of them), at inKey of the scripts bucket; what names the step in its
-// sentences («model «Elasticity»»). A variable: the tests stand in for the engine.
+// columns it reads (nil: all of them) and then the operations `then` (a Bayesian model's series: the
+// engine's `sort`; nil for every other node, whose request keeps its bytes), at inKey of the scripts
+// bucket; what names the step in its sentences («model «Elasticity»»). A variable: the tests stand in
+// for the engine.
 var modelPrepareInput = func(q *queue, ctx context.Context, r *scriptNodeRun, child *childRun, storage *scriptStorage, inKey string,
-	columns []string, what string) (*modelInput, error) {
+	columns []string, then []any, what string) (*modelInput, error) {
 	req, err := flowresolver.ResolveScriptInput(r.definition, r.node, r.resolveDS, q.d.Config.EngineBucket, q.d.flowMode(r.mode), r.outputs)
 	if err != nil {
 		return nil, err
@@ -362,10 +369,7 @@ var modelPrepareInput = func(q *queue, ctx context.Context, r *scriptNodeRun, ch
 	}
 	ops, _ := req.Value("operations").([]any)
 	in := &modelInput{sample: samplesOf(ops)}
-	if len(columns) > 0 {
-		sel := pyjson.Object{{Key: "type", Value: "select"}, {Key: "params", Value: pyjson.Object{{Key: "columns", Value: stringsAny(columns)}}}}
-		req = req.Set("operations", append(append([]any{}, ops...), sel))
-	}
+	req = modelInputRequest(req, columns, then)
 	target := pyjson.Object{{Key: "type", Value: "s3"}, {Key: "connection", Value: storage.payload()}, {Key: "target", Value: pyjson.Object{
 		{Key: "bucket", Value: storage.Bucket}, {Key: "key", Value: inKey}, {Key: "format", Value: "parquet"}, {Key: "partition_by", Value: []any{}}}}}
 	summary := pyDumps(pyjson.Object{{Key: "type", Value: "script_input"}, {Key: "model_run_id", Value: child.id}, {Key: "bucket", Value: storage.Bucket},
@@ -393,6 +397,20 @@ var modelPrepareInput = func(q *queue, ctx context.Context, r *scriptNodeRun, ch
 	}
 	in.rows = run.RowsWritten
 	return in, child.save(ctx, "input_key", run.OutputKey)
+}
+
+// modelInputRequest is the chain's request ended by the `select` of the columns (none: all of them) and then the operations
+// `then`; with neither it is the request as it was.
+func modelInputRequest(req pyjson.Object, columns []string, then []any) pyjson.Object {
+	if len(columns) == 0 && len(then) == 0 {
+		return req
+	}
+	ops, _ := req.Value("operations").([]any)
+	more := append([]any{}, ops...)
+	if len(columns) > 0 {
+		more = append(more, pyjson.Object{{Key: "type", Value: "select"}, {Key: "params", Value: pyjson.Object{{Key: "columns", Value: stringsAny(columns)}}}})
+	}
+	return req.Set("operations", append(more, then...))
 }
 
 // samplesOf is stats.layouts.samples_of: the development samples of a chain, in the order they
@@ -615,7 +633,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 	r.io()
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
 	out, err := func() (*flowresolver.Source, error) {
-		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, columns, "model «"+s.label+"»")
+		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, columns, nil, "model «"+s.label+"»")
 		if err != nil {
 			return nil, err
 		}
@@ -898,8 +916,8 @@ func (q *queue) importModel(ctx context.Context, r *scriptNodeRun, s *modelStep,
 		return nil, err
 	}
 	if res.StatusCode >= 400 {
-		return nil, &scriptFailed{fmt.Sprintf("model «%s»: its results were not accepted, a fault of the runner and not of the data: %s",
-			s.label, engineDetail(raw))}
+		return nil, &scriptFailed{fmt.Sprintf("%s: its results were not accepted, a fault of the runner and not of the data: %s",
+			s.what(), engineDetail(raw))}
 	}
 	v, err := pyjson.Loads(string(raw))
 	if err != nil {
@@ -907,7 +925,7 @@ func (q *queue) importModel(ctx context.Context, r *scriptNodeRun, s *modelStep,
 	}
 	got := pyjson.Obj(v)
 	if !pyjson.Truthy(got.Value("found")) {
-		return nil, &scriptFailed{fmt.Sprintf("model «%s» wrote no results: a fault of the runner (its log may say more)", s.label)}
+		return nil, &scriptFailed{fmt.Sprintf("%s wrote no results: a fault of the runner (its log may say more)", s.what())}
 	}
 	rows, err := intColumn(got.Value("rows"))
 	if err != nil {
@@ -927,7 +945,7 @@ func (q *queue) importModel(ctx context.Context, r *scriptNodeRun, s *modelStep,
 			return nil, err
 		}
 		if res.StatusCode >= 400 {
-			return nil, &scriptFailed{fmt.Sprintf("model «%s»: its rows could not be read: %s", s.label, engineDetail(raw))}
+			return nil, &scriptFailed{fmt.Sprintf("%s: its rows could not be read: %s", s.what(), engineDetail(raw))}
 		}
 		v, err := pyjson.Loads(string(raw))
 		if err != nil {
@@ -935,7 +953,7 @@ func (q *queue) importModel(ctx context.Context, r *scriptNodeRun, s *modelStep,
 		}
 		out := pyjson.Obj(v)
 		if !pyjson.Truthy(out.Value("found")) {
-			return nil, &scriptFailed{fmt.Sprintf("model «%s» did not write the %s the nodes after it read: a fault of the runner", s.label, s.output)}
+			return nil, &scriptFailed{fmt.Sprintf("%s did not write the %s the nodes after it read: a fault of the runner", s.what(), s.output)}
 		}
 		if dataRows, err = intColumn(out.Value("rows")); err != nil {
 			return nil, err

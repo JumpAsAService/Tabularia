@@ -66,6 +66,17 @@ type Task struct {
 	// ScalePairs are the original-scale pairs of model-graph's Model.Pairs as Stan identifiers (bayeschecks.ScalePairs, written
 	// by flow-node from the stored graph and manifests); absent when there is none.
 	ScalePairs []ScalePair `json:"scale_pairs,omitempty"`
+	// Series is the rows' series when the stored graph's rows are one (flow-node writes it from the graph and the binding):
+	// the runner checks the rows' order with it; absent when the model has no series.
+	Series *Series `json:"series,omitempty"`
+}
+
+// Series names what the data entries of a series do not carry: the group plate whose units are the series (By, null for
+// one series) and the input column of the series' time (Time, null when unchecked). The gateway sorts the input by the
+// group index's column and the time before the Job; the runner only checks the order.
+type Series struct {
+	By   *string `json:"by"`
+	Time *string `json:"time"`
 }
 
 // ScalePair is one pair of the original scale: a term (a coefficient and its standardized data) or a linear predictor's
@@ -301,7 +312,7 @@ func (t *Task) Check(mode, output string) error {
 	switch mode {
 	case ModeCompile:
 		if m.BinarySHA256 != "" || t.Sampler != nil || len(t.Plates)+len(t.Mapping)+len(t.Data)+len(t.Quantities) > 0 ||
-			!isNull(t.Checks) || t.Replicated != nil || t.FiniteVariance != nil || t.ScalePairs != nil {
+			!isNull(t.Checks) || t.Replicated != nil || t.FiniteVariance != nil || t.ScalePairs != nil || t.Series != nil {
 			return fail("the compile mode reads the model alone")
 		}
 		if output != "" && output != OutputResults {
@@ -339,7 +350,32 @@ func (t *Task) Check(mode, output string) error {
 	if err := t.checkScale(); err != nil {
 		return err
 	}
+	if err := t.checkSeries(); err != nil {
+		return err
+	}
 	return t.Sampler.Init.check(t.Quantities)
+}
+
+// checkSeries checks bayes.series: its `by` a group plate that has a group index, its `time` a column's name when given
+// (bayes_data._plan reads it so; a model whose data hold no series' array reads neither).
+func (t *Task) checkSeries() error {
+	s := t.Series
+	if s == nil {
+		return nil
+	}
+	indexed := map[string]bool{}
+	for _, d := range t.Data {
+		if d.Kind == DataGroupIndex {
+			indexed[d.Target] = true
+		}
+	}
+	switch {
+	case s.By != nil && !indexed[*s.By]:
+		return fmt.Errorf("bayes.series.by: %q is not a group plate with a group index", *s.By)
+	case s.Time != nil && *s.Time == "":
+		return errors.New("bayes.series.time: a column's name, or null")
+	}
+	return nil
 }
 
 // checkScale checks finite_variance (quantities' nodes, each once) and scale_pairs (quantities and standardized reals of the

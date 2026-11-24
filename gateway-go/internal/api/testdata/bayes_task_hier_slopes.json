@@ -1,0 +1,1409 @@
+{
+  "protocol": 1,
+  "mode": "sample",
+  "group": "bayes",
+  "group_version": 5,
+  "model": "bayes_model",
+  "variant": "sample",
+  "params": {
+    "mode": "sample",
+    "output": "summary"
+  },
+  "output": "summary",
+  "write_output": true,
+  "rows_from": "run",
+  "mlflow": false,
+  "limits": {
+    "bayes_density_points": 200,
+    "bayes_max_chart_quantities": 12,
+    "bayes_max_check_rows": 5000,
+    "bayes_max_pair_quantities": 4,
+    "bayes_max_quantity_entries": 600,
+    "bayes_max_summary_quantities": 2000,
+    "bayes_max_unit_charts": 8,
+    "bayes_pair_points": 300,
+    "bayes_rank_bins": 20,
+    "bayes_trace_points": 200,
+    "bayes_unit_points": 1000,
+    "block_values": 1048576,
+    "max_chart_points": 2000,
+    "max_check_columns": 200,
+    "max_quantities": 20000,
+    "max_result_rows": 100000,
+    "max_units": 20000,
+    "memory_bytes": 2147483648,
+    "started_unix": 0,
+    "time_budget_seconds": 1794,
+    "tmp_bytes": 2147483648
+  },
+  "input_rows": 120,
+  "ids": {
+    "flow_id": 1,
+    "node_id": "b",
+    "run_id": 2,
+    "step_run_id": 2
+  },
+  "recipe_hash": "recipe",
+  "runner_hash": "runner",
+  "bayes": {
+    "model": {
+      "id": 17,
+      "version": 1,
+      "semantic_hash": "42e65c40f5cc47e01d219d56cb1f2e4b6b07e0a642ba4b70923266dd7440b23d",
+      "program_sha256": "dd9dc55fd27ff44ef5bab2bebaaae8391a7c436efb7b7f51f5a39d243d7213df",
+      "binary_sha256": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+      "codegen_version": 3,
+      "cmdstan": "2.40.0",
+      "program_bytes": 5219,
+      "image": "registry:5000/envs/tabularia-env-9@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "sampler": {
+      "chains": 4,
+      "warmup": 1000,
+      "draws": 1000,
+      "seed": 1840277361,
+      "adapt_delta": 0.8,
+      "max_treedepth": 10,
+      "init": null,
+      "refresh": 100
+    },
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Rows"
+      },
+      {
+        "id": "grp",
+        "kind": "group",
+        "label": "Group"
+      }
+    ],
+    "mapping": [
+      {
+        "stan": "N",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "J_grp",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "grp",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "g",
+        "block": "data",
+        "node_id": "g",
+        "component": null,
+        "name": "g",
+        "label": "Group of the row",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "x",
+        "block": "data",
+        "node_id": "x",
+        "component": null,
+        "name": "x",
+        "label": "Predictor",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "y",
+        "block": "data",
+        "node_id": "y",
+        "component": null,
+        "name": "y",
+        "label": "Outcome",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Mode",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "mode",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_on",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_n",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_rows",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_o1_n",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_o1_rows",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_m",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_slots",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_scale",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_shift",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_binned",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_units",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_slot",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_rep",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "mu_a",
+        "block": "parameters",
+        "node_id": "mua",
+        "component": null,
+        "name": "mu_a",
+        "label": "Typical level of the groups",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "mu_b",
+        "block": "parameters",
+        "node_id": "mub",
+        "component": null,
+        "name": "mu_b",
+        "label": "Typical effect of the predictor",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "sigma",
+        "block": "parameters",
+        "node_id": "sigma",
+        "component": null,
+        "name": "sigma",
+        "label": "Spread within a group",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "tau_a",
+        "block": "parameters",
+        "node_id": "taua",
+        "component": null,
+        "name": "tau_a",
+        "label": "Spread of the levels between groups",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "tau_b",
+        "block": "parameters",
+        "node_id": "taub",
+        "component": null,
+        "name": "tau_b",
+        "label": "Spread of the effects between groups",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "Z_eff",
+        "block": "parameters",
+        "node_id": "eff",
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "internal",
+        "plate": "grp",
+        "role": "internal",
+        "renamed": null
+      },
+      {
+        "stan": "L_eff",
+        "block": "parameters",
+        "node_id": "eff",
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "internal",
+        "plate": "grp",
+        "role": "internal",
+        "renamed": null
+      },
+      {
+        "stan": "a_g",
+        "block": "transformed parameters",
+        "node_id": "eff",
+        "component": "ca",
+        "name": "a_g",
+        "label": "Level of a group",
+        "kind": "component",
+        "plate": "grp",
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "b_g",
+        "block": "transformed parameters",
+        "node_id": "eff",
+        "component": "cb",
+        "name": "b_g",
+        "label": "Effect of the predictor in a group",
+        "kind": "component",
+        "plate": "grp",
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "W_eff",
+        "block": "transformed parameters",
+        "node_id": "eff",
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "internal",
+        "plate": "grp",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "rho_g",
+        "block": "generated quantities",
+        "node_id": "eff",
+        "component": null,
+        "name": "rho_g",
+        "label": "Correlation between level and effect",
+        "kind": "correlation",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_d_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_3",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_d_3",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_4",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_d_4",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_5",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_d_5",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_6",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_d_6",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_7_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_7_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_m_7_rho",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_marginal",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_p_7_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_p_7_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_mean",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_sd",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_min",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_max",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_q10",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_q50",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_q90",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_count",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_usum",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_yrep",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_u_m5",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_u_m6",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_g_m7_1_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_g_m7_1_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_g_m7_2_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_g_m7_2_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_l_7_2_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_l_7_2_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_oe_7",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_ob_7",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_a_p7_1_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_a_p7_1_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_a_p7_2_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_a_p7_2_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_e_7_1",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_e_7_2",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_post",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_o1_draw",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_y",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_o1_b",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      }
+    ],
+    "data": [
+      {
+        "stan": "N",
+        "kind": "size",
+        "of": "rows"
+      },
+      {
+        "stan": "J_grp",
+        "kind": "size",
+        "of": "grp"
+      },
+      {
+        "stan": "g",
+        "kind": "group_index",
+        "plate": "rows",
+        "column": "school",
+        "node": "g",
+        "target": "grp"
+      },
+      {
+        "stan": "x",
+        "kind": "real",
+        "plate": "rows",
+        "column": "hours",
+        "node": "x",
+        "standardize": true
+      },
+      {
+        "stan": "y",
+        "kind": "real",
+        "plate": "rows",
+        "column": "score",
+        "node": "y"
+      },
+      {
+        "stan": "Mode",
+        "kind": "mode"
+      },
+      {
+        "stan": "Ppc_on",
+        "kind": "checks_on"
+      },
+      {
+        "stan": "Ppc_o1_n",
+        "kind": "post_count",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_rows",
+        "kind": "post_rows",
+        "of": "rows",
+        "node": "y"
+      },
+      {
+        "stan": "Prior_o1_n",
+        "kind": "prior_count",
+        "node": "y"
+      },
+      {
+        "stan": "Prior_o1_rows",
+        "kind": "prior_rows",
+        "of": "rows",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_m",
+        "kind": "replicated_count",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_slots",
+        "kind": "bin_slots",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_scale",
+        "kind": "bin_scale",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_shift",
+        "kind": "bin_shift",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_binned",
+        "kind": "binned_count",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_units",
+        "kind": "unit_count",
+        "node": "y"
+      },
+      {
+        "stan": "Ppc_o1_slot",
+        "kind": "unit_slot",
+        "node": "g"
+      },
+      {
+        "stan": "Ppc_o1_rep",
+        "kind": "replicated_rows",
+        "node": "y"
+      }
+    ],
+    "quantities": [
+      {
+        "stan": "mu_a",
+        "role": "quantity",
+        "node": "mua",
+        "dims": []
+      },
+      {
+        "stan": "mu_b",
+        "role": "quantity",
+        "node": "mub",
+        "dims": []
+      },
+      {
+        "stan": "sigma",
+        "role": "quantity",
+        "node": "sigma",
+        "dims": []
+      },
+      {
+        "stan": "tau_a",
+        "role": "quantity",
+        "node": "taua",
+        "dims": []
+      },
+      {
+        "stan": "tau_b",
+        "role": "quantity",
+        "node": "taub",
+        "dims": []
+      },
+      {
+        "stan": "Z_eff",
+        "role": "internal",
+        "dims": [
+          {
+            "component": "eff"
+          },
+          {
+            "plate": "grp"
+          }
+        ]
+      },
+      {
+        "stan": "L_eff",
+        "role": "internal",
+        "dims": [
+          {
+            "component": "eff"
+          },
+          {
+            "component": "eff"
+          }
+        ]
+      },
+      {
+        "stan": "a_g",
+        "role": "quantity",
+        "node": "eff.ca",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ]
+      },
+      {
+        "stan": "b_g",
+        "role": "quantity",
+        "node": "eff.cb",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ]
+      },
+      {
+        "stan": "rho_g",
+        "role": "quantity",
+        "node": "eff.correlation",
+        "dims": [
+          {
+            "component": "eff"
+          },
+          {
+            "component": "eff"
+          }
+        ],
+        "triangle": "strict_lower"
+      },
+      {
+        "stan": "Prior_m_2",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "mua"
+      },
+      {
+        "stan": "Prior_d_2",
+        "role": "prior_draw",
+        "dims": [],
+        "of": "mua"
+      },
+      {
+        "stan": "Prior_m_3",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "mub"
+      },
+      {
+        "stan": "Prior_d_3",
+        "role": "prior_draw",
+        "dims": [],
+        "of": "mub"
+      },
+      {
+        "stan": "Prior_m_4",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "sigma"
+      },
+      {
+        "stan": "Prior_d_4",
+        "role": "prior_draw",
+        "dims": [],
+        "of": "sigma"
+      },
+      {
+        "stan": "Prior_m_5",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "taua"
+      },
+      {
+        "stan": "Prior_d_5",
+        "role": "prior_draw",
+        "dims": [],
+        "of": "taua"
+      },
+      {
+        "stan": "Prior_m_6",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "taub"
+      },
+      {
+        "stan": "Prior_d_6",
+        "role": "prior_draw",
+        "dims": [],
+        "of": "taub"
+      },
+      {
+        "stan": "Prior_m_7_1",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "eff.ca"
+      },
+      {
+        "stan": "Prior_m_7_2",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "eff.cb"
+      },
+      {
+        "stan": "Prior_m_7_rho",
+        "role": "prior_marginal",
+        "dims": [],
+        "of": "eff.correlation"
+      },
+      {
+        "stan": "Prior_p_7_1",
+        "role": "prior_draw",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ],
+        "of": "eff.ca"
+      },
+      {
+        "stan": "Prior_p_7_2",
+        "role": "prior_draw",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ],
+        "of": "eff.cb"
+      },
+      {
+        "stan": "Ppc_o1_mean",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "mean",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_sd",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "sd",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_min",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "min",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_max",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "max",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_q10",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "q10",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_q50",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "q50",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_q90",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_on"
+          }
+        ],
+        "check": "q90",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_count",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_o1_slots"
+          }
+        ],
+        "check": "bin_count",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_usum",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_o1_units"
+          }
+        ],
+        "check": "unit_sum",
+        "of": "y"
+      },
+      {
+        "stan": "Ppc_o1_yrep",
+        "role": "check",
+        "dims": [
+          {
+            "size": "Ppc_o1_rep"
+          }
+        ],
+        "check": "replicated",
+        "of": "y"
+      }
+    ],
+    "checks": {
+      "format": 1,
+      "on": true,
+      "outcomes": 3,
+      "value_bins": 40,
+      "stat_bins": 30,
+      "density_draws": 20,
+      "max_units": 8,
+      "ppc_draws": 1000
+    },
+    "replicated": null,
+    "finite_variance": [
+      "mua",
+      "mub",
+      "sigma",
+      "taua",
+      "taub",
+      "eff.ca",
+      "eff.cb",
+      "eff.correlation"
+    ]
+  }
+}

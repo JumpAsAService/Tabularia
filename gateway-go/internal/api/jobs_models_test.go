@@ -347,7 +347,10 @@ func newModelRunFixture(t *testing.T) *modelRunFixture {
 		return r.ok, r.log, r.exit, r.reason, nil
 	}
 	modelPrepareInput = func(_ *queue, ctx context.Context, _ *scriptNodeRun, child *childRun, _ *scriptStorage, _ string,
-		columns []string, _ string) (*modelInput, error) {
+		columns []string, then []any, _ string) (*modelInput, error) {
+		if then != nil {
+			t.Errorf("a model's input appends nothing after its select: %v", then)
+		}
 		f.columns = columns
 		rows := f.rows
 		return &modelInput{rows: &rows, sample: []any{pyjson.Object{{Key: "first", Value: int64(100)}}}}, nil
