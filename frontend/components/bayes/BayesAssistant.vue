@@ -514,7 +514,11 @@ function onKey (e: KeyboardEvent) {
 .ba-pick.on { background: var(--tint-accent); }
 .ba-pick.off { cursor: default; color: var(--muted); }
 .ba-pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
-.ba-stream { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+/* The stream scrolls to its end, so a long answer's first line sits half cut at the top edge, right under the notes above:
+   it read as text drawn over the warning. The text now fades out under the edge, and the padding keeps the first line
+   clear of the fade when the stream is at its top. */
+.ba-stream { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 2px 0 0; margin-top: 4px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px); mask-image: linear-gradient(to bottom, transparent 0, #000 12px); }
 .ba-empty p { margin: 2px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
 .ba-example { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left; line-height: 1.4; border-radius: 8px; }
 .ba-you { display: flex; flex-direction: column; align-items: flex-end; margin-top: 12px; }

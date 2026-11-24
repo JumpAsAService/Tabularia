@@ -433,3 +433,10 @@ test('the words the component uses exist, the proposal\'s places included', () =
   }
   assert.ok(used.size > 25, String(used.size))
 })
+
+test('the conversation fades under its top edge, so a long answer scrolled to its end never reads as drawn over the notes above (lot A3)', () => {
+  const vue = read('components/bayes/BayesAssistant.vue')
+  const rule = vue.match(/\.ba-stream \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /mask-image: linear-gradient\(to bottom, transparent 0/)
+  assert.match(rule, /padding: 10px /)
+})
