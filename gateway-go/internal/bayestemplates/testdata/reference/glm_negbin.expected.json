@@ -1,0 +1,54 @@
+{
+ "header": {
+  "template": "glm_negbin",
+  "template_version": 2,
+  "cmdstan": "2.40.0",
+  "image_id": "sha256:df1cf58a3244fc06f8be539bb4a04b916e3465c635c6dd4e8f4acf337214d1ee",
+  "chains": 4,
+  "draws": 2000,
+  "warmup": 1000,
+  "seed_reference": 11004,
+  "seed_tabularia": 22004,
+  "script_sha256": {
+   "make_reference.py": "f30fcc979b6c3e90df8ddd9c7d9066df25c99e092c5bc6c660dcde94608af56d",
+   "run_reference.py": "2d47f9c469dadc18ef662dca1a4f2340459af1f5f735553f2bd91c1cedda0cff"
+  },
+  "program_sha256": "255de659671960b6c0a8564a5c715b1fa56429210a5a4fb214a1b3fd53864c68",
+  "data_sha256": "6f6f5aec6267b4607ae7998f61cb37956b14b4a6e7b4570d06713057c01906a8",
+  "mcse": "batch means of 100 draws"
+ },
+ "sampler": {
+  "divergences": 0,
+  "treedepth_at_10": 0
+ },
+ "quantities": {
+  "alpha": {
+   "mean": 1.47186,
+   "sd": 0.0313972,
+   "mcse_mean": 0.000411889,
+   "mcse_sd": 0.000317174,
+   "rhat": 1.00048
+  },
+  "b_x": {
+   "mean": 0.560365,
+   "sd": 0.0320857,
+   "mcse_mean": 0.000403152,
+   "mcse_sd": 0.000340559,
+   "rhat": 1.00058
+  },
+  "beta.1": {
+   "mean": 0.560365,
+   "sd": 0.0320857,
+   "mcse_mean": 0.000403152,
+   "mcse_sd": 0.000340559,
+   "rhat": 1.00058
+  },
+  "phi": {
+   "mean": 4.29811,
+   "sd": 0.549109,
+   "mcse_mean": 0.00635837,
+   "mcse_sd": 0.00556281,
+   "rhat": 0.999854
+  }
+ }
+}

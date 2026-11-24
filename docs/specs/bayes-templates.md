@@ -423,3 +423,58 @@ Applied by the owner's decision of 2026-11-23, each marked there «Correction of
 ## Open questions
 
 None.
+
+## As built
+
+**Lot T3 (recorded 2026-11-24, by hand, one run at a time).** Files in `gateway-go/internal/bayestemplates/testdata/reference/`:
+`make_reference.py` (the data, PCG64, seed 20261123 + the template's position 1–10), `<id>.csv` (200 to 500 rows), `<id>.stan`
+(by hand), `run_reference.py` (data file, compile, sample, streaming statistics), `compare.py` (the test), `<id>.expected.json`,
+`compare.json`. Everything ran in `tabularia-bayes-b0:local` (`sha256:df1cf58a3244…d1ee`, CmdStan 2.40.0), as the model Job runs
+(`--read-only`, uid 10001, no network, `--memory 2g --cpus 2`, `make -C /opt/cmdstan … PRECOMPILED_HEADERS=false`),
+4 chains × 2,000 draws after 1,000 of warm-up, `num_threads=2`, seeds 11000 + position (reference) and 22000 + position (Tabularia).
+Tabularia's program is the template's golden program (`TestTemplatesGolden` pins it to the generator's output); the Go test
+`TestReferenceValuesAreRecordedForTheCurrentVersions` also checks that the program recorded in `compare.json` is the current one.
+
+- **Known parameters** (on the standardized scale of the predictor): linear alpha 1.5, slope 0.8, sigma 1.2; logistic −0.5, 1.0;
+  Poisson 1.0, 0.4; negative binomial 1.5, 0.5, phi 4; intercepts mu 2, tau 1, slope 0.8, sigma 1.5 (12 groups × 25); slopes
+  mu 1 and 0.5, tau 1 and 0.4, rho 0.5, sigma 1 (15 × 20); nested mu 3, tau_d 1, tau_s 0.7, slope 0.6 (6 districts, 18 schools,
+  15 rows each); AR(2) mu 2, phi 0.5 and 0.2, sigma 1 (400 points); random walk drift 0.15, sigma 0.8 (300); local level
+  sigma_level 0.3, sigma_obs 0.8 (200 points, not 400: the state has one parameter a point).
+- **The hand-written programs** use other forms than the generator's where Stan has one: `normal_id_glm`, `bernoulli_logit_glm`,
+  `poisson_log_glm` for the first three GLMs, the natural-scale `neg_binomial_2(exp(…), phi)`, an explicit `z` for each
+  non-centred level, loops for the likelihoods, and the **centred** form for the local level.
+- **The test**: the quantities present in both programs (the parameters and the group and state vectors; a hand program's
+  internal `z` and `L` have other names than the generator's `Z_*` and `L_*` and are not compared; a constant, such as the
+  diagonal of a correlation matrix, is skipped), mean and sd each: 600 comparisons in all, Holm over the 600, alpha 0.001.
+  MCSEs: batch means of 100 draws within a chain (80 batches), for the sd by the delta method on the batch means of the squared
+  deviation; R-hat by split chains; the CSVs are read twice, line by line.
+
+| Template | Quantities | Comparisons | Smallest p (before Holm) | Smallest Holm p | Reference: compile / sample (s) | Tabularia: compile / sample (s) | Divergences ref / Tabularia |
+|---|---|---|---|---|---|---|---|
+| `glm_linear` | 3 | 6 | 0.0413 (sigma sd) | 1 | 13.8 / 0.1 | 10.8 / 0.3 | 0 / 0 |
+| `glm_logistic` | 2 | 4 | 0.0594 (alpha mean) | 1 | 12.8 / 0.4 | 11.1 / 0.7 | 0 / 0 |
+| `glm_poisson` | 2 | 4 | 0.273 (b_x sd) | 1 | 11.9 / 0.3 | 10.7 / 0.3 | 0 / 0 |
+| `glm_negbin` | 3 | 6 | 0.152 (b_x sd) | 1 | 16.1 / 3.7 | 11.5 / 3.0 | 0 / 0 |
+| `hier_intercepts` | 16 | 32 | 0.00142 (a_g.6 mean) | 0.851 | 11.7 / 2.6 | 13.5 / 1.0 | 0 / 0 |
+| `hier_slopes` | 37 | 74 | 0.006 (a_g.6 sd) | 1 | 22.3 / 4.3 | 22.9 / 2.2 | 0 / 0 |
+| `hier_nested` | 29 | 58 | 0.0629 (u_s.12 mean) | 1 | 13.2 / 7.3 | 17.0 / 4.3 | 88 / 63 |
+| `ts_ar` (golden `ts_ar2`) | 4 | 8 | 0.198 (phi1 mean) | 1 | 9.2 / 1.8 | 12.2 / 1.0 | 0 / 0 |
+| `ts_random_walk` | 2 | 4 | 0.0865 (delta mean) | 1 | 9.7 / 0.6 | 11.0 / 0.2 | 0 / 0 |
+| `ts_local_level` | 202 | 404 | 0.00684 (level.149 mean) | 1 | 11.4 / 3.2 | 14.4 / 17.9 | 0 / 14 |
+
+**All ten agree** (criterion 5): no Holm-adjusted p-value is below 0.001 (the smallest, 0.851). Highest R-hat 1.009. The
+whole recording: 20 compiles of 9–23 s and 20 samplings of 0.1–18 s, about 10 minutes of machine time, memory never above
+the 2 GiB of the container.
+
+What the runs showed, without any change to the generator:
+
+1. **`hier_nested` diverges in both programs** (88 draws of 8,000 for the hand-written one, 63 for Tabularia's, about 1 %): six
+   districts do not identify `tau_d`, the funnel is the data's, not the generator's, and the two agree. A template for few
+   groups at the top level will warn the person; the report's divergence note says so.
+2. **`ts_local_level` has 14 divergences** (0.2 %) in the non-centred program that the centred hand-written one does not have,
+   and takes 17.9 s to sample against 3.2 s: at 200 points the centred form is the better one; the posteriors agree. The
+   template's non-centred state is kept (answer 4), the cost is seen in the run time.
+3. **A first hand-written negative binomial through `neg_binomial_2_log_glm` did not converge** (312 divergences, `phi` drifting
+   to 10^57, from the random initial points under the `inv_gamma(0.4, 0.3)` prior, whose tail has no mean), while the generator's
+   `neg_binomial_2_log` and the natural-scale `neg_binomial_2` both did; the recorded reference uses the latter. The prior is
+   the cause of the difficulty: a run whose initial points land in the flat region of large `phi` can stay there.
