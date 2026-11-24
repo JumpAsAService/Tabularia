@@ -283,7 +283,7 @@
       "bayes_quantities_capped": "The report lists {listed:int} of the {total:int} quantities' entries; the node's summary output has them all.",
       "bayes_contraction_null": "The contraction is empty for {no_finite_variance:int} quantities whose prior has no finite variance, for {no_prior_draws:int} whose run has no draws of the prior and for {not_decided:int} whose model version does not say whether the prior has a finite variance.",
       "bayes_original_capped": "The column's scale is given for {original:int} coefficients; {capped:int} more are left without it (the node's limit on the quantities listed).",
-      "bayes_density_cut": "The density charts leave out the draws beyond their range, in these quantities: {names}. Posterior draws left out, in the same order: {posterior:int}. Prior draws left out: {prior:int}.",
+      "bayes_density_cut": "The density charts leave out the draws beyond their range, in these quantities: {names}. Posterior draws left out, in the same order: {posterior:int}. Prior draws left out, in the same order: {prior:int}.",
       "bayes_no_checks": "This version was saved before the predictive checks: saving it again adds them.",
       "bayes_checks_dropped": "{dropped:int} of the {draws:int} draws of the predictive checks were left out: CmdStan wrote their replicated values as missing (a generator could not use its arguments); the charts use the other {valid:int}.",
       "bayes_prior_undrawn_one": "The quantity {names} has no ancestral draw: it is left out of the summary.",
@@ -584,8 +584,8 @@
     },
     "predictive": {
       "note": {
-        "sample": "Le linee grigie sono 20 insiemi di dati che il modello estrae dalla distribuzione a posteriori; la linea nera è costituita dai dati. Dove la linea nera esce dalle grigie, gli insiemi estratti non mostrano quella caratteristica dei dati.",
-        "prior_predictive": "Le linee grigie sono 20 insiemi di dati estratti dalle sole distribuzioni a priori, prima di vedere i dati; la linea nera è costituita dai dati. I grafici mostrano gli insiemi di dati che le distribuzioni a priori consentono, accanto ai dati."
+        "sample": "Le linee grigie sono 20 insiemi di dati che il modello estrae dalla distribuzione a posteriori; la linea nera sono i dati. Dove la linea nera esce dalle grigie, gli insiemi estratti non mostrano quella caratteristica dei dati.",
+        "prior_predictive": "Le linee grigie sono 20 insiemi di dati estratti dalle sole distribuzioni a priori, prima di vedere i dati; la linea nera sono i dati. I grafici mostrano gli insiemi di dati che le distribuzioni a priori consentono, accanto ai dati."
       },
       "how": {
         "density": "Densità: i valori dell'esito, quella dei dati (nera, spessa) e quella di ogni insieme estratto (grigia, sottile) sullo stesso asse; i due punti esterni di una linea grigia contano i valori estratti sotto e sopra l'intervallo dei dati.",
@@ -609,23 +609,23 @@
       "outside": "Nei {draws} insiemi di dati estratti, {below} valori estratti stanno sotto l'intervallo dei dati e {above} sopra."
     },
     "reading_texts": {
-      "method_nuts": "Le estrazioni vengono dal No-U-Turn sampler di Stan, un Hamiltonian Monte Carlo dinamico: {chains:int} catene, ciascuna con {warmup:int} iterazioni di riscaldamento che fissano il passo e una metrica diagonale, poi {draws:int} iterazioni conservate, dal seme {seed}; una traiettoria smette di raddoppiare a una profondità dell'albero di {depth:int}, e l'accettazione obiettivo è {delta:num}. Hoffman e Gelman (2014, arXiv:1111.4246v1, p. 1) lo descrivono così: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
-      "method_prior": "Le estrazioni sono ancestrali: in ciascuna delle {chains:int} × {draws:int} estrazioni ogni quantità è estratta dalla sua distribuzione a priori, poi i valori che il programma genera da esse, senza riscaldamento e senza sampler, dal seme {seed}. Per tali estrazioni non esistono R-hat, dimensione campionaria efficace, divergenze né profondità dell'albero, e nessuna è data.",
-      "method_precision": "Ogni estrazione è scritta con 8 cifre di precisione, come fa CmdStan 2.40.0 per impostazione predefinita: un'estrazione x differisce dal valore tenuto dal sampler al più di 5·10^(−8)·|x|, e una quantità la cui media è grande rispetto alla deviazione standard può ripetere valori. Ogni numero di questo rapporto è calcolato dalle estrazioni così come scritte.",
+      "method_nuts": "Le estrazioni vengono dal campionatore No-U-Turn di Stan, un Hamiltonian Monte Carlo dinamico: {chains:int} catene, ciascuna con {warmup:int} iterazioni di riscaldamento che fissano il passo e una metrica diagonale, poi {draws:int} iterazioni conservate, dal seme {seed}; una traiettoria smette di raddoppiare a una profondità dell'albero di {depth:int}, e l'accettazione obiettivo è {delta:num}. Hoffman e Gelman (2014, arXiv:1111.4246v1, p. 1) lo descrivono così: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
+      "method_prior": "Le estrazioni sono ancestrali: in ciascuna delle {chains:int} × {draws:int} estrazioni ogni quantità è estratta dalla sua distribuzione a priori, poi i valori che il programma genera da esse, senza riscaldamento e senza campionatore, dal seme {seed}. Per tali estrazioni non esistono R-hat, dimensione campionaria efficace, divergenze né profondità dell'albero, e non ne viene dato nessuno.",
+      "method_precision": "Ogni estrazione è scritta con 8 cifre di precisione, come fa CmdStan 2.40.0 per impostazione predefinita: un'estrazione x differisce dal valore tenuto dal campionatore al più di 5·10^(−8)·|x|, e una quantità la cui media è grande rispetto alla deviazione standard può ripetere valori. Ogni numero di questo report è calcolato dalle estrazioni così come scritte.",
       "method_standardized": "Predittori numerici centrati sulla media e divisi per la deviazione standard prima del campionamento: {count:int}. La tabella «Dati» dà entrambi i numeri per ciascuno.",
       "method_original": "Sulla scala della colonna un coefficiente è il coefficiente standardizzato diviso per la deviazione standard del predittore, e l'intercetta è l'intercetta standardizzata meno la somma di ogni coefficiente per la media del predittore sulla sua deviazione standard, estrazione per estrazione: la tabella «Sulla scala della colonna» dà la media, la deviazione standard e i quantili di quelle estrazioni.",
-      "method_rhat_ess": "R-hat confronta le catene tra loro e all'interno delle loro metà, sui ranghi delle estrazioni, nel corpo e nelle code della distribuzione; la dimensione campionaria efficace (ESS) del corpo e delle code dice a quante estrazioni indipendenti equivalgono le catene per il centro e per i quantili al 5 % e al 95 %. Sono calcolati come li calcola il pacchetto R posterior 1.8.0, secondo Vehtari, Gelman, Simpson, Carpenter e Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Gli autori scrivono (p. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” e, negli stessi paragrafi (p. 4): “we recommend running at least four chains by default.” e (p. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Sono i loro valori, citati: nessun numero di questo rapporto è confrontato con essi.",
+      "method_rhat_ess": "R-hat confronta le catene tra loro e all'interno delle loro metà, sui ranghi delle estrazioni, nel centro e nelle code della distribuzione; la dimensione campionaria efficace (ESS) del centro e delle code dice a quante estrazioni indipendenti equivalgono le catene per il centro e per i quantili al 5 % e al 95 %. Sono calcolati come li calcola il pacchetto R posterior 1.8.0, secondo Vehtari, Gelman, Simpson, Carpenter e Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Gli autori scrivono (p. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” e, negli stessi paragrafi (p. 4): “we recommend running at least four chains by default.” e (p. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Sono i loro valori, citati: nessun numero di questo report è confrontato con essi.",
       "method_divergences": "Una transizione divergente è un'iterazione in cui la traiettoria simulata lascia il percorso che seguirebbe la dinamica esatta. In questa esecuzione {n:int} delle {total:int} estrazioni dopo il riscaldamento erano transizioni divergenti. Lo Stan Reference Manual (versione 2.40, «MCMC Sampling», «Divergent transitions») dice: “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
       "method_treedepth": "La profondità dell'albero è il numero di volte che la traiettoria è stata raddoppiata in un'iterazione. In questa esecuzione {hits:int} estrazioni si sono fermate alla massima profondità consentita dal nodo, {depth:int}. Lo Stan Reference Manual (versione 2.40, «MCMC Sampling», «NUTS and its configuration») dice: “a tree depth equal to the maximum depth indicates that NUTS is taking many leapfrog steps and being terminated prematurely to avoid excessively long execution time.”",
       "method_ebfmi": "L'E-BFMI di una catena, la sua frazione bayesiana stimata di informazione mancante, confronta le variazioni dell'energia tra iterazioni successive con la variazione totale dell'energia. La tabella «Misure del campionatore per catena» lo dà per ogni catena, senza segni. Betancourt (2017, arXiv:1701.02434v2, p. 44) scrive: “Empirically, values of this energy Bayesian fraction of missing information below 0.3 have proven problematic, although more theoretical work is needed to formalize any exact threshold.”",
       "method_contraction": "La contrazione di una quantità è 1 − Var(a posteriori) / Var(a priori): quanto i dati hanno ristretto la distribuzione a priori. È vuota dove la distribuzione a priori non ha varianza finita (una Cauchy, una t di Student con ν ≤ 2) o l'esecuzione non ha estrazioni dalla distribuzione a priori. Betancourt (2018, arXiv:1803.08393v1, p. 17), che la chiama posterior shrinkage, scrive: “The posterior shrinkage quantifies how much the posterior distribution contracts from the initial prior distribution.”",
-      "method_checks": "Un controllo predittivo estrae dalla distribuzione a posteriori insiemi di dati replicati; in ogni grafico le linee grigie ne sono {drawn:int} e la linea nera è il dato, e ogni istogramma conta gli insiemi estratti per il valore di una statistica, con la statistica del dato segnata da una linea tratteggiata. Questo rapporto non dà alcun p-value, alcuna probabilità e alcuna quota per un controllo. Gabry, Simpson, Vehtari, Betancourt e Gelman (2019, Journal of the Royal Statistical Society A 182(2); arXiv:1709.01449v5, p. 8) scrivono: “Posterior predictive checking is mostly qualitative. By looking at some important features of the data and the replicated data, which were not explicitly included in the model, we may find a need to extend or modify the model.”",
-      "method_prior_checks": "Un controllo predittivo a priori estrae insiemi di dati dalle sole distribuzioni a priori, prima che i dati si vedano: in ogni grafico le linee grigie ne sono {drawn:int} e la linea nera è il dato, e ogni istogramma conta gli insiemi estratti per il valore di una statistica, con la statistica del dato segnata da una linea tratteggiata. Questo rapporto non dà alcun p-value, alcuna probabilità e alcuna quota per un controllo. Gabry, Simpson, Vehtari, Betancourt e Gelman (2019, arXiv:1709.01449v5, p. 5) scrivono: “we say that a prior leads to a weakly informative joint prior data generating process if draws from the prior data generating distribution p(y) could represent any data set that could plausibly be observed.”",
+      "method_checks": "Un controllo predittivo estrae dalla distribuzione a posteriori insiemi di dati replicati; in ogni grafico le linee grigie ne sono {drawn:int} e la linea nera sono i dati, e ogni istogramma conta gli insiemi estratti per il valore di una statistica, con la statistica dei dati segnata da una linea tratteggiata. Questo report non dà alcun p-value, alcuna probabilità e alcuna quota per un controllo. Gabry, Simpson, Vehtari, Betancourt e Gelman (2019, Journal of the Royal Statistical Society A 182(2); arXiv:1709.01449v5, p. 8) scrivono: “Posterior predictive checking is mostly qualitative. By looking at some important features of the data and the replicated data, which were not explicitly included in the model, we may find a need to extend or modify the model.”",
+      "method_prior_checks": "Un controllo predittivo a priori estrae insiemi di dati dalle sole distribuzioni a priori, prima che i dati si vedano: in ogni grafico le linee grigie ne sono {drawn:int} e la linea nera sono i dati, e ogni istogramma conta gli insiemi estratti per il valore di una statistica, con la statistica dei dati segnata da una linea tratteggiata. Questo report non dà alcun p-value, alcuna probabilità e alcuna quota per un controllo. Gabry, Simpson, Vehtari, Betancourt e Gelman (2019, arXiv:1709.01449v5, p. 5) scrivono: “we say that a prior leads to a weakly informative joint prior data generating process if draws from the prior data generating distribution p(y) could represent any data set that could plausibly be observed.”",
       "method_program": "Il modello salvato è {model}, versione {version}. Lo sha256 del programma Stan è {program}, quello del binario compilato {binary}. Software: {software}."
     },
     "formula_texts": {
       "formula_rhat": "R̂ = √(var+ / W), W la media delle varianze interne delle catene divise, var+ = (N′ − 1)/N′ · W + B/N′, B la varianza tra le loro medie, N′ le estrazioni di una catena divisa; calcolato sulle estrazioni normalizzate sui ranghi e sulle estrazioni ripiegate |θ − mediana(θ)|, dato il maggiore dei due",
-      "formula_ess": "ESS = S / τ̂, S il numero di estrazioni di tutte le catene, τ̂ = 1 + 2 Σ_t ρ̂_t dalle autocorrelazioni ρ̂_t delle catene divise, sommate con la sequenza monotona iniziale di Geyer; corpo: sulle estrazioni normalizzate sui ranghi; code: la minore tra le ESS degli indicatori I(θ ≤ q5) e I(θ ≥ q95)",
+      "formula_ess": "ESS = S / τ̂, S il numero di estrazioni di tutte le catene, τ̂ = 1 + 2 Σ_t ρ̂_t dalle autocorrelazioni ρ̂_t delle catene divise, sommate con la sequenza monotona iniziale di Geyer; centro: sulle estrazioni normalizzate sui ranghi; code: la minore tra le ESS degli indicatori I(θ ≤ q5) e I(θ ≥ q95)",
       "formula_mcse": "MCSE della media = sd(θ) / √ESS, l'ESS delle catene divise di θ stessa (non normalizzata sui ranghi)",
       "formula_ebfmi": "E-BFMI = [Σ_(n=2..N) (E_n − E_(n−1))² / (N − 1)] / [Σ_(n=1..N) (E_n − Ē)² / (N − 1)], E_n l'energia dell'estrazione n di una catena",
       "formula_contraction": "contrazione = 1 − Var(a posteriori) / Var(a priori), vuota dove la distribuzione a priori non ha varianza finita",
@@ -653,11 +653,11 @@
       "formula_original": "La scala della colonna"
     },
     "note_texts": {
-      "bayes_summary_capped": "Il rapporto elenca {listed:int} delle {total:int} quantità; l'output di riepilogo del nodo le ha tutte.",
-      "bayes_quantities_capped": "Il rapporto elenca {listed:int} delle {total:int} voci delle quantità; l'output di riepilogo del nodo le ha tutte.",
+      "bayes_summary_capped": "Il report elenca {listed:int} delle {total:int} quantità; l'output di riepilogo del nodo le ha tutte.",
+      "bayes_quantities_capped": "Il report elenca {listed:int} delle {total:int} voci delle quantità; l'output di riepilogo del nodo le ha tutte.",
       "bayes_contraction_null": "La contrazione è vuota per {no_finite_variance:int} quantità la cui distribuzione a priori non ha varianza finita, per {no_prior_draws:int} la cui esecuzione non ha estrazioni dalla distribuzione a priori e per {not_decided:int} la cui versione del modello non dice se la distribuzione a priori ha varianza finita.",
       "bayes_original_capped": "La scala della colonna è data per {original:int} coefficienti; altri {capped:int} ne restano senza (il limite del nodo sulle quantità elencate).",
-      "bayes_density_cut": "I grafici di densità lasciano fuori le estrazioni oltre il loro intervallo, in queste quantità: {names}. Estrazioni a posteriori lasciate fuori, nello stesso ordine: {posterior:int}. Estrazioni a priori lasciate fuori: {prior:int}.",
+      "bayes_density_cut": "I grafici di densità lasciano fuori le estrazioni oltre il loro intervallo, in queste quantità: {names}. Estrazioni a posteriori lasciate fuori, nello stesso ordine: {posterior:int}. Estrazioni a priori lasciate fuori, nello stesso ordine: {prior:int}.",
       "bayes_no_checks": "Questa versione è stata salvata prima dei controlli predittivi: salvandola di nuovo si aggiungono.",
       "bayes_checks_dropped": "{dropped:int} delle {draws:int} estrazioni dei controlli predittivi sono state lasciate fuori: CmdStan ha scritto i loro valori replicati come mancanti (un generatore non ha potuto usare i suoi argomenti); i grafici usano le altre {valid:int}.",
       "bayes_prior_undrawn_one": "La quantità {names} non ha estrazione ancestrale: resta fuori dal riepilogo.",
@@ -1004,14 +1004,14 @@
       "outside": "In den {draws} gezogenen Datensätzen liegen {below} gezogene Werte unter dem Wertebereich der Daten und {above} darüber."
     },
     "reading_texts": {
-      "method_nuts": "Die Ziehungen stammen aus dem No-U-Turn-Sampler von Stan, einem dynamischen Hamiltonian Monte Carlo: {chains:int} Ketten, jede mit {warmup:int} Aufwärmiterationen, die die Schrittweite und eine diagonale Metrik festlegen, danach {draws:int} behaltene Iterationen, vom Seed {seed}; eine Trajektorie verdoppelt sich nicht weiter ab einer Baumtiefe von {depth:int}, und die Ziel-Akzeptanz ist {delta:num}. Hoffman und Gelman (2014, arXiv:1111.4246v1, S. 1) beschreiben es so: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
-      "method_prior": "Die Ziehungen sind ancestral: in jeder der {chains:int} × {draws:int} Ziehungen wird jede Größe aus ihrer Prior-Verteilung gezogen, danach die Werte, die das Programm daraus erzeugt, ohne Aufwärmen und ohne Sampler, vom Seed {seed}. Für solche Ziehungen gibt es kein R-hat, keine effektive Stichprobengröße, keine Divergenzen und keine Baumtiefe, und keine wird angegeben.",
+      "method_nuts": "Die Ziehungen stammen aus dem No-U-Turn-Sampler von Stan, einem dynamischen Hamiltonian Monte Carlo: {chains:int} Ketten, jede mit {warmup:int} Warm-up-Iterationen, die die Schrittweite und eine diagonale Metrik festlegen, danach {draws:int} behaltene Iterationen, vom Seed {seed}; eine Trajektorie verdoppelt sich nicht weiter ab einer Baumtiefe von {depth:int}, und die Ziel-Akzeptanz ist {delta:num}. Hoffman und Gelman (2014, arXiv:1111.4246v1, S. 1) beschreiben es so: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
+      "method_prior": "Die Ziehungen sind «ancestral»: in jeder der {chains:int} × {draws:int} Ziehungen wird jede Größe aus ihrer Prior-Verteilung gezogen, danach die Werte, die das Programm daraus erzeugt, ohne Warm-up und ohne Sampler, vom Seed {seed}. Für solche Ziehungen gibt es kein R-hat, keine effektive Stichprobengröße, keine Divergenzen und keine Baumtiefe, und keine wird angegeben.",
       "method_precision": "Jede Ziehung wird mit 8 Stellen Genauigkeit geschrieben, wie CmdStan 2.40.0 es standardmäßig tut: eine Ziehung x weicht vom Wert, den der Sampler hielt, höchstens um 5·10^(−8)·|x| ab, und eine Größe, deren Mittelwert groß neben ihrer Standardabweichung ist, kann Werte wiederholen. Jede Zahl dieses Berichts wird aus den Ziehungen berechnet, wie sie geschrieben sind.",
       "method_standardized": "Numerische Prädiktoren, vor dem Sampling auf ihren Mittelwert zentriert und durch ihre Standardabweichung geteilt: {count:int}. Die Tabelle «Daten» nennt beide Zahlen für jeden von ihnen.",
       "method_original": "Auf der Skala der Spalte ist ein Koeffizient der standardisierte Koeffizient geteilt durch die Standardabweichung des Prädiktors, und der Achsenabschnitt ist der standardisierte Achsenabschnitt minus die Summe jedes Koeffizienten mal dem Mittelwert des Prädiktors über seiner Standardabweichung, Ziehung für Ziehung: die Tabelle «Auf der Skala der Spalte» nennt Mittelwert, Standardabweichung und Quantile dieser Ziehungen.",
-      "method_rhat_ess": "R-hat vergleicht die Ketten miteinander und innerhalb ihrer Hälften, auf den Rängen der Ziehungen, im Zentrum und in den Rändern der Verteilung; die effektive Stichprobengröße (ESS) des Zentrums und der Ränder sagt, wie vielen unabhängigen Ziehungen die Ketten für die Mitte und für die 5-%- und 95-%-Quantile entsprechen. Sie werden berechnet, wie das R-Paket posterior 1.8.0 sie berechnet, nach Vehtari, Gelman, Simpson, Carpenter und Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Die Autoren schreiben (S. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” und in denselben Absätzen (S. 4): “we recommend running at least four chains by default.” und (S. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Das sind ihre Werte, zitiert: keine Zahl dieses Berichts wird mit ihnen verglichen.",
-      "method_divergences": "Eine divergente Transition ist eine Iteration, in der die simulierte Trajektorie den Pfad verlässt, dem die exakte Dynamik folgen würde. In diesem Lauf waren {n:int} der {total:int} Ziehungen nach dem Aufwärmen divergente Transitionen. Das Stan Reference Manual (Version 2.40, «MCMC Sampling», «Divergent transitions») sagt: “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
-      "method_treedepth": "Die Baumtiefe ist die Zahl, wie oft die Trajektorie in einer Iteration verdoppelt wurde. In diesem Lauf endeten {hits:int} Ziehungen bei der größten Tiefe, die der Knoten erlaubt, {depth:int}. Das Stan Reference Manual (Version 2.40, «MCMC Sampling», «NUTS and its configuration») sagt: “a tree depth equal to the maximum depth indicates that NUTS is taking many leapfrog steps and being terminated prematurely to avoid excessively long execution time.”",
+      "method_rhat_ess": "R-hat vergleicht die Ketten miteinander und innerhalb ihrer Hälften, auf den Rängen der Ziehungen, in der Mitte und in den Rändern der Verteilung; die effektive Stichprobengröße (ESS) der Mitte und der Ränder sagt, wie vielen unabhängigen Ziehungen die Ketten für die Mitte und für die 5-%- und 95-%-Quantile entsprechen. Sie werden berechnet, wie das R-Paket posterior 1.8.0 sie berechnet, nach Vehtari, Gelman, Simpson, Carpenter und Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Die Autoren schreiben (S. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” und in denselben Absätzen (S. 4): “we recommend running at least four chains by default.” und (S. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Das sind ihre Werte, zitiert: keine Zahl dieses Berichts wird mit ihnen verglichen.",
+      "method_divergences": "Ein divergenter Übergang ist eine Iteration, in der die simulierte Trajektorie den Pfad verlässt, dem die exakte Dynamik folgen würde. In diesem Lauf waren {n:int} der {total:int} Ziehungen nach dem Warm-up divergente Übergänge. Das Stan Reference Manual (Version 2.40, «MCMC Sampling», «Divergent transitions») sagt: “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
+      "method_treedepth": "Die Baumtiefe ist die Anzahl der Verdopplungen der Trajektorie in einer Iteration. In diesem Lauf endeten {hits:int} Ziehungen bei der größten Tiefe, die der Knoten erlaubt, {depth:int}. Das Stan Reference Manual (Version 2.40, «MCMC Sampling», «NUTS and its configuration») sagt: “a tree depth equal to the maximum depth indicates that NUTS is taking many leapfrog steps and being terminated prematurely to avoid excessively long execution time.”",
       "method_ebfmi": "Das E-BFMI einer Kette, ihr geschätzter bayesscher Anteil fehlender Information, vergleicht die Änderungen der Energie zwischen aufeinanderfolgenden Iterationen mit der gesamten Variation der Energie. Die Tabelle «Maße des Samplers je Kette» nennt es für jede Kette, ohne Markierung. Betancourt (2017, arXiv:1701.02434v2, S. 44) schreibt: “Empirically, values of this energy Bayesian fraction of missing information below 0.3 have proven problematic, although more theoretical work is needed to formalize any exact threshold.”",
       "method_contraction": "Die Kontraktion einer Größe ist 1 − Var(Posterior) / Var(Prior): wie sehr die Daten die Prior-Verteilung verengt haben. Sie ist leer, wo die Prior-Verteilung keine endliche Varianz hat (eine Cauchy, eine Student-t mit ν ≤ 2) oder der Lauf keine Ziehungen aus der Prior-Verteilung hat. Betancourt (2018, arXiv:1803.08393v1, S. 17), der sie posterior shrinkage nennt, schreibt: “The posterior shrinkage quantifies how much the posterior distribution contracts from the initial prior distribution.”",
       "method_checks": "Eine prädiktive Prüfung zieht replizierte Datensätze aus der Posterior-Verteilung; in jedem Diagramm sind die grauen Linien {drawn:int} davon und die schwarze Linie die Daten, und jedes Histogramm zählt die gezogenen Datensätze nach dem Wert einer Statistik, die Statistik der Daten durch eine gestrichelte Linie markiert. Dieser Bericht gibt für eine Prüfung keinen p-Wert, keine Wahrscheinlichkeit und keinen Anteil an. Gabry, Simpson, Vehtari, Betancourt und Gelman (2019, Journal of the Royal Statistical Society A 182(2); arXiv:1709.01449v5, S. 8) schreiben: “Posterior predictive checking is mostly qualitative. By looking at some important features of the data and the replicated data, which were not explicitly included in the model, we may find a need to extend or modify the model.”",
@@ -1020,7 +1020,7 @@
     },
     "formula_texts": {
       "formula_rhat": "R̂ = √(var+ / W), W der Mittelwert der Varianzen innerhalb der geteilten Ketten, var+ = (N′ − 1)/N′ · W + B/N′, B die Varianz zwischen ihren Mittelwerten, N′ die Ziehungen einer geteilten Kette; berechnet auf den rangnormalisierten Ziehungen und auf den gefalteten Ziehungen |θ − Median(θ)|, angegeben wird der größere der beiden",
-      "formula_ess": "ESS = S / τ̂, S die Zahl der Ziehungen aller Ketten, τ̂ = 1 + 2 Σ_t ρ̂_t aus den Autokorrelationen ρ̂_t der geteilten Ketten, summiert nach Geyers anfänglicher monotoner Folge; Zentrum: auf den rangnormalisierten Ziehungen; Ränder: die kleinere der ESS der Indikatoren I(θ ≤ q5) und I(θ ≥ q95)",
+      "formula_ess": "ESS = S / τ̂, S die Zahl der Ziehungen aller Ketten, τ̂ = 1 + 2 Σ_t ρ̂_t aus den Autokorrelationen ρ̂_t der geteilten Ketten, summiert nach Geyers anfänglicher monotoner Folge; Mitte: auf den rangnormalisierten Ziehungen; Ränder: die kleinere der ESS der Indikatoren I(θ ≤ q5) und I(θ ≥ q95)",
       "formula_mcse": "MCSE des Mittelwerts = sd(θ) / √ESS, die ESS der geteilten Ketten von θ selbst (nicht rangnormalisiert)",
       "formula_ebfmi": "E-BFMI = [Σ_(n=2..N) (E_n − E_(n−1))² / (N − 1)] / [Σ_(n=1..N) (E_n − Ē)² / (N − 1)], E_n die Energie der Ziehung n einer Kette",
       "formula_contraction": "Kontraktion = 1 − Var(Posterior) / Var(Prior), leer, wo die Prior-Verteilung keine endliche Varianz hat",
@@ -1052,7 +1052,7 @@
       "bayes_quantities_capped": "Der Bericht führt {listed:int} der {total:int} Einträge der Größen auf; die Zusammenfassung des Knotens hat alle.",
       "bayes_contraction_null": "Die Kontraktion ist leer für {no_finite_variance:int} Größen, deren Prior-Verteilung keine endliche Varianz hat, für {no_prior_draws:int}, deren Lauf keine Ziehungen aus der Prior-Verteilung hat, und für {not_decided:int}, deren Modellversion nicht sagt, ob die Prior-Verteilung eine endliche Varianz hat.",
       "bayes_original_capped": "Die Skala der Spalte wird für {original:int} Koeffizienten angegeben; {capped:int} weitere bleiben ohne sie (die Grenze des Knotens für die aufgeführten Größen).",
-      "bayes_density_cut": "Die Dichtediagramme lassen die Ziehungen außerhalb ihres Bereichs weg, bei diesen Größen: {names}. Weggelassene Posterior-Ziehungen, in derselben Reihenfolge: {posterior:int}. Weggelassene Prior-Ziehungen: {prior:int}.",
+      "bayes_density_cut": "Die Dichtediagramme lassen die Ziehungen außerhalb ihres Bereichs weg, bei diesen Größen: {names}. Weggelassene Posterior-Ziehungen, in derselben Reihenfolge: {posterior:int}. Weggelassene Prior-Ziehungen, in derselben Reihenfolge: {prior:int}.",
       "bayes_no_checks": "Diese Version wurde vor den prädiktiven Prüfungen gespeichert: erneutes Speichern fügt sie hinzu.",
       "bayes_checks_dropped": "{dropped:int} der {draws:int} Ziehungen der prädiktiven Prüfungen wurden weggelassen: CmdStan schrieb ihre replizierten Werte als fehlend (ein Generator konnte seine Argumente nicht verwenden); die Diagramme verwenden die übrigen {valid:int}.",
       "bayes_prior_undrawn_one": "Die Größe {names} hat keine ancestrale Ziehung: sie bleibt aus der Zusammenfassung weg.",
@@ -1171,11 +1171,11 @@
     "name": "Modelo bayesiano",
     "about": {
       "sample": "muestreo de la distribución a posteriori",
-      "prior_predictive": "muestras solo de las distribuciones a priori"
+      "prior_predictive": "extracciones solo de las distribuciones a priori"
     },
     "sections": {
       "posterior": "Resumen a posteriori",
-      "prior": "Resumen de las muestras a priori",
+      "prior": "Resumen de las extracciones a priori",
       "data": "Datos",
       "groups": "Grupos",
       "charts": "Gráficos de las extracciones",
@@ -1186,26 +1186,26 @@
     "kpi": {
       "rows": "Filas usadas",
       "rows_under": "{left} excluidas",
-      "draws": "Muestras",
-      "draws_under": "cadenas × muestras, tras {warmup} iteraciones de calentamiento",
-      "draws_prior": "Muestras a priori",
-      "draws_prior_under": "cadenas × muestras, sin calentamiento",
+      "draws": "Extracciones",
+      "draws_under": "cadenas × extracciones, tras {warmup} iteraciones de calentamiento",
+      "draws_prior": "Extracciones a priori",
+      "draws_prior_under": "cadenas × extracciones, sin calentamiento",
       "quantities": "Cantidades muestreadas",
       "divergences": "Divergencias",
-      "divergences_under": "de {total} muestras",
+      "divergences_under": "de {total} extracciones",
       "rhat": "R-hat máximo",
       "ess_under": "ESS mínimo: centro {bulk}, colas {tail}"
     },
     "facts": {
       "sample": "Modelo guardado {model}, versión {version} · muestreador {sampler}, métrica {metric}, aceptación objetivo {delta}, profundidad del árbol hasta {depth} · semilla {seed} · {precision} · {warmup} s de calentamiento, {sampling} s de muestreo",
-      "prior_predictive": "Modelo guardado {model}, versión {version} · muestras solo de las distribuciones a priori, antes de ver los datos: sin calentamiento, sin diagnósticos de un muestreador ({sampler}) · semilla {seed} · {precision}"
+      "prior_predictive": "Modelo guardado {model}, versión {version} · extracciones solo de las distribuciones a priori, antes de ver los datos: sin calentamiento, sin diagnósticos de un muestreador ({sampler}) · semilla {seed} · {precision}"
     },
     "posterior_note": {
-      "sample": "Una fila por cantidad: la media y la desviación típica de sus muestras a posteriori, tres cuantiles, R-hat, los tamaños de muestra efectivos (ESS) del centro y de las colas, el error típico de la media (MCSE) y la contracción respecto de la distribución a priori, 1 − Var(posteriori) / Var(priori), vacía donde la distribución a priori no tiene varianza finita.",
-      "prior_predictive": "Una fila por cantidad: la media, la desviación típica y los cinco cuantiles de las muestras de las distribuciones a priori solas, antes de ver los datos."
+      "sample": "Una fila por cantidad: la media y la desviación estándar de sus extracciones a posteriori, tres cuantiles, R-hat, los tamaños de muestra efectivos (ESS) del centro y de las colas, el error estándar de la media (MCSE) y la contracción respecto de la distribución a priori, 1 − Var(posteriori) / Var(priori), vacía donde la distribución a priori no tiene varianza finita.",
+      "prior_predictive": "Una fila por cantidad: la media, la desviación estándar y los cinco cuantiles de las extracciones de las distribuciones a priori solas, antes de ver los datos."
     },
-    "original_note": "Los coeficientes de un predictor lineal en la escala de la columna: el coeficiente dividido por la desviación típica con la que se estandarizó su predictor (la tabla «Datos» la da).",
-    "data_note": "Las variables que el modelo enlaza con columnas: cómo se leyó cada una y, para un número estandarizado, la media y la desviación típica con las que se centró y se dividió.",
+    "original_note": "Los coeficientes de un predictor lineal en la escala de la columna: el coeficiente dividido por la desviación estándar con la que se estandarizó su predictor (la tabla «Datos» la da).",
+    "data_note": "Las variables que el modelo enlaza con columnas: cómo se leyó cada una y, para un número estandarizado, la media y la desviación estándar con las que se centró y se dividió.",
     "data_types": {
       "real": "Número",
       "int": "Número entero",
@@ -1216,7 +1216,7 @@
       "quantity": "Cantidad",
       "unit": "Unidad",
       "mean": "Media",
-      "sd": "Desv. típ.",
+      "sd": "Desv. est.",
       "q5": "5 %",
       "q25": "25 %",
       "q50": "Mediana",
@@ -1228,10 +1228,10 @@
       "mcse_mean": "MCSE de la media",
       "contraction": "Contracción",
       "posterior": "Resumen a posteriori de los escalares y las correlaciones",
-      "prior": "Resumen de las muestras a priori de los escalares y las correlaciones",
+      "prior": "Resumen de las extracciones a priori de los escalares y las correlaciones",
       "original": "En la escala de la columna",
       "orig_mean": "Media",
-      "orig_sd": "Desv. típ.",
+      "orig_sd": "Desv. est.",
       "orig_q5": "5 %",
       "orig_q50": "Mediana",
       "orig_q95": "95 %",
@@ -1259,8 +1259,8 @@
       "seconds_warmup": "Calentamiento (s)",
       "seconds_sampling": "Muestreo (s)",
       "rhat_max": "R-hat máximo",
-      "ess_bulk_min": "ESS centro mínima",
-      "ess_tail_min": "ESS colas mínima",
+      "ess_bulk_min": "ESS centro mínimo",
+      "ess_tail_min": "ESS colas mínimo",
       "plate": "Grupo"
     },
     "stats": {
@@ -1270,7 +1270,7 @@
         "n_not_finite": "Filas excluidas (no finitas)",
         "chains": "Cadenas",
         "warmup": "Iteraciones de calentamiento",
-        "draws": "Muestras por cadena",
+        "draws": "Extracciones por cadena",
         "seed": "Semilla",
         "adapt_delta": "Aceptación objetivo",
         "max_treedepth": "Profundidad máxima del árbol",
@@ -1280,8 +1280,8 @@
         "seconds_data": "Lectura de los datos (s)",
         "seconds_warmup": "Calentamiento (s)",
         "seconds_sampling": "Muestreo (s)",
-        "seconds_conversion": "Conversión de las muestras (s)",
-        "seconds_pass_2": "Medida de las muestras (s)",
+        "seconds_conversion": "Conversión de las extracciones (s)",
+        "seconds_pass_2": "Medida de las extracciones (s)",
         "seconds_checks": "Comprobaciones predictivas (s)",
         "seconds_replicated": "Datos replicados (s)",
         "bayes_model": "Modelo guardado",
@@ -1291,16 +1291,16 @@
         "binary_sha256": "sha256 del binario",
         "sampler": "Muestreador",
         "metric": "Métrica",
-        "precision": "Precisión de las muestras",
+        "precision": "Precisión de las extracciones",
         "note_summary_capped": "Nota: cantidades excluidas del informe",
         "note_quantities_capped": "Nota: nodos excluidos del informe",
         "note_contraction_null": "Nota: la contracción",
         "note_density_cut": "Nota: los gráficos de densidad",
-        "note_no_checks": "Nota: los controles predictivos",
-        "note_checks_dropped": "Nota: muestras excluidas de los controles",
-        "note_prior_undrawn": "Nota: cantidades sin muestra a priori",
-        "note_prior_dropped": "Nota: muestras a priori excluidas",
-        "note_replicated_dropped": "Nota: muestras replicadas excluidas"
+        "note_no_checks": "Nota: los comprobaciones predictivas",
+        "note_checks_dropped": "Nota: extracciones excluidas de las comprobaciones",
+        "note_prior_undrawn": "Nota: cantidades sin extracción a priori",
+        "note_prior_dropped": "Nota: extracciones a priori excluidas",
+        "note_replicated_dropped": "Nota: extracciones replicadas excluidas"
       }
     },
     "values": {
@@ -1321,7 +1321,7 @@
     },
     "charts": {
       "how": {
-        "trace": "Traza: una línea por cada cadena, el valor de la cantidad en cada iteración conservada (aclarada), en el orden de extracción.",
+        "trace": "Traza: una línea por cada cadena, el valor de la cantidad en cada iteración conservada (submuestreada), en el orden de extracción.",
         "rank": "Histograma de rangos: para cada cadena, el número de sus extracciones en cada uno de los 20 intervalos iguales de los rangos de todas las extracciones de las cadenas juntas.",
         "density": "Densidad: la densidad a posteriori de las extracciones (continua) y la a priori (discontinua) sobre el mismo eje; las extracciones fuera del rango dibujado se cuentan en las notas.",
         "pairs": "Cada punto es una extracción: la primera cantidad en el eje horizontal, la segunda en el vertical; las extracciones divergentes tienen su propio color.",
@@ -1352,7 +1352,7 @@
         },
         "ess": {
           "name": "ESS, centro y colas",
-          "says": "El tamaño de muestra efectivo dice a cuántas extracciones independientes equivalen las cadenas: la ESS del centro para el centro de la distribución (su media y su mediana), la ESS de las colas para sus cuantiles del 5 % y del 95 %."
+          "says": "El tamaño de muestra efectivo dice a cuántas extracciones independientes equivalen las cadenas: el ESS del centro para el centro de la distribución (su media y su mediana), el ESS de las colas para sus cuantiles del 5 % y del 95 %."
         },
         "mcse": {
           "name": "MCSE de la media",
@@ -1403,12 +1403,12 @@
       "outside": "En los {draws} conjuntos de datos extraídos, {below} valores extraídos quedan por debajo del rango de los datos y {above} por encima."
     },
     "reading_texts": {
-      "method_nuts": "Las extracciones vienen del No-U-Turn sampler de Stan, un Hamiltonian Monte Carlo dinámico: {chains:int} cadenas, cada una con {warmup:int} iteraciones de calentamiento que fijan el tamaño de paso y una métrica diagonal, luego {draws:int} iteraciones conservadas, desde la semilla {seed}; una trayectoria deja de duplicarse a una profundidad de árbol de {depth:int}, y la aceptación objetivo es {delta:num}. Hoffman y Gelman (2014, arXiv:1111.4246v1, p. 1) lo describen así: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
-      "method_prior": "Las extracciones son ancestrales: en cada una de las {chains:int} × {draws:int} extracciones cada cantidad se extrae de su distribución a priori, luego los valores que el programa genera a partir de ellas, sin calentamiento y sin sampler, desde la semilla {seed}. Para tales extracciones no existen R-hat, tamaño muestral efectivo, divergencias ni profundidad de árbol, y no se da ninguno.",
-      "method_precision": "Cada extracción se escribe con 8 cifras de precisión, como hace CmdStan 2.40.0 por defecto: una extracción x difiere del valor que tenía el sampler como máximo en 5·10^(−8)·|x|, y una cantidad cuya media es grande junto a su desviación estándar puede repetir valores. Cada número de este informe se calcula a partir de las extracciones tal como están escritas.",
+      "method_nuts": "Las extracciones vienen del muestreador No-U-Turn de Stan, un Hamiltonian Monte Carlo dinámico: {chains:int} cadenas, cada una con {warmup:int} iteraciones de calentamiento que fijan el tamaño de paso y una métrica diagonal, luego {draws:int} iteraciones conservadas, desde la semilla {seed}; una trayectoria deja de duplicarse a una profundidad de árbol de {depth:int}, y la aceptación objetivo es {delta:num}. Hoffman y Gelman (2014, arXiv:1111.4246v1, p. 1) lo describen así: “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
+      "method_prior": "Las extracciones son ancestrales: en cada una de las {chains:int} × {draws:int} extracciones cada cantidad se extrae de su distribución a priori, luego los valores que el programa genera a partir de ellas, sin calentamiento y sin muestreador, desde la semilla {seed}. Para tales extracciones no existen R-hat, tamaño de muestra efectivo, divergencias ni profundidad de árbol, y no se da ninguno.",
+      "method_precision": "Cada extracción se escribe con 8 cifras de precisión, como hace CmdStan 2.40.0 por defecto: una extracción x difiere del valor que tenía el muestreador como máximo en 5·10^(−8)·|x|, y una cantidad cuya media es grande en comparación con su desviación estándar puede repetir valores. Cada número de este informe se calcula a partir de las extracciones tal como están escritas.",
       "method_standardized": "Predictores numéricos centrados en su media y divididos por su desviación estándar antes del muestreo: {count:int}. La tabla «Datos» da ambos números para cada uno.",
-      "method_original": "En la escala de la columna un coeficiente es el coeficiente estandarizado dividido por la desviación estándar del predictor, y la ordenada es la ordenada estandarizada menos la suma de cada coeficiente por la media del predictor sobre su desviación estándar, extracción por extracción: la tabla «En la escala de la columna» da la media, la desviación estándar y los cuantiles de esas extracciones.",
-      "method_rhat_ess": "R-hat compara las cadenas entre sí y dentro de sus mitades, sobre los rangos de las extracciones, en el centro y en las colas de la distribución; el tamaño muestral efectivo (ESS) del centro y de las colas dice a cuántas extracciones independientes equivalen las cadenas para el centro y para los cuantiles del 5 % y del 95 %. Se calculan como los calcula el paquete de R posterior 1.8.0, según Vehtari, Gelman, Simpson, Carpenter y Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Los autores escriben (p. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” y, en los mismos párrafos (p. 4): “we recommend running at least four chains by default.” y (p. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Son sus valores, citados: ningún número de este informe se compara con ellos.",
+      "method_original": "En la escala de la columna un coeficiente es el coeficiente estandarizado dividido por la desviación estándar del predictor, y el intercepto es el intercepto estandarizado menos la suma de cada coeficiente por la media del predictor sobre su desviación estándar, extracción por extracción: la tabla «En la escala de la columna» da la media, la desviación estándar y los cuantiles de esas extracciones.",
+      "method_rhat_ess": "R-hat compara las cadenas entre sí y dentro de sus mitades, sobre los rangos de las extracciones, en el centro y en las colas de la distribución; el tamaño de muestra efectivo (ESS) del centro y de las colas dice a cuántas extracciones independientes equivalen las cadenas para el centro y para los cuantiles del 5 % y del 95 %. Se calculan como los calcula el paquete de R posterior 1.8.0, según Vehtari, Gelman, Simpson, Carpenter y Bürkner (2021, Bayesian Analysis 16(2); arXiv:1903.08008v5). Los autores escriben (p. 4): “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” y, en los mismos párrafos (p. 4): “we recommend running at least four chains by default.” y (p. 5): “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Son sus valores, citados: ningún número de este informe se compara con ellos.",
       "method_divergences": "Una transición divergente es una iteración en la que la trayectoria simulada abandona el camino que seguiría la dinámica exacta. En esta ejecución {n:int} de las {total:int} extracciones tras el calentamiento fueron transiciones divergentes. El Stan Reference Manual (versión 2.40, «MCMC Sampling», «Divergent transitions») dice: “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
       "method_treedepth": "La profundidad del árbol es el número de veces que la trayectoria se duplicó en una iteración. En esta ejecución {hits:int} extracciones se detuvieron en la mayor profundidad que permite el nodo, {depth:int}. El Stan Reference Manual (versión 2.40, «MCMC Sampling», «NUTS and its configuration») dice: “a tree depth equal to the maximum depth indicates that NUTS is taking many leapfrog steps and being terminated prematurely to avoid excessively long execution time.”",
       "method_ebfmi": "El E-BFMI de una cadena, su fracción bayesiana estimada de información faltante, compara los cambios de la energía entre iteraciones sucesivas con la variación total de la energía. La tabla «Medidas del muestreador por cadena» lo da para cada cadena, sin marcas. Betancourt (2017, arXiv:1701.02434v2, p. 44) escribe: “Empirically, values of this energy Bayesian fraction of missing information below 0.3 have proven problematic, although more theoretical work is needed to formalize any exact threshold.”",
@@ -1419,11 +1419,11 @@
     },
     "formula_texts": {
       "formula_rhat": "R̂ = √(var+ / W), W la media de las varianzas internas de las cadenas divididas, var+ = (N′ − 1)/N′ · W + B/N′, B la varianza entre sus medias, N′ las extracciones de una cadena dividida; calculado sobre las extracciones normalizadas por rangos y sobre las extracciones plegadas |θ − mediana(θ)|, se da el mayor de los dos",
-      "formula_ess": "ESS = S / τ̂, S el número de extracciones de todas las cadenas, τ̂ = 1 + 2 Σ_t ρ̂_t a partir de las autocorrelaciones ρ̂_t de las cadenas divididas, sumadas con la secuencia monótona inicial de Geyer; centro: sobre las extracciones normalizadas por rangos; colas: la menor de las ESS de los indicadores I(θ ≤ q5) e I(θ ≥ q95)",
-      "formula_mcse": "MCSE de la media = sd(θ) / √ESS, la ESS de las cadenas divididas de θ misma (sin normalizar por rangos)",
+      "formula_ess": "ESS = S / τ̂, S el número de extracciones de todas las cadenas, τ̂ = 1 + 2 Σ_t ρ̂_t a partir de las autocorrelaciones ρ̂_t de las cadenas divididas, sumadas con la secuencia monótona inicial de Geyer; centro: sobre las extracciones normalizadas por rangos; colas: el menor de los ESS de los indicadores I(θ ≤ q5) e I(θ ≥ q95)",
+      "formula_mcse": "MCSE de la media = sd(θ) / √ESS, el ESS de las cadenas divididas de θ misma (sin normalizar por rangos)",
       "formula_ebfmi": "E-BFMI = [Σ_(n=2..N) (E_n − E_(n−1))² / (N − 1)] / [Σ_(n=1..N) (E_n − Ē)² / (N − 1)], E_n la energía de la extracción n de una cadena",
       "formula_contraction": "contracción = 1 − Var(a posteriori) / Var(a priori), vacía donde la distribución a priori no tiene varianza finita",
-      "formula_original": "β en la escala de la columna = β / sd(x);  α en la escala de la columna = α − Σ_j β_j · media(x_j) / sd(x_j), extracción por extracción, β un coeficiente, α la ordenada, x el predictor, su media y su sd las de la tabla «Datos»"
+      "formula_original": "β en la escala de la columna = β / sd(x);  α en la escala de la columna = α − Σ_j β_j · media(x_j) / sd(x_j), extracción por extracción, β un coeficiente, α el intercepto, x el predictor, su media y su sd las de la tabla «Datos»"
     },
     "reading_labels": {
       "method_nuts": "Muestreador",
@@ -1451,7 +1451,7 @@
       "bayes_quantities_capped": "El informe lista {listed:int} de las {total:int} entradas de las cantidades; la salida de resumen del nodo las tiene todas.",
       "bayes_contraction_null": "La contracción está vacía para {no_finite_variance:int} cantidades cuya distribución a priori no tiene varianza finita, para {no_prior_draws:int} cuya ejecución no tiene extracciones de la distribución a priori y para {not_decided:int} cuya versión del modelo no dice si la distribución a priori tiene varianza finita.",
       "bayes_original_capped": "La escala de la columna se da para {original:int} coeficientes; otros {capped:int} quedan sin ella (el límite del nodo sobre las cantidades listadas).",
-      "bayes_density_cut": "Los gráficos de densidad dejan fuera las extracciones más allá de su rango, en estas cantidades: {names}. Extracciones a posteriori dejadas fuera, en el mismo orden: {posterior:int}. Extracciones a priori dejadas fuera: {prior:int}.",
+      "bayes_density_cut": "Los gráficos de densidad dejan fuera las extracciones más allá de su rango, en estas cantidades: {names}. Extracciones a posteriori dejadas fuera, en el mismo orden: {posterior:int}. Extracciones a priori dejadas fuera, en el mismo orden: {prior:int}.",
       "bayes_no_checks": "Esta versión se guardó antes de las comprobaciones predictivas: guardarla de nuevo las añade.",
       "bayes_checks_dropped": "{dropped:int} de las {draws:int} extracciones de las comprobaciones predictivas se dejaron fuera: CmdStan escribió sus valores replicados como ausentes (un generador no pudo usar sus argumentos); los gráficos usan las otras {valid:int}.",
       "bayes_prior_undrawn_one": "La cantidad {names} no tiene extracción ancestral: queda fuera del resumen.",
@@ -1567,8 +1567,8 @@
       "prior_predictive": "tirages issus des seules lois a priori"
     },
     "sections": {
-      "posterior": "Résumé a posteriori",
-      "prior": "Résumé des tirages a priori",
+      "posterior": "Synthèse a posteriori",
+      "prior": "Synthèse des tirages a priori",
       "data": "Données",
       "groups": "Groupes",
       "charts": "Graphiques des tirages",
@@ -1583,19 +1583,19 @@
       "draws_under": "chaînes × tirages, après {warmup} itérations d'échauffement",
       "draws_prior": "Tirages a priori",
       "draws_prior_under": "chaînes × tirages, sans échauffement",
-      "quantities": "Quantités tirées",
+      "quantities": "Grandeurs tirées",
       "divergences": "Divergences",
       "divergences_under": "sur {total} tirages",
       "rhat": "R-hat maximal",
-      "ess_under": "ESS minimal : centre {bulk}, queues {tail}"
+      "ess_under": "ESS minimale : centre {bulk}, queues {tail}"
     },
     "facts": {
       "sample": "Modèle enregistré {model}, version {version} · échantillonneur {sampler}, métrique {metric}, acceptation cible {delta}, profondeur de l'arbre jusqu'à {depth} · graine {seed} · {precision} · {warmup} s d'échauffement, {sampling} s d'échantillonnage",
       "prior_predictive": "Modèle enregistré {model}, version {version} · tirages issus des seules lois a priori, avant de voir les données : pas d'échauffement, pas de diagnostics d'un échantillonneur ({sampler}) · graine {seed} · {precision}"
     },
     "posterior_note": {
-      "sample": "Une ligne par quantité : la moyenne et l'écart type de ses tirages a posteriori, trois quantiles, le R-hat, les tailles d'échantillon effectives (ESS) du centre et des queues, l'erreur standard de la moyenne (MCSE) et la contraction par rapport à la loi a priori, 1 − Var(a posteriori) / Var(a priori), vide là où la loi a priori n'a pas de variance finie.",
-      "prior_predictive": "Une ligne par quantité : la moyenne, l'écart type et les cinq quantiles des tirages issus des seules lois a priori, avant de voir les données."
+      "sample": "Une ligne par grandeur : la moyenne et l'écart type de ses tirages a posteriori, trois quantiles, le R-hat, les tailles d'échantillon effectives (ESS) du centre et des queues, l'erreur standard de la moyenne (MCSE) et la contraction par rapport à la loi a priori, 1 − Var(a posteriori) / Var(a priori), vide là où la loi a priori n'a pas de variance finie.",
+      "prior_predictive": "Une ligne par grandeur : la moyenne, l'écart type et les cinq quantiles des tirages issus des seules lois a priori, avant de voir les données."
     },
     "original_note": "Les coefficients d'un prédicteur linéaire sur l'échelle de la colonne : le coefficient divisé par l'écart type avec lequel son prédicteur a été standardisé (le tableau « Données » le donne).",
     "data_note": "Les variables que le modèle relie à des colonnes : comment chacune a été lue et, pour un nombre standardisé, la moyenne et l'écart type avec lesquels il a été centré et divisé.",
@@ -1606,7 +1606,7 @@
       "category": "Catégorie"
     },
     "tables": {
-      "quantity": "Quantité",
+      "quantity": "Grandeur",
       "unit": "Unité",
       "mean": "Moyenne",
       "sd": "Éc. type",
@@ -1620,8 +1620,8 @@
       "ess_tail": "ESS queues",
       "mcse_mean": "MCSE de la moyenne",
       "contraction": "Contraction",
-      "posterior": "Résumé a posteriori des scalaires et des corrélations",
-      "prior": "Résumé des tirages a priori des scalaires et des corrélations",
+      "posterior": "Synthèse a posteriori des scalaires et des corrélations",
+      "prior": "Synthèse des tirages a priori des scalaires et des corrélations",
       "original": "Sur l'échelle de la colonne",
       "orig_mean": "Moyenne",
       "orig_sd": "Éc. type",
@@ -1636,8 +1636,8 @@
       "count": "Unités ou niveaux",
       "reference": "Niveau de référence",
       "missing": "Écartées",
-      "posterior_sheet": "Résumé a posteriori",
-      "prior_sheet": "Résumé des tirages a priori",
+      "posterior_sheet": "Synthèse a posteriori",
+      "prior_sheet": "Synthèse des tirages a priori",
       "sampler": "Mesures de l'échantillonneur par chaîne",
       "nodes": "Mesures par nœud",
       "chain": "Chaîne",
@@ -1649,7 +1649,7 @@
       "stepsize": "Pas",
       "accept_stat_mean": "Acceptation moyenne",
       "n_leapfrog_mean": "Pas leapfrog moyens",
-      "seconds_warmup": "Réchauffement (s)",
+      "seconds_warmup": "Échauffement (s)",
       "seconds_sampling": "Échantillonnage (s)",
       "rhat_max": "R-hat maximal",
       "ess_bulk_min": "ESS centre minimale",
@@ -1668,14 +1668,14 @@
         "adapt_delta": "Acceptation cible",
         "max_treedepth": "Profondeur maximale de l'arbre",
         "threads": "Fils",
-        "n_quantities": "Quantités",
-        "n_in_summary": "Quantités dans le résumé",
+        "n_quantities": "Grandeurs",
+        "n_in_summary": "Grandeurs dans la synthèse",
         "seconds_data": "Lecture des données (s)",
         "seconds_warmup": "Échauffement (s)",
         "seconds_sampling": "Échantillonnage (s)",
         "seconds_conversion": "Conversion des tirages (s)",
         "seconds_pass_2": "Mesure des tirages (s)",
-        "seconds_checks": "Contrôles prédictifs (s)",
+        "seconds_checks": "Vérifications prédictives (s)",
         "seconds_replicated": "Données répliquées (s)",
         "bayes_model": "Modèle enregistré",
         "bayes_version": "Version",
@@ -1685,13 +1685,13 @@
         "sampler": "Échantillonneur",
         "metric": "Métrique",
         "precision": "Précision des tirages",
-        "note_summary_capped": "Note : quantités écartées du rapport",
+        "note_summary_capped": "Note : grandeurs écartées du rapport",
         "note_quantities_capped": "Note : nœuds écartés du rapport",
         "note_contraction_null": "Note : la contraction",
         "note_density_cut": "Note : les graphiques de densité",
-        "note_no_checks": "Note : les contrôles prédictifs",
-        "note_checks_dropped": "Note : tirages écartés des contrôles",
-        "note_prior_undrawn": "Note : quantités sans tirage a priori",
+        "note_no_checks": "Note : les vérifications prédictives",
+        "note_checks_dropped": "Note : tirages écartés des vérifications",
+        "note_prior_undrawn": "Note : grandeurs sans tirage a priori",
         "note_prior_dropped": "Note : tirages a priori écartés",
         "note_replicated_dropped": "Note : tirages répliqués écartés"
       }
@@ -1709,15 +1709,15 @@
       }
     },
     "groups": {
-      "note": "Les quantités d'un groupe, une par unité : la médiane des tirages a posteriori de chaque unité avec son intervalle de 5 % à 95 %, les unités dans l'ordre de leurs médianes.",
+      "note": "Les grandeurs d'un groupe, une par unité : la médiane des tirages a posteriori de chaque unité avec son intervalle de 5 % à 95 %, les unités dans l'ordre de leurs médianes.",
       "sampled": "Un échantillon de {shown} unités sur {total} : les dix dont les médianes sont les plus éloignées de la médiane centrale et un échantillon aléatoire (à graine fixe) des autres."
     },
     "charts": {
       "how": {
-        "trace": "Trace : une ligne par chaîne, la valeur de la quantité à chaque itération conservée (éclaircie), dans l'ordre du tirage.",
+        "trace": "Trace : une ligne par chaîne, la valeur de la grandeur à chaque itération conservée (éclaircie), dans l'ordre du tirage.",
         "rank": "Histogramme des rangs : pour chaque chaîne, le nombre de ses tirages dans chacun des 20 intervalles égaux des rangs de tous les tirages des chaînes réunies.",
         "density": "Densité : la densité a posteriori des tirages (trait plein) et celle a priori (tirets) sur le même axe ; les tirages hors de la plage dessinée sont comptés dans les notes.",
-        "pairs": "Chaque point est un tirage : la première quantité sur l'axe horizontal, la seconde sur l'axe vertical ; les tirages divergents ont leur propre couleur.",
+        "pairs": "Chaque point est un tirage : la première grandeur sur l'axe horizontal, la seconde sur l'axe vertical ; les tirages divergents ont leur propre couleur.",
         "units": "Chaque point est la médiane a posteriori d'une unité, le trait son intervalle de 5 % à 95 %."
       },
       "trace": "Trace",
@@ -1736,7 +1736,7 @@
     },
     "diagnostics": {
       "note": "Mesures et faits de l'exécution, tels quels. Le tableau donne les chiffres de l'échantillonneur par chaîne ; dessous, ce qu'est chaque mesure.",
-      "divergences_fact": "{n} des {total} tirages après le réchauffement étaient des transitions divergentes.",
+      "divergences_fact": "{n} des {total} tirages après l'échauffement étaient des transitions divergentes.",
       "treedepth_fact": "{n} des tirages se sont arrêtés à la plus grande profondeur d'arbre permise ({depth}).",
       "measures": {
         "rhat": {
@@ -1749,11 +1749,11 @@
         },
         "mcse": {
           "name": "MCSE de la moyenne",
-          "says": "L'erreur standard de Monte Carlo de la moyenne : de combien la moyenne des tirages peut s'écarter de la moyenne a posteriori parce que le nombre de tirages indépendants est fini, dans l'unité de la quantité."
+          "says": "L'erreur standard de Monte Carlo de la moyenne : de combien la moyenne des tirages peut s'écarter de la moyenne a posteriori parce que le nombre de tirages indépendants est fini, dans l'unité de la grandeur."
         },
         "divergences": {
           "name": "Divergences",
-          "says": "Une transition divergente est une itération où la trajectoire simulée s'écarte du chemin que suivrait la dynamique exacte ; le décompte porte sur les tirages après le réchauffement et les graphiques de paires marquent où elles ont eu lieu."
+          "says": "Une transition divergente est une itération où la trajectoire simulée s'écarte du chemin que suivrait la dynamique exacte ; le décompte porte sur les tirages après l'échauffement et les graphiques de paires marquent où elles ont eu lieu."
         },
         "treedepth": {
           "name": "Profondeur de l'arbre",
@@ -1765,7 +1765,7 @@
         },
         "adaptation": {
           "name": "Pas et acceptation",
-          "says": "Le pas sur lequel le réchauffement s'est fixé, la statistique d'acceptation moyenne des itérations et le nombre moyen de pas leapfrog par itération : ce que l'échantillonneur a fait, en chiffres."
+          "says": "Le pas sur lequel l'échauffement s'est fixé, la statistique d'acceptation moyenne des itérations et le nombre moyen de pas leapfrog par itération : ce que l'échantillonneur a fait, en chiffres."
         }
       }
     },
@@ -1796,23 +1796,23 @@
       "outside": "Dans les {draws} jeux de données tirés, {below} valeurs tirées sont en dessous de l'étendue des données et {above} au-dessus."
     },
     "reading_texts": {
-      "method_nuts": "Les tirages viennent du No-U-Turn sampler de Stan, un Hamiltonian Monte Carlo dynamique : {chains:int} chaînes, chacune avec {warmup:int} itérations de chauffe qui fixent le pas et une métrique diagonale, puis {draws:int} itérations conservées, depuis la graine {seed} ; une trajectoire cesse de doubler à une profondeur d'arbre de {depth:int}, et l'acceptation cible est {delta:num}. Hoffman et Gelman (2014, arXiv:1111.4246v1, p. 1) le décrivent ainsi : “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
-      "method_prior": "Les tirages sont ancestraux : dans chacun des {chains:int} × {draws:int} tirages chaque grandeur est tirée de sa loi a priori, puis les valeurs que le programme en génère, sans chauffe et sans sampler, depuis la graine {seed}. Pour de tels tirages il n'existe ni R-hat, ni taille d'échantillon effective, ni divergences, ni profondeur d'arbre, et aucun n'est donné.",
-      "method_precision": "Chaque tirage est écrit avec 8 chiffres de précision, comme le fait CmdStan 2.40.0 par défaut : un tirage x diffère de la valeur que tenait le sampler d'au plus 5·10^(−8)·|x|, et une grandeur dont la moyenne est grande devant son écart type peut répéter des valeurs. Chaque nombre de ce rapport est calculé à partir des tirages tels qu'ils sont écrits.",
+      "method_nuts": "Les tirages viennent du échantillonneur No-U-Turn de Stan, un Hamiltonian Monte Carlo dynamique : {chains:int} chaînes, chacune avec {warmup:int} itérations d'échauffement qui fixent le pas et une métrique diagonale, puis {draws:int} itérations conservées, depuis la graine {seed} ; une trajectoire cesse de doubler à une profondeur d'arbre de {depth:int}, et l'acceptation cible est {delta:num}. Hoffman et Gelman (2014, arXiv:1111.4246v1, p. 1) le décrivent ainsi : “NUTS uses a recursive algorithm to build a set of likely candidate points that spans a wide swath of the target distribution, stopping automatically when it starts to double back and retrace its steps.”",
+      "method_prior": "Les tirages sont ancestraux : dans chacun des {chains:int} × {draws:int} tirages chaque grandeur est tirée de sa loi a priori, puis les valeurs que le programme en génère, sans échauffement et sans échantillonneur, depuis la graine {seed}. Pour de tels tirages il n'existe ni R-hat, ni taille d'échantillon effective, ni divergences, ni profondeur d'arbre, et aucun n'est donné.",
+      "method_precision": "Chaque tirage est écrit avec 8 chiffres de précision, comme le fait CmdStan 2.40.0 par défaut : un tirage x diffère de la valeur que tenait l'échantillonneur d'au plus 5·10^(−8)·|x|, et une grandeur dont la moyenne est grande devant son écart type peut répéter des valeurs. Chaque nombre de ce rapport est calculé à partir des tirages tels qu'ils sont écrits.",
       "method_standardized": "Prédicteurs numériques centrés sur leur moyenne et divisés par leur écart type avant l'échantillonnage : {count:int}. Le tableau « Données » donne les deux nombres pour chacun.",
       "method_original": "Sur l'échelle de la colonne un coefficient est le coefficient standardisé divisé par l'écart type du prédicteur, et l'ordonnée à l'origine est l'ordonnée standardisée moins la somme de chaque coefficient fois la moyenne du prédicteur sur son écart type, tirage par tirage : le tableau « Sur l'échelle de la colonne » donne la moyenne, l'écart type et les quantiles de ces tirages.",
-      "method_rhat_ess": "R-hat compare les chaînes entre elles et à l'intérieur de leurs moitiés, sur les rangs des tirages, dans le corps et dans les queues de la distribution ; la taille d'échantillon effective (ESS) du corps et des queues dit à combien de tirages indépendants les chaînes équivalent pour le centre et pour les quantiles à 5 % et à 95 %. Ils sont calculés comme les calcule le paquet R posterior 1.8.0, d'après Vehtari, Gelman, Simpson, Carpenter et Bürkner (2021, Bayesian Analysis 16(2) ; arXiv:1903.08008v5). Les auteurs écrivent (p. 4) : “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” et, dans les mêmes paragraphes (p. 4) : “we recommend running at least four chains by default.” et (p. 5) : “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Ce sont leurs valeurs, citées : aucun nombre de ce rapport n'est comparé avec elles.",
-      "method_divergences": "Une transition divergente est une itération où la trajectoire simulée quitte le chemin que suivrait la dynamique exacte. Dans cette exécution {n:int} des {total:int} tirages après la chauffe étaient des transitions divergentes. Le Stan Reference Manual (version 2.40, « MCMC Sampling », « Divergent transitions ») dit : “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
+      "method_rhat_ess": "R-hat compare les chaînes entre elles et à l'intérieur de leurs moitiés, sur les rangs des tirages, dans le centre et dans les queues de la distribution ; la taille d'échantillon effective (ESS) du centre et des queues dit à combien de tirages indépendants les chaînes équivalent pour le centre et pour les quantiles à 5 % et à 95 %. Ils sont calculés comme les calcule le paquet R posterior 1.8.0, d'après Vehtari, Gelman, Simpson, Carpenter et Bürkner (2021, Bayesian Analysis 16(2) ; arXiv:1903.08008v5). Les auteurs écrivent (p. 4) : “we propose modifications to [R-hat] based on rank-normalizing and folding the posterior draws, only using the sample if [R-hat] < 1.01.” et, dans les mêmes paragraphes (p. 4) : “we recommend running at least four chains by default.” et (p. 5) : “we recommend requiring that the rank-normalized ESS is greater than 400, a number we chose based on practical experience and simulations”. Ce sont leurs valeurs, citées : aucun nombre de ce rapport n'est comparé avec elles.",
+      "method_divergences": "Une transition divergente est une itération où la trajectoire simulée quitte le chemin que suivrait la dynamique exacte. Dans cette exécution {n:int} des {total:int} tirages après l'échauffement étaient des transitions divergentes. Le Stan Reference Manual (version 2.40, « MCMC Sampling », « Divergent transitions ») dit : “The positions along the simulated trajectory after the Hamiltonian diverges will never be selected as the next draw of the MCMC algorithm, potentially reducing Hamiltonian Monte Carlo to a simple random walk and biasing estimates by not being able to thoroughly explore the posterior distribution.”",
       "method_treedepth": "La profondeur d'arbre est le nombre de fois que la trajectoire a été doublée dans une itération. Dans cette exécution {hits:int} tirages se sont arrêtés à la plus grande profondeur que le nœud permet, {depth:int}. Le Stan Reference Manual (version 2.40, « MCMC Sampling », « NUTS and its configuration ») dit : “a tree depth equal to the maximum depth indicates that NUTS is taking many leapfrog steps and being terminated prematurely to avoid excessively long execution time.”",
       "method_ebfmi": "L'E-BFMI d'une chaîne, sa fraction bayésienne estimée d'information manquante, compare les variations de l'énergie entre itérations successives avec la variation totale de l'énergie. Le tableau « Mesures de l'échantillonneur par chaîne » le donne pour chaque chaîne, sans marque. Betancourt (2017, arXiv:1701.02434v2, p. 44) écrit : “Empirically, values of this energy Bayesian fraction of missing information below 0.3 have proven problematic, although more theoretical work is needed to formalize any exact threshold.”",
       "method_contraction": "La contraction d'une grandeur est 1 − Var(a posteriori) / Var(a priori) : de combien les données ont resserré la loi a priori. Elle est vide là où la loi a priori n'a pas de variance finie (une Cauchy, une t de Student avec ν ≤ 2) ou que l'exécution n'a pas de tirages de la loi a priori. Betancourt (2018, arXiv:1803.08393v1, p. 17), qui l'appelle posterior shrinkage, écrit : “The posterior shrinkage quantifies how much the posterior distribution contracts from the initial prior distribution.”",
-      "method_checks": "Un contrôle prédictif tire de la loi a posteriori des jeux de données répliqués ; dans chaque graphique les lignes grises en sont {drawn:int} et la ligne noire est la donnée, et chaque histogramme compte les jeux tirés selon la valeur d'une statistique, celle de la donnée marquée par une ligne pointillée. Ce rapport ne donne ni valeur p, ni probabilité, ni part pour un contrôle. Gabry, Simpson, Vehtari, Betancourt et Gelman (2019, Journal of the Royal Statistical Society A 182(2) ; arXiv:1709.01449v5, p. 8) écrivent : “Posterior predictive checking is mostly qualitative. By looking at some important features of the data and the replicated data, which were not explicitly included in the model, we may find a need to extend or modify the model.”",
-      "method_prior_checks": "Un contrôle prédictif a priori tire des jeux de données des seules lois a priori, avant que les données ne soient vues : dans chaque graphique les lignes grises en sont {drawn:int} et la ligne noire est la donnée, et chaque histogramme compte les jeux tirés selon la valeur d'une statistique, celle de la donnée marquée par une ligne pointillée. Ce rapport ne donne ni valeur p, ni probabilité, ni part pour un contrôle. Gabry, Simpson, Vehtari, Betancourt et Gelman (2019, arXiv:1709.01449v5, p. 5) écrivent : “we say that a prior leads to a weakly informative joint prior data generating process if draws from the prior data generating distribution p(y) could represent any data set that could plausibly be observed.”",
+      "method_checks": "Une vérification prédictive tire de la loi a posteriori des jeux de données répliqués ; dans chaque graphique les lignes grises en sont {drawn:int} et la ligne noire est celle des données, et chaque histogramme compte les jeux tirés selon la valeur d'une statistique, celle des données marquée par une ligne pointillée. Ce rapport ne donne ni valeur p, ni probabilité, ni part pour une vérification. Gabry, Simpson, Vehtari, Betancourt et Gelman (2019, Journal of the Royal Statistical Society A 182(2) ; arXiv:1709.01449v5, p. 8) écrivent : “Posterior predictive checking is mostly qualitative. By looking at some important features of the data and the replicated data, which were not explicitly included in the model, we may find a need to extend or modify the model.”",
+      "method_prior_checks": "Une vérification prédictive a priori tire des jeux de données des seules lois a priori, avant que les données ne soient vues : dans chaque graphique les lignes grises en sont {drawn:int} et la ligne noire est celle des données, et chaque histogramme compte les jeux tirés selon la valeur d'une statistique, celle des données marquée par une ligne pointillée. Ce rapport ne donne ni valeur p, ni probabilité, ni part pour une vérification. Gabry, Simpson, Vehtari, Betancourt et Gelman (2019, arXiv:1709.01449v5, p. 5) écrivent : “we say that a prior leads to a weakly informative joint prior data generating process if draws from the prior data generating distribution p(y) could represent any data set that could plausibly be observed.”",
       "method_program": "Le modèle enregistré est {model}, version {version}. Le sha256 du programme Stan est {program}, celui du binaire compilé {binary}. Logiciels : {software}."
     },
     "formula_texts": {
       "formula_rhat": "R̂ = √(var+ / W), W la moyenne des variances internes des chaînes coupées en deux, var+ = (N′ − 1)/N′ · W + B/N′, B la variance entre leurs moyennes, N′ les tirages d'une chaîne coupée ; calculé sur les tirages normalisés par les rangs et sur les tirages repliés |θ − médiane(θ)|, le plus grand des deux est donné",
-      "formula_ess": "ESS = S / τ̂, S le nombre de tirages de toutes les chaînes, τ̂ = 1 + 2 Σ_t ρ̂_t à partir des autocorrélations ρ̂_t des chaînes coupées, sommées par la séquence monotone initiale de Geyer ; corps : sur les tirages normalisés par les rangs ; queues : la plus petite des ESS des indicateurs I(θ ≤ q5) et I(θ ≥ q95)",
+      "formula_ess": "ESS = S / τ̂, S le nombre de tirages de toutes les chaînes, τ̂ = 1 + 2 Σ_t ρ̂_t à partir des autocorrélations ρ̂_t des chaînes coupées, sommées par la séquence monotone initiale de Geyer ; centre : sur les tirages normalisés par les rangs ; queues : la plus petite des ESS des indicateurs I(θ ≤ q5) et I(θ ≥ q95)",
       "formula_mcse": "MCSE de la moyenne = sd(θ) / √ESS, l'ESS des chaînes coupées de θ elle-même (non normalisée par les rangs)",
       "formula_ebfmi": "E-BFMI = [Σ_(n=2..N) (E_n − E_(n−1))² / (N − 1)] / [Σ_(n=1..N) (E_n − Ē)² / (N − 1)], E_n l'énergie du tirage n d'une chaîne",
       "formula_contraction": "contraction = 1 − Var(a posteriori) / Var(a priori), vide là où la loi a priori n'a pas de variance finie",
@@ -1829,8 +1829,8 @@
       "method_treedepth": "Profondeur d'arbre",
       "method_ebfmi": "E-BFMI",
       "method_contraction": "Contraction",
-      "method_checks": "Contrôles prédictifs",
-      "method_prior_checks": "Contrôles prédictifs a priori",
+      "method_checks": "Vérifications prédictives",
+      "method_prior_checks": "Vérifications prédictives a priori",
       "method_program": "Programme et logiciels",
       "formula_rhat": "R-hat",
       "formula_ess": "ESS",
@@ -1844,9 +1844,9 @@
       "bayes_quantities_capped": "Le rapport liste {listed:int} des {total:int} entrées des grandeurs ; la sortie de synthèse du nœud les a toutes.",
       "bayes_contraction_null": "La contraction est vide pour {no_finite_variance:int} grandeurs dont la loi a priori n'a pas de variance finie, pour {no_prior_draws:int} dont l'exécution n'a pas de tirages de la loi a priori et pour {not_decided:int} dont la version du modèle ne dit pas si la loi a priori a une variance finie.",
       "bayes_original_capped": "L'échelle de la colonne est donnée pour {original:int} coefficients ; {capped:int} autres restent sans elle (la limite du nœud sur les grandeurs listées).",
-      "bayes_density_cut": "Les graphiques de densité laissent de côté les tirages au-delà de leur étendue, dans ces grandeurs : {names}. Tirages a posteriori laissés de côté, dans le même ordre : {posterior:int}. Tirages a priori laissés de côté : {prior:int}.",
-      "bayes_no_checks": "Cette version a été enregistrée avant les contrôles prédictifs : l'enregistrer de nouveau les ajoute.",
-      "bayes_checks_dropped": "{dropped:int} des {draws:int} tirages des contrôles prédictifs ont été laissés de côté : CmdStan a écrit leurs valeurs répliquées comme manquantes (un générateur n'a pas pu utiliser ses arguments) ; les graphiques utilisent les {valid:int} autres.",
+      "bayes_density_cut": "Les graphiques de densité laissent de côté les tirages au-delà de leur étendue, dans ces grandeurs : {names}. Tirages a posteriori laissés de côté, dans le même ordre : {posterior:int}. Tirages a priori laissés de côté, dans le même ordre : {prior:int}.",
+      "bayes_no_checks": "Cette version a été enregistrée avant les vérifications prédictives : l'enregistrer de nouveau les ajoute.",
+      "bayes_checks_dropped": "{dropped:int} des {draws:int} tirages des vérifications prédictives ont été laissés de côté : CmdStan a écrit leurs valeurs répliquées comme manquantes (un générateur n'a pas pu utiliser ses arguments) ; les graphiques utilisent les {valid:int} autres.",
       "bayes_prior_undrawn_one": "La grandeur {names} n'a pas de tirage ancestral : elle est laissée hors de la synthèse.",
       "bayes_prior_undrawn": "{n:int} grandeurs n'ont pas de tirage ancestral ({names}) : elles sont laissées hors de la synthèse.",
       "bayes_prior_undrawn_more": "{n:int} grandeurs n'ont pas de tirage ancestral, les cinq premières étant {names} : elles sont laissées hors de la synthèse.",
