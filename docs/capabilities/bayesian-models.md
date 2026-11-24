@@ -28,7 +28,7 @@ in [For administrators](#for-administrators).
 This example draws a linear regression from a template, saves it, runs it in a flow and reads its report. It uses the sample
 data of the Docker Compose stack, loaded in a Kubernetes installation as the [Statistical
 models](models.md#the-models) page says: `order_rows`, with the columns `quantita` (the outcome) and `prezzo_unitario` (the
-predictor), stored as text.
+predictor). In the Docker Compose stack they are stored as text; in a Kubernetes installation they may already be numbers.
 
 1. Open **Scripting → Bayesian models** and press **New model**. Choose the folder it goes in (you need EDIT on it).
 2. In **Where do you start?** choose **Linear regression**. The template asks for the outcome's typical value and its typical
@@ -41,8 +41,9 @@ predictor), stored as text.
 
    ![The editor with the linear regression template open: the canvas on the left, the inspector of the node «Effect of the predictor» on the right with its prior and the chart of the prior](../media/guide/bayesian-models/editor.png)
 
-5. In a flow, add `order_rows` as a source and a **Change type** of `quantita` and `prezzo_unitario` to *decimal* (a number
-   variable takes only a numeric column), then drop **Bayesian model** from the **Models** section of the palette after it, and
+5. In a flow, add `order_rows` as a source. If the source's preview shows `quantita` and `prezzo_unitario` as text (as in
+   the Docker Compose stack), add a **Change type** of the two to *decimal* (a number variable takes only a numeric column); if
+   it shows them as numbers, as on a Kubernetes installation that loaded them so, skip it. Then drop **Bayesian model** from the **Models** section of the palette after it, and
    in its panel choose your saved model. Under **Variables**, bind **Outcome** to `quantita` and **Predictor** to
    `prezzo_unitario`. A Run in the panel reads the flow's development sample; a flow run reads every row of the input, up to the
    group's limit, so keep a large table down with a filter first ([Limits](#limits-and-what-it-refuses)).
@@ -54,7 +55,9 @@ predictor), stored as text.
    predictor was standardized, so its coefficient is per standard deviation of the predictor and the table also gives it on the
    column's own scale ([Reading the report](#reading-the-report)).
    With no development sample set on the source, the panel's Run reads every row: on the 104,819 rows of `order_rows` it took
-   5 minutes 30 seconds on the three-node test cluster, so set a sample or filter first when you only want to look.
+   5 minutes 30 seconds on the three-node test cluster. To read fewer rows, open the source and set a **Development sample**
+   (**first N rows** or **random %**), which the panel's Run uses and a flow run does not, or add **Upstream filters**, which
+   every run applies.
 
    ![The first page of the report: the rows used, the draws, the divergences and the largest R-hat in four cards, the facts line, the posterior summary, the data and the diagnostics](../media/guide/bayesian-models/report-first-page.png)
 
