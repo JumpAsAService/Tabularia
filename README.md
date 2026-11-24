@@ -214,11 +214,13 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   **Report** tab, to download as PDF and Excel. [Statistics](docs/capabilities/statistics.md)
 - **Statistical models.** Nodes of a flow, run on Kubernetes in groups an administrator enables:
   linear and logistic regression (ridge, lasso, elastic net), Kaplan–Meier, Cox and parametric
-  survival, ARIMA and the decomposition of a series (STL, classical, MSTL, EMD), XGBoost and
-  CatBoost, customer lifetime value and BG/BB, and A/B tests with their planning (CUPED, Bayesian
-  and sequential readings). Each has a report that opens on the checks of its assumptions and
-  explains its method in plain words, optional MLflow recording and, for the fitted models, a
-  Predict node. [Statistical models](docs/capabilities/models.md)
+  survival, ARIMA, the decomposition of a series (STL, classical, MSTL, EMD), volatility (GARCH)
+  and risk simulation, XGBoost and CatBoost, customer lifetime value and BG/BB, A/B tests with
+  their planning (CUPED, Bayesian and sequential readings), forecasts from a pre-trained model,
+  and Bayesian models drawn as a graph and sampled with Stan. Each has a report that opens on the
+  checks of its assumptions and explains its method in plain words, optional MLflow recording and,
+  for the fitted models, a Predict node. [Statistical models](docs/capabilities/models.md) ·
+  [Bayesian models](docs/capabilities/bayesian-models.md)
 - **A declarative definition.** A flow is a JSON list of typed operations, decoupled from
   the engine that runs it. [Concepts](docs/concepts.md), [How it works](docs/how-it-works.md#the-declarative-definition)
   ```json
