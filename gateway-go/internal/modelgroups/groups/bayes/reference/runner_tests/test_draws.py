@@ -196,15 +196,28 @@ class TestReplicatedWriter(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bayes_draws.ReplicatedWriter(Path(tmp) / "x.parquet", 5, 2, 5, 10 ** 6)
 
-    def test_a_replicated_value_that_is_not_finite_is_refused(self):
+    def test_a_replicated_draw_with_a_value_that_is_not_finite_is_left_out_whole_and_counted(self):
         with tempfile.TemporaryDirectory() as tmp:
-            w = bayes_draws.ReplicatedWriter(Path(tmp) / "rep.parquet", 3, 1, 2, 2)
-            block = np.ones((2, 3))
+            path = Path(tmp) / "rep.parquet"
+            w = bayes_draws.ReplicatedWriter(path, 3, 1, 3, 3)
+            block = np.ones((3, 3))
             block[1, 1] = np.nan
-            with self.assertRaises(Refusal) as e:
-                w.write_block(1, 1, block)
-            self.assertEqual((e.exception.code, e.exception.params["draw"]), ("not_finite", 2))
-            w.abort()
+            w.write_block(1, 1, block)
+            meta = w.close()
+            self.assertEqual((w.dropped, w.kept, meta["dropped_draws"]), (1, 2, 1))
+            self.assertEqual(meta["row_groups"], [[1, 1, 3]])            # the schedule's draws, not the kept ones
+            t = pq.read_table(path).to_pydict()
+            self.assertEqual(sorted(set(t["draw"])), [1, 3])
+            self.assertEqual(len(t["value"]), 6)
+
+    def test_a_block_of_replicated_draws_that_all_threw_leaves_an_empty_row_group_and_the_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "rep.parquet"
+            w = bayes_draws.ReplicatedWriter(path, 2, 1, 2, 2)
+            w.write_block(1, 1, np.full((2, 2), np.nan))
+            w.close()
+            self.assertEqual((w.dropped, w.kept), (2, 0))
+            self.assertEqual(pq.ParquetFile(path).metadata.num_row_groups, 1)
 
 
 class TestSchedule(unittest.TestCase):

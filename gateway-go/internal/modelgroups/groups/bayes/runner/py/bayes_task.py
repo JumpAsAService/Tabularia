@@ -248,6 +248,14 @@ class Layout:
     n_sampler: int = 0
     marginal_columns: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
     marginals: list[Element] = field(default_factory=list)   # the prior marginals (/tmp/run/prior.parquet): `node` is their `of`
+    # the prior predictive's quantities that have no ancestral draw (a correlation matrix, a node the prior path does not draw): their Stan
+    # identifier and their scalars, left out of the draws and of the entries
+    undrawn: list[tuple[str, int]] = field(default_factory=list)
+
+    @property
+    def n_undrawn(self) -> int:
+        """The scalars the prior predictive leaves out for want of an ancestral draw."""
+        return sum(n for _, n in self.undrawn)
 
     @property
     def n_quantities(self) -> int:
@@ -368,6 +376,7 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
     entries: list[Entry] = []
     marginal_cols: list[int] = []
     marginals: list[Element] = []
+    undrawn: list[tuple[str, int]] = []
     for v in variables:
         q = v["q"]
         role = q.get("role")
@@ -384,6 +393,10 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
                     check_cols.append(col)
                     checks.append(element)
         elif role == "quantity":
+            if task.mode == "prior_predictive" and id(v) not in replaced:
+                # no ancestral draw: under fixed_param the quantity holds its initial value, which says nothing; it is left out
+                undrawn.append((q["stan"], sum(1 for _, element in v["elements"] if element is not None)))
+                continue
             cols = replaced.get(id(v), v["cols"])
             first = len(draws)
             for col, (_, element) in zip(cols, v["elements"]):
@@ -401,7 +414,7 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
         dup = next(n for i, n in enumerate(names) if n in names[:i])
         raise ManifestMismatch(f"two quantities are named {dup}")
     return Layout(task.mode, header, len(header), np.asarray(draw_cols, dtype=np.int64), draws, np.asarray(check_cols, dtype=np.int64),
-                  checks, entries, len(sampler), np.asarray(marginal_cols, dtype=np.int64), marginals)
+                  checks, entries, len(sampler), np.asarray(marginal_cols, dtype=np.int64), marginals, undrawn)
 
 
 # the quantities' order in a report and in the capped sections: the scalars first (the hyperparameters and the population-level

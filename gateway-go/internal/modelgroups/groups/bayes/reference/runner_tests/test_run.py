@@ -433,13 +433,14 @@ class TestRefusals(RunCase):
         self.assertEqual(self.left_behind(), ["results/results.parquet"])   # the gateway deletes the step's files by key (exit 1)
 
 
-class TestWhatLaterLotsBuild(RunCase):
-    def test_the_prior_predictive_is_refused_before_the_binary_is_fetched(self):
+class TestThePriorPredictiveOfAProgramWithoutOne(RunCase):
+    def test_it_is_refused_before_the_binary_is_fetched(self):
         raw = json.loads((GO_TESTDATA / "tasks" / "prior_predictive.json").read_text(encoding="utf-8"))
+        raw["bayes"]["data"] = [e for e in raw["bayes"]["data"] if not e.get("kind", "").startswith(("prior_", "checks_"))]
         with mock.patch.object(bayes_main.bayes_binary, "fetch_binary") as fetch, self.assertRaises(Refusal) as e:
             bayes_main.run_task(bayes_task.parse_task(raw), HERE, self.work)
-        self.assertEqual(e.exception.code, "not_built")
-        self.assertIn("prior predictive", e.exception.message)
+        self.assertEqual(e.exception.code, "task_value")
+        self.assertIn("no prior predictive", e.exception.message)
         fetch.assert_not_called()
 
 

@@ -94,6 +94,8 @@ class PassReport:
     density_cut: dict[str, tuple[int, int]] = field(default_factory=dict)   # quantity → (posterior draws, prior draws) outside the range
     summary_rows: int = 0
     contraction: dict[str, int] = field(default_factory=dict)      # quantities by what the contraction is: "computed" or a reason
+    not_finite_draws: int = 0            # the prior predictive: draws in which some quantity is not finite (left out of that quantity's measures)
+    total_draws: int = 0                 # the draws of all the chains
 
 
 # ── the order ─────────────────────────────────────────────────────────────────
@@ -222,7 +224,8 @@ def contraction(sd: np.ndarray, positions: Sequence[int], prior_variance: Callab
 def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writer: Any, *, summary_path: str | None = None,
                 budget: Budget | None = None, diagnostics: bool = True, prior: Callable[[int], np.ndarray | None] | None = None,
                 seed: int = 0, seconds_left: float | None = None, quantity_entries: Sequence[Entry] | None = None,
-                prior_variance: Callable[[int], float | str] | None = None, read_row_group: Callable[..., Any] | None = None) -> PassReport:
+                prior_variance: Callable[[int], float | str] | None = None, read_row_group: Callable[..., Any] | None = None,
+                charts: bool | None = None) -> PassReport:
     """Reads the draws parquet back by blocks of quantities and writes the summary, the quantity measures and the charts.
 
     `writer`: a ResultsWriter (`number`, `points`, `note`); `diagnostics` False is the prior predictive mode (mean, sd, the
@@ -230,8 +233,13 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     `seconds_left`: the time the pass may take (the projection above it is `too_slow`); `quantity_entries`: the entries that have a
     `quantity` row (default: the report's first `bayes_max_quantity_entries`); `prior_variance(position)`: the variance of a quantity's
     prior marginal or the reason it has none (the contraction). A refusal or an error leaves the summary file deleted.
+    `charts` (default: `diagnostics`) False writes no chart at all: the prior predictive variant declares no `hist` and no `point`, and its
+    report shows the priors' summary and the checks only (bayes-report.md, «The pages of `prior_predictive`»). Without `diagnostics` a draw in
+    which a quantity is not finite (an ancestral draw that threw, or one with no mass) is left out of that quantity's measures, counted in
+    the note `note_prior_dropped`.
     """
     budget = budget or Budget.of(limits)
+    charts = diagnostics if charts is None else charts
     t_start = time.monotonic()
     meta = read_metadata(draws_path)
     chains, draws = int(meta["chains"]), int(meta["draws"])
@@ -252,16 +260,16 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     scope = scope_positions(layout, limits)
     scope_set = set(scope)
     report.in_summary = len(scope)
-    chart_positions = scope[:limit(limits, "bayes_max_chart_quantities")]
+    chart_positions = scope[:limit(limits, "bayes_max_chart_quantities")] if charts else []
     chart_set = set(chart_positions)
     entry_of = _entry_index(layout)
-    scalar_scope = [p for p in scope if layout.entries[entry_of[p]].scalar][:limit(limits, "bayes_max_pair_quantities")]
+    scalar_scope = ([p for p in scope if layout.entries[entry_of[p]].scalar][:limit(limits, "bayes_max_pair_quantities")] if charts else [])
     pair_set = set(scalar_scope) if len(scalar_scope) >= 2 else set()
     pair_index = bayes_charts.thin_indices(s, limit(limits, "bayes_pair_points"))
     pair_draws: dict[int, np.ndarray] = {}
     index_of = {id(e): k for k, e in enumerate(layout.entries)}
     unit_entries = [index_of[id(e)] for e in report_order(layout.entries) if e.plate is not None and not e.scalar and e.count >= 2
-                    ][:limit(limits, "bayes_max_unit_charts")]
+                    ][:limit(limits, "bayes_max_unit_charts")] if charts else []
     unit_store = {k: np.full((layout.entries[k].count, 3), np.nan) for k in unit_entries}
     if quantity_entries is None:
         quantity_entries = report_order(layout.entries)[:limit(limits, "bayes_max_quantity_entries")]
@@ -274,6 +282,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     per_block = max(1, budget.pass_bytes // (8 * s))
     per_sub = bayes_diag.sub_block(budget.compute_bytes, s)
     projected = False
+    not_finite = np.zeros(s, dtype=bool)
     d_div = np.zeros((chains, draws)) if divergent_position is not None and pair_set else None
     try:
         for p0 in range(first, p_all, per_block):
@@ -291,6 +300,8 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                                                                                     (divergent_position + 1) * count]
                 del values
             read_seconds = time.monotonic() - t0
+            if not diagnostics:
+                not_finite |= ~np.isfinite(block).all(axis=0).reshape(-1)
             report.seconds_read += read_seconds
             report.passes += 1
             if d_div is not None and p0 == first:
@@ -339,6 +350,11 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
         if summary is not None:
             summary.abort()
         raise
+    if not diagnostics:
+        report.total_draws, report.not_finite_draws = s, int(not_finite.sum())
+        if report.not_finite_draws:
+            writer.note("prior_dropped", f"{report.not_finite_draws} of the {s} prior draws have a quantity that is not a finite number (an "
+                                         "ancestral draw that threw, or one with no mass): each is left out of the summary of that quantity.")
     _finish(writer, report, layout, limits, seed, scope, numbers, diagnostics, pair_draws, scalar_scope, pair_index, divergent,
             unit_store, extremes)
     report.seconds = time.monotonic() - t_start

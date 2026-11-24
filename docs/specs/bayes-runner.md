@@ -524,3 +524,25 @@ Applied on the owner's approval of 2026-11-24, each marked «Correction of 2026-
 ## Open questions
 
 None.
+
+## As built — lot R3
+
+`bayes_run.py` (`begin`, `SampleJob.run_prior`, `run_replicated`), `bayes_task.py` (`Layout.undrawn`), `bayes_pass2.py` (`charts`,
+`not_finite_draws`), `bayes_diag.py` (`_measures_of_the_finite`), `bayes_draws.py` (`ReplicatedWriter.dropped`/`kept`); tests
+`reference/runner_tests/test_prior.py` and the corrected `test_pass2`, `test_gq`, `test_draws`, `test_run`, `test_task`.
+
+- **`begin`** returns the run `prior` for the mode `prior_predictive` and refuses before the binary is fetched a program without the
+  extension or without `Prior_o<k>_n` (`task_value`, «no prior predictive»).
+- **`run_prior`**: one CmdStan run (`algorithm=fixed_param`, `num_warmup=0`, `Mode` 1, `Ppc_on` 1) followed into two sinks, `draws.parquet`
+  (the prior draws in place of the quantities': `build_layout`, which now leaves out of `draws` and `entries` a quantity without a
+  `prior_draw`, recorded in `Layout.undrawn` and said by `note_prior_undrawn`) and `checks.parquet` (as the checks' run's); no
+  `FactsAccumulator`, no thinned lines, no prior marginals, no contraction, no card, no output. Then the summary (mean, sd, quantiles:
+  `second_pass(diagnostics=False)` with no chart), the `prior_check` rows and `prior_density` curves (`Plan.rows(..., "prior_check")`), the
+  notes, `run.json`, and the copy of `results.parquet` only at the end (a refusal before it leaves nothing).
+- **The projections** count the checks' file instead of the prior marginals' (disk) and the second pass over the checks (time), before sampling
+  and at each progress line, as in `sample`.
+- **A non-finite value**: the draws file accepts it in this mode (`measures` over each quantity's finite draws, `note_prior_dropped` with the
+  count of draws); the checks' draws are dropped as in `sample`. See the contract's «Correction of 2026-11-24 from R2».
+- **`replicated`** (lot R2's open point): a draw with a non-finite value is left out whole, counted in `note_replicated_dropped`; refused
+  (`not_finite`) only when no draw is left.
+

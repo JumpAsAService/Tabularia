@@ -182,7 +182,8 @@ def model_section(w: ResultsWriter, task: Task, facts: Facts, layout: Layout, th
     w.text("model", "program_sha256", m.get("program_sha256"))
     w.text("model", "binary_sha256", m.get("binary_sha256"))
     w.text("model", "sampler", task.algorithm)
-    w.text("model", "metric", "diag_e")
+    if task.mode != "prior_predictive":      # fixed_param has no adaptation, so no metric
+        w.text("model", "metric", "diag_e")
     w.text("model", "precision", "8 significant digits")
     w.number("model", "n", facts.n)
     w.number("model", "n_missing", facts.rows_missing)

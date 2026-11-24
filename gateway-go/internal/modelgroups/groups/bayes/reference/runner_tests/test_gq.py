@@ -412,10 +412,21 @@ class TestTheReplicatedRun(GqCase):
         self.assertIn("model|||seconds_replicated", rows)
         self.assertNotIn("model|||note_no_checks", rows)
 
-    def test_a_replicated_value_that_is_not_finite_is_refused(self):
+    def test_a_replicated_draw_that_threw_is_left_out_counted_and_noted_the_step_is_refused_only_when_none_is_left(self):
         raw = checks_task(replicated=True, on=False)
+        code, runs, header = self.run_job(raw, gq_extra={"replicated": {"nan_rows": [[1, 3]]}})
+        self.assertEqual(code, 0)
+        t = pq.read_table(self.out / "output" / "output.parquet").to_pydict()
+        n = len(linear_input()["y"])
+        self.assertEqual(len(t["value"]), (4 * 5 - 1) * n)
+        self.assertNotIn(3, [d for c, d in zip(t["chain"], t["draw"]) if c == 1])
+        cols, rows = self.rows()
+        self.assertIn("1 of the 20 replicated draws", rows["model|||note_replicated_dropped"][1])
+        self.tearDown()
+        self.setUp()
+        every = [[c, r] for c in range(1, 5) for r in range(1, 6)]
         with self.assertRaises(Refusal) as e:
-            self.run_job(raw, gq_extra={"replicated": {"nan_rows": [[1, 3]]}})
+            self.run_job(raw, gq_extra={"replicated": {"nan_rows": every}})
         self.assertEqual(e.exception.code, "not_finite")
         self.assert_nothing_left()
 

@@ -268,7 +268,9 @@ def measures(draws: np.ndarray, *, diagnostics: bool = True) -> dict[str, np.nda
     if x.ndim != 3 or 0 in x.shape:
         raise ValueError(f"draws must be shaped (quantities, chains, draws), not {x.shape}")
     if not np.isfinite(x).all():
-        raise ValueError("a draw is not finite: the follower refuses it (not_finite) before any measure")
+        if diagnostics:
+            raise ValueError("a draw is not finite: the follower refuses it (not_finite) before any measure")
+        return _measures_of_the_finite(x)
     q, chains, n = x.shape
     s = chains * n
     flat = x.reshape(q, s)
@@ -321,6 +323,28 @@ def measures(draws: np.ndarray, *, diagnostics: bool = True) -> dict[str, np.nda
     for name in ("mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail"):
         v = out[name]
         v[undefined | ~np.isfinite(v)] = np.nan
+    return out
+
+
+def _measures_of_the_finite(x: np.ndarray) -> dict[str, np.ndarray]:
+    """The prior predictive's summary of quantities some of whose draws are not finite (an ancestral draw that threw, or one with no mass:
+    «the browser's rejected draw»): each quantity's mean, sd and quantiles over its own finite draws, NaN where it has none (or, for the sd,
+    fewer than two)."""
+    q = x.shape[0]
+    flat = x.reshape(q, -1)
+    finite = np.isfinite(flat)
+    whole = finite.all(axis=1)
+    out = {name: np.full(q, np.nan) for name in NUMBERS}
+    if whole.any():
+        m = measures(x[whole], diagnostics=False)
+        for name in NUMBERS:
+            out[name][whole] = m[name]
+    for i in np.flatnonzero(~whole):
+        kept = flat[i][finite[i]]
+        if kept.size:
+            m = measures(kept.reshape(1, 1, -1), diagnostics=False)
+            for name in NUMBERS:
+                out[name][i] = m[name][0]
     return out
 
 

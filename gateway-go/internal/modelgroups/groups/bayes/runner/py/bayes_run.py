@@ -57,9 +57,9 @@ import bayes_main
 import bayes_pass2
 import bayes_rows
 import tab_card
-from bayes_task import Layout, ManifestMismatch, Task, report_order
+from bayes_task import Layout, ManifestMismatch, Task, report_order, task_value
 from tab_card import versions
-from tab_protocol import ENV_ARTIFACTS, ENV_OUTPUT, ENV_RESULTS, PROTOCOL, Refusal, artifact, not_built, threads, to_json
+from tab_protocol import ENV_ARTIFACTS, ENV_OUTPUT, ENV_RESULTS, PROTOCOL, Refusal, artifact, threads, to_json
 
 # Measured constants («Time and disk»): the bytes of a value of 8-digit CSV text (bayes-image) and of the long parquet (the contract, 2026-11-23,
 # full doubles); the second pass's seconds a value (X5: 74 s for 80 million values); the follower's seconds a converted value (K2: 895 MB of
@@ -84,12 +84,15 @@ NO_CHECKS_NOTE = "This version was saved before the predictive checks: saving it
 # ── the start ─────────────────────────────────────────────────────────────────
 def begin(task: Task) -> tuple[Any, str]:
     """The start of every sampling mode: the C library's allocator for Arrow (bayes_follow.use_system_allocator, once, before any writer),
-    the checks' plan, and the run whose extension values pass B writes. What a later lot builds is refused as not built here, before the
-    binary is fetched or a row is read: never half run."""
+    the checks' plan, and the run whose extension values pass B writes (`prior` for the prior predictive, `sample` for the sampling mode).
+    A prior predictive of a program that has none is refused here, before the binary is fetched or a row is read: never half run."""
     bayes_follow.use_system_allocator()
     plan = bayes_checks.plan(task)
     if task.mode == "prior_predictive":
-        raise not_built("the prior predictive check")
+        if not (plan.has_extension and plan.has_prior):
+            raise task_value("this program has no prior predictive: its version was saved before the predictive checks, or a quantity a "
+                             "likelihood reads has no ancestral draw")
+        return plan, "prior"
     return plan, "sample"
 
 
@@ -242,7 +245,9 @@ class Watch:
         c, d = self.chains, self.draws
         line = self.columns * CSV_BYTES_A_VALUE
         csv = sum(d * self.csv_draw_bytes.get(k, line) for k in range(1, c + 1)) + c * (CSV_HEAD_BYTES + self.columns * CSV_HEAD_BYTES_A_COLUMN)
-        parquet = c * d * (len(layout.draws) + len(layout.marginals)) * PARQUET_BYTES_A_VALUE
+        # the prior marginals go to their own file in `sample`; the prior predictive writes the checks' file instead and no marginals
+        extra = len(layout.checks) if self.job.task.mode == "prior_predictive" else len(layout.marginals)
+        parquet = c * d * (len(layout.draws) + extra) * PARQUET_BYTES_A_VALUE
         summary = layout.n_quantities * SUMMARY_BYTES_A_QUANTITY
         results = self.job.task.limit("max_result_rows") * RESULT_BYTES_A_ROW + self.job.task.limit("max_card_bytes")
         return self.used + csv + parquet + summary + results + self.gq_bytes()
@@ -412,10 +417,17 @@ class SampleJob:
             seconds += 2 * draws * len(run.layout.checks) * PASS2_SECONDS_A_VALUE
         return seconds
 
+    def prior_checks_seconds(self) -> float:
+        """The prior predictive's second pass over its checks file (it reads it twice, as the checks' run's)."""
+        if self.task.mode != "prior_predictive":
+            return 0.0
+        return 2 * self.chains * self.draws * len(self.layout.checks) * PASS2_SECONDS_A_VALUE
+
     def later_seconds(self, per_draw: float | None = None) -> float:
-        """The stages after sampling: the second pass, the `generate_quantities` runs (at `per_draw` seconds a sampling draw, once known) and
-        the copies."""
-        return self.pass2_seconds() + sum(self.gq_seconds(g, per_draw) for g in self.gq_runs) + self.copy_seconds()
+        """The stages after sampling: the second pass, the `generate_quantities` runs (at `per_draw` seconds a sampling draw, once known), the
+        prior predictive's pass over its checks, and the copies."""
+        return (self.pass2_seconds() + sum(self.gq_seconds(g, per_draw) for g in self.gq_runs) + self.prior_checks_seconds()
+                + self.copy_seconds())
 
     def too_slow(self, projected: float) -> None:
         s = self.task.sampler or {}
@@ -457,17 +469,108 @@ class SampleJob:
         path.unlink(missing_ok=True)
         self.seconds["checks"] = time.monotonic() - t0
 
-    def run_replicated(self, g: bayes_gq.GqRun, thin: bayes_gq.ThinnedLines, after: float) -> None:
-        """The replicated run, followed into `replicated.parquet`: chain, draw (the thinned draw's number), row, outcome, value."""
+    def run_replicated(self, g: bayes_gq.GqRun, thin: bayes_gq.ThinnedLines, w: Any, after: float) -> None:
+        """The replicated run, followed into `replicated.parquet`: chain, draw (the thinned draw's number), row, outcome, value. A draw with a
+        value that is not finite (the program threw there) is left out whole and counted in the note `note_replicated_dropped`, as the checks'
+        draws are; the step is refused (`not_finite`) only when no draw is left."""
         t0 = time.monotonic()
         layout = g.layout
         block = bayes_follow.block_rows(self.task.limit("block_values"), layout.n_columns)
         writer = bayes_draws.ReplicatedWriter(self.workdir / "replicated.parquet", layout.replicated_rows, self.chains, g.per_chain, block,
                                               self._info(), outcomes=layout.replicated)
         self._generate(g, thin, writer, after)
+        if writer.kept == 0:
+            raise Refusal("not_finite", f"none of the {writer.dropped} replicated draws holds finite numbers: the model has no finite value "
+                                        "there", {"quantity": "replicated", "draws": writer.dropped})
+        if writer.dropped:
+            w.note("replicated_dropped", f"{writer.dropped} of the {writer.dropped + writer.kept} replicated draws were left out of the "
+                                         "replicated data because the program failed to draw a value in them.")
         self.seconds["replicated"] = time.monotonic() - t0
 
+    def run_prior(self) -> int:
+        """The prior predictive Job (`fixed_param`, `Mode` 1, the checks on, no warm-up): one run whose CSV holds the ancestral draws and the
+        checks' columns, followed into `draws.parquet` (the prior draws in place of the quantities') and `checks.parquet`; no thinned lines, no
+        `generate_quantities`, no prior marginals, no contraction, no card. The summary of the draws (mean, sd, the quantiles), the
+        `prior_check` rows and densities, the notes, the copy of `results.parquet`. It is a trial: never an output for the nodes downstream."""
+        t_job = time.monotonic()
+        task, layout, work = self.task, self.layout, self.workdir
+        results_to = os.environ.get(ENV_RESULTS, "")
+        if not results_to:
+            raise Refusal("task_value", f"{ENV_RESULTS} is empty: the Job was not made by Tabularia", {"what": ENV_RESULTS})
+        watch = Watch(self)
+        watch.used = tree_bytes(work)
+        watch.check_disk()
+        watch.check_time()
+
+        s = task.sampler or {}
+        info = self._info()
+        draws_path, checks_path = work / "draws.parquet", work / "checks.parquet"
+        # an ancestral draw that threw is NaN in every generated quantity of its draw: the draws are summarised over their finite values (the
+        # second pass counts what it leaves out) and the checks' draws are counted and dropped by the second pass of the checks
+        draws_w = bayes_draws.DrawsWriter(draws_path, layout.draws, layout.draw_columns, self.chains, self.draws, self.block_rows, info,
+                                          n_unchecked=len(layout.draws))
+        checks_w = bayes_draws.DrawsWriter(checks_path, layout.checks, layout.check_columns, self.chains, self.draws, self.block_rows, info,
+                                           n_unchecked=len(layout.checks), kind="checks")
+        chain_facts = bayes_follow.sample(self.prepared.binary_path, s, task.algorithm, layout.header, task.limit("block_values"), work,
+                                          self.prepared.data_path, self.threads, draws_w, checks_w, check_header=layout.check_header,
+                                          on_progress=watch.on_progress, on_idle=watch.on_idle, on_block=watch.on_block)
+        t_followed = time.monotonic()
+        draws_w.close()
+        checks_w.close()
+        for path in bayes_follow.csv_paths(work / "out.csv", self.chains):
+            path.unlink(missing_ok=True)
+        samp = [c.seconds_sampling for c in chain_facts if c.seconds_sampling is not None]
+        self.seconds["sampling"] = max(samp) if samp else 0.0
+        self.draw_seconds = self.seconds["sampling"] / self.draws
+        self.seconds["conversion"] = max(0.0, time.monotonic() - (watch.last_line if watch.last_line is not None else t_followed))
+
+        left = self.clock.left()
+        later = self.later_seconds(self.draw_seconds)
+        if left <= 0 or later > left:
+            self.too_slow(self.clock.elapsed() + later)
+
+        decl, shapes = bayes_main.results_declaration(task)
+        w = bayes_rows.ResultsWriter(str(work / "results.parquet"), max_rows=task.limit("max_result_rows"), declaration=decl, shapes=shapes)
+        try:
+            entries = bayes_rows.quantity_section(w, task, layout)
+            report = bayes_pass2.second_pass(str(draws_path), layout, task.limits, w, budget=bayes_pass2.Budget.of(task.limits),
+                                             diagnostics=False, seed=int(s.get("seed") or 0),
+                                             seconds_left=self.clock.left() - self.copy_seconds(), quantity_entries=entries)
+            self.seconds["pass_2"] = report.seconds
+            draws_path.unlink(missing_ok=True)
+            t_checks = time.monotonic()
+            self.prepared.checks.rows(str(checks_path), w, "prior_check", self.clock.left() - self.copy_seconds())
+            checks_path.unlink(missing_ok=True)
+            self.seconds["checks"] = time.monotonic() - t_checks
+            if layout.undrawn:
+                names = ", ".join(n for n, _ in layout.undrawn[:5]) + (", …" if len(layout.undrawn) > 5 else "")
+                what = "quantity has" if layout.n_undrawn == 1 else "quantities have"
+                w.note("prior_undrawn", f"{layout.n_undrawn} {what} no ancestral draw ({names}): left out of the summary.")
+            bayes_rows.model_section(w, task, self.facts, layout, self.threads, self.seconds)
+            bayes_rows.data_section(w, task, self.facts)
+            rows = w.close()
+        except BaseException:
+            w.abort()
+            raise
+        artifacts = work / "artifacts"
+        artifacts.mkdir(exist_ok=True)
+        self.seconds["data"] = self.facts.seconds_pass_a + self.facts.seconds_pass_b
+        self.seconds["job"] = time.monotonic() - t_job
+        run_json = {"protocol": PROTOCOL, "group": "bayes", "model": task.raw.get("model"), "mode": task.mode, "exit": 0,
+                    "software": versions(("numpy", "pyarrow")), "seconds": round(self.seconds["job"], 3),
+                    "phases": {k: round(v, 3) for k, v in self.seconds.items() if k != "job"}, "rows": rows, "warnings": []}
+        (artifacts / "run.json").write_text(to_json(run_json), encoding="utf-8")
+
+        # the copies, only now: the results and run.json (no output, no card)
+        bayes_draws.copy_in_chunks(work / "results.parquet", results_to)
+        if os.environ.get(ENV_ARTIFACTS, ""):
+            bayes_draws.copy_in_chunks(artifacts / "run.json", artifact("run.json"))
+        shutil.rmtree(work, ignore_errors=True)
+        return 0
+
     def run(self) -> int:
+        if self.task.mode == "prior_predictive":
+            return self.run_prior()
         t_job = time.monotonic()
         task, layout, work = self.task, self.layout, self.workdir
         results_to = os.environ.get(ENV_RESULTS, "")
@@ -558,7 +661,7 @@ class SampleJob:
                 if g.name == bayes_gq.CHECKS:
                     self.run_checks(g, thin, w, after)
                 else:
-                    self.run_replicated(g, thin, after)
+                    self.run_replicated(g, thin, w, after)
 
             # 6. the rows that remain, the card, run.json
             bayes_rows.model_section(w, task, self.facts, layout, self.threads, self.seconds)

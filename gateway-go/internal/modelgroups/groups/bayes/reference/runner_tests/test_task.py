@@ -181,6 +181,7 @@ class TestLayout(unittest.TestCase):
 
     def test_the_levels_after_the_reference_and_a_row_plate(self):
         task = bayes_task.parse_task(go_task("prior_predictive"))
+        task = dataclasses.replace(task, mode="sample", variant="sample")      # the levels are the same in every mode
         sizes = go_header("prior_predictive")["sizes"]
         layout = bayes_task.build_layout(task, sizes, {"levels:c": ["email", "radio", "tv"], "grp": [f"g{i}" for i in range(20)]})
         by = {e.quantity: e for e in layout.draws}
@@ -194,16 +195,21 @@ class TestLayout(unittest.TestCase):
         header = layout.header
         names = [e.quantity for e in layout.draws]
         self.assertEqual(names[:2], ["lp__", "accept_stat__"])
-        self.assertEqual(len(layout.draws) - 2, 2 + 4 + 20)
+        self.assertEqual(len(layout.draws) - 2, 20)          # only `a` has a prior draw in this task: the others are left out, and counted
+        self.assertEqual(layout.undrawn, [("b_c", 2), ("b_x", 1), ("mu", 1), ("s", 1), ("tau", 1)])
+        self.assertEqual(layout.n_undrawn, 6)
         a1 = layout.draw_columns[names.index("a[g0]")]
         self.assertEqual(header[a1], "Prior_a.1")  # the prior draw's column, not the parameter's own
         self.assertEqual([e.quantity for e in layout.checks], ["Ppc_first_rep"])
         self.assertEqual(header[layout.check_columns[0]], "Ppc_first_rep")
         self.assertEqual(layout.checks[0].node, "first")
-        # the order is the manifest's (the quantity's place), whatever the mode
-        order = [e.stan for e in layout.entries]
-        self.assertEqual(order, ["b_c", "b_x", "mu", "s", "tau", "a"])
-        self.assertEqual([e.count for e in layout.entries], [2, 1, 1, 1, 1, 20])
+        self.assertEqual([e.stan for e in layout.entries], ["a"])
+        self.assertEqual([e.count for e in layout.entries], [20])
+        # in the sample mode every quantity is written, in the manifest's order
+        sample = bayes_task.build_layout(dataclasses.replace(task, mode="sample", variant="sample"), go_header("prior_predictive")["sizes"],
+                                         {"grp": [f"g{i}" for i in range(20)], "levels:c": ["email", "radio", "tv"]})
+        self.assertEqual([e.stan for e in sample.entries], ["b_c", "b_x", "mu", "s", "tau", "a"])
+        self.assertEqual(sample.undrawn, [])
 
     def test_a_prior_draw_in_the_sample_mode_has_no_column_with_a_dimension_and_is_dropped_without(self):
         task = bayes_task.parse_task(go_task("prior_predictive"))

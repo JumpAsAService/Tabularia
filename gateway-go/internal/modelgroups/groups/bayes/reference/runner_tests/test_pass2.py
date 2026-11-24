@@ -103,6 +103,38 @@ class TestTheNumbers(Base):
         self.assertTrue(all(v is None for v in summary["rhat"]))
         self.assertFalse([k for k in rows["key"] if k.startswith("quantity|") and "rhat_max" in k])
 
+    def test_the_prior_predictive_mode_writes_no_chart_the_variant_declares_none(self):
+        report, rows, _ = self.run_pass(diagnostics=False)
+        self.assertEqual({s for s in rows["section"]} - {"model", "summary"}, set())      # no hist (rank), no point (units, pairs), no curve
+        self.assertEqual(report.charts, {})
+        report, rows, _ = self.run_pass("b", diagnostics=False, charts=True)
+        self.assertTrue({"curve", "hist"} <= set(rows["section"]))                           # the flag, not the mode, decides
+
+    def test_a_draw_in_which_a_quantity_is_not_finite_is_left_out_of_its_measures_and_counted(self):
+        import pyarrow as pa
+        f = pq.ParquetFile(self.path)
+        path = self.dir / "bad.parquet"
+        with pq.ParquetWriter(str(path), f.schema_arrow.remove_metadata()) as out:
+            for k in range(f.num_row_groups):
+                t = f.read_row_group(k)
+                values = t.column("value").to_numpy().copy()
+                quantity, chain, draw = t.column("quantity").to_pylist(), t.column("chain").to_numpy(), t.column("draw").to_numpy()
+                for i, q in enumerate(quantity):
+                    if q == "mu" and chain[i] == 2 and draw[i] in (5, 6):
+                        values[i] = np.nan
+                out.write_table(t.set_column(t.schema.get_field_index("value"), "value", pa.array(values)).cast(f.schema_arrow.remove_metadata()),
+                                row_group_size=t.num_rows)
+            out.add_key_value_metadata({k: v for k, v in f.metadata.metadata.items() if k == b"tabularia.bayes"})
+        self.path = path
+        report, rows, _ = self.run_pass("c", diagnostics=False)
+        by_key = dict(zip(rows["key"], rows["value"]))
+        want = self.full[3:][0]
+        kept = np.delete(want.reshape(CHAINS, DRAWS)[1], [4, 5])
+        pool = np.concatenate([want.reshape(CHAINS, DRAWS)[[0, 2, 3]].reshape(-1), kept])
+        self.assertAlmostEqual(by_key["summary|mu||mean"], pool.mean(), places=9)
+        self.assertEqual(report.not_finite_draws, 2)
+        self.assertIn("2 of the 480 prior draws", rows["text"][rows["key"].index("model|||note_prior_dropped")])
+
 
 class TestTheContraction(Base):
     """Lot X4: 1 − Var_post/Var_prior (Betancourt 2018), NULL when the prior has no finite variance or no draws."""

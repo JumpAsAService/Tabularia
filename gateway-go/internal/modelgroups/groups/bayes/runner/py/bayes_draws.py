@@ -19,7 +19,9 @@ draw) when a quantity of the program holds a value that is not finite; the sampl
 facts and are not checked; the program's internal columns are never in `meta`, hence never checked. The writer holds one block at a
 time (the arrays of the row group being built) and a few numbers a row group (the footer's list): its memory does not grow with the
 draws. The checks file is a DrawsWriter with the checks' meta and columns and n_unchecked = 0; the replicated data are a
-ReplicatedWriter (chain, draw, row, outcome, value), called the same way with a block shaped (count, rows) or, with `outcomes`, the CSV's own block.
+ReplicatedWriter (chain, draw, row, outcome, value), called the same way with a block shaped (count, rows) or, with `outcomes`, the CSV's own block;
+a replicated draw with a value that is not finite is left out whole and counted (`dropped`, `dropped_draws` in the footer), never a refusal of
+the writer: the caller refuses when no draw is left.
 
 The columns, as `bayescontract`'s declaration has them: chain (Int32), draw (Int32), quantity (dictionary of String), node, unit (the
 same, nullable), index, index_2 (Int32, nullable), value (Float64); within a row group the rows are quantity-major (all the block's
@@ -225,22 +227,34 @@ class ReplicatedWriter(_BlockWriter):
             raise ValueError("the outcomes' columns are not the rows a draw holds")
         names = [n for n, _ in self.outcomes] if self.outcomes is not None else ["y"]
         self._names, self._codes, _ = _dictionary(names)
+        self.dropped = 0          # the draws left out because a value of theirs is not finite, counted
+        self.kept = 0
         super().__init__(path, chains, draws, block_draws, {**(info or {}), "rows": rows, "outcomes": names})
 
+    def metadata(self) -> dict[str, Any]:
+        return {**super().metadata(), "dropped_draws": self.dropped}
+
     def write_block(self, chain: int, first_draw: int, block: np.ndarray) -> None:
-        count = int(block.shape[0])
+        scheduled = count = int(block.shape[0])
         self._expect(chain, first_draw, count)
         parts = self.outcomes if self.outcomes is not None else [("y", np.arange(self.rows))]
         if self.outcomes is None and block.shape[1] != self.rows:
             raise ValueError(f"a block has {self.rows} columns, not {block.shape[1]}")
         taken = [block[:, cols] for _, cols in parts] if self.outcomes is not None else [block]
+        # a draw one of whose values is not finite (the program threw there: CmdStan writes NaN) is left out whole and counted, as the
+        # checks' draws are; the step is refused only when no draw is left (`bayes_run.run_replicated`)
+        ok = np.ones(count, dtype=bool)
         for values in taken:
-            if not np.isfinite(values).all():
-                draw = first_draw + int(np.argmax((~np.isfinite(values)).any(axis=1)))
-                raise Refusal("not_finite", f"the replicated data of draw {draw} of chain {chain} are not finite numbers",
-                              {"quantity": "replicated", "chain": chain, "draw": draw})
+            ok &= np.isfinite(values).all(axis=1)
+        self.dropped += int(count - ok.sum())
+        self.kept += int(ok.sum())
+        numbers = np.arange(first_draw, first_draw + count, dtype=np.int32)
+        if not ok.all():
+            taken = [v[ok] for v in taken]
+            numbers = numbers[ok]
+            count = int(ok.sum())
         n = count * self.rows
-        draw = np.concatenate([np.repeat(np.arange(first_draw, first_draw + count, dtype=np.int32), v.shape[1]) for v in taken])
+        draw = np.concatenate([np.repeat(numbers, v.shape[1]) for v in taken])
         row = np.concatenate([np.tile(np.arange(1, v.shape[1] + 1, dtype=np.int32), count) for v in taken])
         outcome = np.concatenate([np.full(count * v.shape[1], k, dtype=np.int32) for k, v in enumerate(taken)])
         value = np.concatenate([np.ascontiguousarray(v, dtype=np.float64).reshape(-1) for v in taken])
@@ -251,7 +265,7 @@ class ReplicatedWriter(_BlockWriter):
             "outcome": pa.DictionaryArray.from_arrays(pa.array(outcome, pa.int32()), self._names),
             "value": pa.array(value),
         }, schema=self.schema)
-        self._append(table, chain, first_draw, count)
+        self._append(table, chain, first_draw, scheduled)
 
 
 def block_draws_for_rows(block_values: int, rows: int) -> int:

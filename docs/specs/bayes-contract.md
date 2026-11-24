@@ -954,3 +954,26 @@ have every lag: with a lagged likelihood and one on every row, the runner could 
    outcome lagged when the data holds a `rows_subset`), and a save of it writes the new manifest.
 4. **The runner** (`bayes_checks.py`, `Plan._lagged`) reads each outcome's `post_rows` `of`; `of` other than `rows` or
    `Rows_lag`, or `Rows_lag` without a `rows_subset`, is `task_value`.
+
+## Correction of 2026-11-24 from R2
+
+Lot R2 of `bayes-runner.md` (the `generate_quantities` runs) left one question to the owner: a `replicated` draw with a value that is not
+finite (the program threw in that draw: CmdStan writes every generated quantity of it as NaN) was the refusal `not_finite` of the whole
+step, while the checks' draws are dropped and counted. The owner's decision (2026-11-24), settled in lot R3; where this section and the text
+above differ, this section holds.
+
+1. **A replicated draw with a value that is not finite is left out whole and counted**: none of its rows is written (the draw's number in
+   the file has a gap), the footer says `dropped_draws`, and the `model` section gets the note `note_replicated_dropped` («N of the M
+   replicated draws were left out of the replicated data because the program failed to draw a value in them»). The step is refused
+   (`not_finite`, the quantity `replicated`) **only when no draw is left**. The note is declared by the `note_*` of the `model` section's
+   texts: no change to the declaration or the catalogue.
+2. **The same rule in the prior predictive for the draws file** (lot R3): a prior draw with a quantity that is not finite (an ancestral draw
+   that threw, or one with no mass) is left out of that quantity's summary and counted in `note_prior_dropped`; the checks' draws are
+   dropped as in `sample` (`note_checks_dropped`). The prior predictive's draws file is therefore written without the `not_finite` check.
+3. **The prior predictive writes no `hist` and no `point` row** (the variant declares none: «Shapes»): neither the rank histograms, the
+   units' charts nor the pairs; and no `curve` of the quantities (traces, densities), whose pages the variant does not have: its charts are
+   the `prior_density` curves of the checks alone. The summary is the mean, the sd and the five quantiles; `model|||metric` is not written
+   (`fixed_param` has no metric) and no `sampler` row.
+4. **A quantity without an ancestral draw** (a correlation matrix, a node the prior path does not draw) is left out of the draws, the
+   `quantity` section and the `summary`, and counted in `note_prior_undrawn` (`n_quantities` counts the scalars written).
+
