@@ -31,6 +31,7 @@ import bayes_data
 import bayes_follow
 from bayes_checks import EXTENSION_KINDS, Plan
 from bayes_task import Element, ManifestMismatch, Task, _elements, _mapping_by_stan, task_value
+from tab_protocol import Refusal
 
 GENERATED = "generated quantities"
 DEFAULT_PPC_DRAWS = 1000
@@ -251,6 +252,16 @@ def plan_runs(task: Task, plan: Plan, facts: bayes_data.Facts) -> list[GqRun]:
         wanted.append((REPLICATED, replicated_per_chain(task)))
     if not wanted:
         return []
+    # the draws are read back by CmdStan from its CSV, written to 8 significant digits, and a constrained type of the program
+    # (the correlated effects' cholesky_factor_corr) checks its value then: the manifest says so, and the run is refused before
+    # the sampling (the owner's decision of 2026-11-24; the gateway keeps the checks off and refuses the replicated output)
+    for q in task.quantities:
+        if q.get("gq_reread") is False:
+            kind = str(q.get("gq_reread_type") or "constrained type")
+            what = "the replicated data" if name_of(wanted) == REPLICATED else "the predictive checks"
+            raise Refusal("gq_reread", f"{what} cannot be made for this model: it has correlated effects, and Stan reads the draws back with a check "
+                          f"on their correlations ({kind}) that the 8 digits the sampler writes cannot meet; run it without them",
+                          {"type": kind, "what": what})
     extension = [e for e in task.data if e.get("kind") in EXTENSION_KINDS]
     first = next(i for i, e in enumerate(task.data) if e.get("kind") in EXTENSION_KINDS)
     if any(e.get("kind") not in EXTENSION_KINDS for e in task.data[first:]):
@@ -267,6 +278,11 @@ def plan_runs(task: Task, plan: Plan, facts: bayes_data.Facts) -> list[GqRun]:
             raise task_value("the program writes no replicated rows")
         runs.append(GqRun(name, per_chain, layout, values, extension))
     return runs
+
+
+def name_of(wanted: Sequence[tuple[str, int]]) -> str:
+    """The run the refusal names: the replicated data when it is wanted, else the checks."""
+    return REPLICATED if any(n == REPLICATED for n, _ in wanted) else CHECKS
 
 
 def thinned_wanted(runs: Sequence[GqRun]) -> dict[str, int]:

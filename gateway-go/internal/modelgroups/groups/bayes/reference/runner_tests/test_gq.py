@@ -218,6 +218,20 @@ class TestTheRunsOfAProgram(RunCase):
             bayes_gq.plan_runs(task, prepared.checks, prepared.facts)
         self.assertEqual(e.exception.code, "data_shape")
 
+    def test_a_program_that_cannot_be_reread_refuses_the_generate_quantities_runs_before_the_sampling(self):
+        # the owner's decision of 2026-11-24: CmdStan's CSV has 8 digits and the correlated effects' Cholesky factor is checked to 1e-8
+        # on reading, so the manifest says gq_reread false and a task that asks for a run is refused, never a sampler_failed
+        for kwargs, what in (({}, "predictive checks"), ({"replicated": True}, "replicated data")):
+            task = bayes_task.parse_task(json.loads(json.dumps(checks_task("hier_slopes", **kwargs))))
+            with self.assertRaises(Refusal) as e:
+                bayes_gq.plan_runs(task, bayes_run.bayes_checks.plan(task), None)
+            self.assertEqual(e.exception.code, "gq_reread")
+            self.assertIn(what, e.exception.message)
+            self.assertEqual(e.exception.params["type"], "cholesky_factor_corr")
+        # the checks off, which is how the gateway sends the program: no run, no refusal
+        task = bayes_task.parse_task(json.loads(json.dumps(checks_task("hier_slopes", on=False))))
+        self.assertEqual(bayes_gq.plan_runs(task, bayes_run.bayes_checks.plan(task), None), [])
+
     def test_the_replicated_writer_with_two_outcomes(self):
         path = self.dir / "rep.parquet"
         w = bayes_draws.ReplicatedWriter(path, 5, 2, 3, 2, outcomes=[("y", np.array([0, 1, 2])), ("z", np.array([3, 4]))])
