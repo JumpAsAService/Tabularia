@@ -1,0 +1,89 @@
+# The Python runner of the Bayesian group (gateway-go/internal/modelgroups/groups/bayes/runner, the code that
+# runs in the model image; docs/specs/bayes-image.md): its unit tests (runner_tests, on the fake CmdStan and
+# the Go contract's testdata), the tests that need SciPy as the witness (the exact Kolmogorov-Smirnov
+# p-value, check 7's comparison: reference/test_bayes_runner.py), and the notices check — the
+# third-party text of the CmdStan family is what .github/scripts/third_party_bayes.py writes from the
+# licence files the group ships, and the sha256 in the spec are those of shipped files.
+#
+# Python 3.14, numpy 2.5.5 and pyarrow 26.0.1 are the versions of the group's recipe
+# (groups/bayes/recipe.json), installed here with --require-hashes from the same wheel digests; SciPy 1.18.1
+# is the witness's version (reference/diagnostics/witness.json), hashed likewise. The long memory
+# tests stay off: they are skipped unless BAYES_MEMORY_TEST, BAYES_RUN_MEMORY_TEST and the like are set,
+# and nothing sets them here. The runner tests need no image and no CmdStan.
+#
+# Run it locally from the repository root with the same pins:
+#   uv run --no-project --python 3.14 --with numpy==2.5.5 --with pyarrow==26.0.1 \
+#     python -I -B -m unittest discover -s gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests
+
+name: Bayesian runner
+
+on:
+  push:
+    paths:
+      - "gateway-go/internal/modelgroups/groups/bayes/**"
+      - "gateway-go/internal/modelgroups/groups/common/**"
+      - "gateway-go/internal/bayescontract/testdata/**"
+      - "backend/tests/fixtures/bayes_runner_notes.json"
+      - "frontend/assets/third-party/cmdstan.txt"
+      - "docs/specs/bayes-image.md"
+      - ".github/scripts/third_party_bayes.py"
+      - ".github/workflows/bayes-runner.yml"
+  pull_request:
+    paths:
+      - "gateway-go/internal/modelgroups/groups/bayes/**"
+      - "gateway-go/internal/modelgroups/groups/common/**"
+      - "gateway-go/internal/bayescontract/testdata/**"
+      - "backend/tests/fixtures/bayes_runner_notes.json"
+      - "frontend/assets/third-party/cmdstan.txt"
+      - "docs/specs/bayes-image.md"
+      - ".github/scripts/third_party_bayes.py"
+      - ".github/workflows/bayes-runner.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    name: the runner's tests and the notices check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Install numpy, pyarrow and SciPy at the pinned versions, by hash
+        run: |
+          cat > "$RUNNER_TEMP/bayes-requirements.txt" <<'EOF2'
+          numpy==2.5.5 \
+              --hash=sha256:c48960d420e90cf305cb1fde0d4e6082cc90512cda87a9acf0b6e04e91cf4abe \
+              --hash=sha256:cc6eb7502facce90349b4097a26821af224aaa0ab36e78304711cdb544352882
+          pyarrow==26.0.1 \
+              --hash=sha256:0044cb9303c3ae082cc52a2493312109c955bcfa84e87be768736f7d6d8f6257 \
+              --hash=sha256:7ae48ab53610b85e004b03bccff593fbdf22186d0ab48ed42c90797915dac814
+          scipy==1.18.1 \
+              --hash=sha256:2d3ab0e8c69a17dd3559eab8cbb88f258e285c94d572c2719033f90f83290c89 \
+              --hash=sha256:ac0333bdf38309aa3dcbe7e3fa7ea29e7a2c37c6ea306a757b700ded8e4596ad
+          EOF2
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --require-hashes --only-binary=:all: -r "$RUNNER_TEMP/bayes-requirements.txt"
+          "$RUNNER_TEMP/venv/bin/python" -c 'import sys, numpy, pyarrow, scipy; print(sys.version.split()[0], numpy.__version__, pyarrow.__version__, scipy.__version__)'
+
+      - name: The runner's tests
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -I -B -m unittest discover \
+            -s gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests
+
+      - name: The tests against SciPy
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -I -B gateway-go/internal/modelgroups/groups/bayes/reference/test_bayes_runner.py
+
+      - name: The third-party notices of the CmdStan family
+        run: python3 .github/scripts/third_party_bayes.py check
