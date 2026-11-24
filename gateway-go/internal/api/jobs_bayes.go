@@ -222,6 +222,11 @@ func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Obje
 			AdaptDelta: bayescontract.DefaultAdaptDelta, MaxTreedepth: bayescontract.DefaultMaxTreedepth, Refresh: bayescontract.DefaultRefresh}
 		s.modelStep.output, s.replicated = bayescontract.OutputResults, nil
 	}
+	// a program whose draws generate_quantities cannot reread (correlated effects: the CSV's 8 digits break the Cholesky factor's
+	// check) has no replicated data: the panel keeps it off, and this is the second wall (owner's decision of 2026-11-24)
+	if t, no := bayescontract.GQRereadRefusal(s.quantities); no && s.mode == bayescontract.ModeSample && s.output == bayescontract.OutputReplicated {
+		return nil, fail("%s", gqRereadSentence(t, "the replicated data are not available"))
+	}
 	params := map[string]any{"mode": s.mode, "output": s.output}
 	if s.mode == bayescontract.ModePriorPredictive {
 		params = map[string]any{"mode": s.mode} // the catalogue's variant takes no output: it writes the results table alone
@@ -510,6 +515,12 @@ func (s *bayesStep) sortOps() []any {
 	return []any{pyjson.Object{{Key: "type", Value: "sort"}, {Key: "params", Value: pyjson.Object{{Key: "by", Value: stringsAny(s.sortBy)}}}}}
 }
 
+// gqRereadSentence says why a model with a constrained Stan type cannot give its draws back to the checks, and what the person can do.
+func gqRereadSentence(stanType, what string) string {
+	return what + " for this model: it has correlated effects, and Stan reads the draws back with a check on their correlations that " +
+		"the 8 digits the sampler writes cannot meet (" + stanType + "); run it with the summary, the draws or the results table"
+}
+
 // hasPriorCheck: the stored program holds the predictive checks and the prior's draws (the entries of kind prior_count: a
 // truncated gamma or inverse-gamma prior has none, and the check is not offered).
 func (s *bayesStep) hasPriorCheck() bool {
@@ -563,7 +574,10 @@ func (s *bayesStep) task(binarySHA256 string, writeOutput bool, rowsFrom string)
 		Series:         s.series,
 	}
 	if s.hasChecks() {
-		checks, err := json.Marshal(bayeschecks.TaskChecks(true))
+		// the posterior checks run generate_quantities on the draws: off for a program that cannot reread them (the prior
+		// predictive check, fixed_param, does not read draws back and runs as it does)
+		_, noReread := bayescontract.GQRereadRefusal(s.quantities)
+		checks, err := json.Marshal(bayeschecks.TaskChecks(!noReread))
 		if err != nil {
 			return modelgroups.Task{}, err
 		}

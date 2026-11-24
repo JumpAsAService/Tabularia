@@ -250,6 +250,7 @@ var Refusals = []Refusal{
 	{Code: "too_many_quantities", Exit: 3, Modes: sampling},
 	{Code: "too_slow", Exit: 3, Modes: sampling},
 	{Code: "too_much_disk", Exit: 3, Modes: sampling},
+	{Code: "gq_reread", Exit: 3, Modes: []string{ModeSample}},
 	{Code: "init_failed", Exit: 3, Modes: sampling},
 	{Code: "sampler_failed", Exit: 3, Modes: sampling},
 	{Code: "not_finite", Exit: 3, Modes: sampling},

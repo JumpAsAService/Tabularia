@@ -437,6 +437,13 @@
       ]
     },
     {
+      "code": "gq_reread",
+      "exit": 3,
+      "modes": [
+        "sample"
+      ]
+    },
+    {
       "code": "init_failed",
       "exit": 3,
       "modes": [

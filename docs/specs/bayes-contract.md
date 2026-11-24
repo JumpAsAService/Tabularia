@@ -547,6 +547,7 @@ give the same numbers, and a cut that depends on the machine's speed would not).
 | `too_many_quantities` | the program would write more than `max_quantities` scalars | «the model has 31,400 quantities; this installation allows 20,000» |
 | `too_slow` | the time projection passes `time_budget_seconds` | «about 41 minutes for 4 chains of 2,000 iterations; the node's timeout is 30 minutes: fewer draws, or a longer timeout up to the group's 60» |
 | `too_much_disk` | the disk projection passes `tmp_bytes` | «the draws would write about 6.1 GB; this Job's disk holds 4 GB: fewer draws or chains» |
+| `gq_reread` | the task asks for a `generate_quantities` run (the predictive checks, the replicated output) on a program whose quantity manifest says `gq_reread: false` (the owner's decision of 2026-11-24, below) | «the replicated data cannot be made for this model: it has correlated effects, and Stan reads the draws back with a check on their correlations (cholesky_factor_corr) that the 8 digits the sampler writes cannot meet; run it without them» |
 | `init_failed` | CmdStan could not start a chain (its message «Initialization … failed», assumed; lot K1 reads the pinned text) | «the sampler found no starting point where the model's density is finite: check the bounds and the priors, or give initial values under Advanced» |
 | `sampler_failed` | CmdStan exited with another error | the last lines of `stderr.txt` (CmdStan's own text, about our program and our data) |
 | `not_finite` | a quantity's draw is not a finite number | the quantity and the draw |
@@ -977,3 +978,22 @@ above differ, this section holds.
 4. **A quantity without an ancestral draw** (a correlation matrix, a node the prior path does not draw) is left out of the draws, the
    `quantity` section and the `summary`, and counted in `note_prior_undrawn` (`n_quantities` counts the scalars written).
 
+## Correction of 2026-11-24 (owner): the draws a `generate_quantities` run cannot reread
+
+Lot R6 found that a `generate_quantities` run reads the fitted draws back from the CSV, written to 8 significant digits, and that a constrained
+type with a tight check refuses the rounded values: the correlated effects' `cholesky_factor_corr` (unit norm of each row to 1e-8) is refused with
+`sampler_failed`. **The owner's decision: the CSV keeps its 8 digits; such a model runs with the posterior checks and the replicated data off.**
+Where this section and the text above differ, this section holds.
+
+1. **The quantity manifest says it.** A `Quantity` may hold `gq_reread` (`false`, written; absent for every other variable and for a manifest
+   stored before) and `gq_reread_type` (the Stan type that checks). The generator writes them on the Cholesky factor `L_<id>` of correlated
+   effects, the one constrained type it emits with a check that 8 digits can break (a bound is written with the bound's own digits and
+   checked inclusively; the catalogue has no simplex, ordered, covariance or unit-vector parameter). `bayescontract.GQRereadRefusal` reads it.
+2. **`CodegenVersion` 4**: the programs' bytes are unchanged, the manifests a save stores change (every golden manifest says
+   `codegen_version: 4`; the ones with correlated effects gain the two fields). A version stored before has neither and is read as before:
+   saving it again writes them.
+3. **Three walls.** The panel (`bayesNodeNoReread`) keeps the replicated output off for such a version, turns it back to the summary by itself
+   and says why. The gateway (`planBayes`) refuses a sampling with the output `replicated` on it before any Job, and sends `checks.on` false
+   for it (the posterior checks are the program's own, with no setting on the node). The runner refuses a task that still asks for a
+   `generate_quantities` run, before the sampling: the refusal `gq_reread` (exit 3, mode `sample`), params `{type, what}`, never a `sampler_failed`.
+4. **The prior predictive check stays**: it runs `fixed_param` and reads no draws.

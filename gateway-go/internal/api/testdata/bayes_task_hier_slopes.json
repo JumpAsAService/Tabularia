@@ -52,7 +52,7 @@
       "semantic_hash": "42e65c40f5cc47e01d219d56cb1f2e4b6b07e0a642ba4b70923266dd7440b23d",
       "program_sha256": "dd9dc55fd27ff44ef5bab2bebaaae8391a7c436efb7b7f51f5a39d243d7213df",
       "binary_sha256": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
-      "codegen_version": 3,
+      "codegen_version": 4,
       "cmdstan": "2.40.0",
       "program_bytes": 5219,
       "image": "registry:5000/envs/tabularia-env-9@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -1139,7 +1139,9 @@
           {
             "component": "eff"
           }
-        ]
+        ],
+        "gq_reread": false,
+        "gq_reread_type": "cholesky_factor_corr"
       },
       {
         "stan": "a_g",
@@ -1386,7 +1388,7 @@
     ],
     "checks": {
       "format": 1,
-      "on": true,
+      "on": false,
       "outcomes": 3,
       "value_bins": 40,
       "stat_bins": 30,

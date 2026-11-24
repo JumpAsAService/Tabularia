@@ -258,7 +258,7 @@ func TestABayesFlowRunIsRecordedInMLflow(t *testing.T) {
 	}
 }
 
-// No draw, ever: whatever the output (the summary, the draws, the replicated data), the files are the same five, the read-back
+// No draw, ever: whatever the output (the summary, the draws), the files are the same five, the read-back
 // asks for the five sections alone, and no value of a curve row (the thinned traces, the densities) is in a file or a metric.
 func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 	w := newBayesMLflowWorld(t)
@@ -274,7 +274,13 @@ func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 		t.Fatalf("the fixture has %d long curve values", len(drawn))
 	}
 	ml := w.ml.ml
-	for i, output := range []string{"summary", "draws", "replicated"} {
+	// the replicated data are not an output of this model (the slopes model has correlated effects: the 8 digits of the draws' CSV
+	// break their Cholesky factor when Stan reads the draws back, the owner's decision of 2026-11-24): refused before any run
+	if _, _, err := w.step(w.ann, w.node("", map[string]any{"output": "replicated"}), true, "manual"); err == nil ||
+		!strings.Contains(err.Error(), "the replicated data are not available for this model") || len(ml.Runs) != 0 {
+		t.Fatalf("the replicated data of the slopes model: %v (%d runs)", err, len(ml.Runs))
+	}
+	for i, output := range []string{"summary", "draws"} {
 		_, id, err := w.step(w.ann, w.node("", map[string]any{"output": output}), true, "manual")
 		if err != nil {
 			t.Fatalf("%s: %v", output, err)
@@ -315,13 +321,10 @@ func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 		if strings.Contains(text, "PAR1") {
 			t.Errorf("%s: a parquet file in MLflow", output)
 		}
-		if output == "replicated" && run.Params["replicated_draws"] != "50" {
-			t.Errorf("replicated_draws = %q", run.Params["replicated_draws"])
-		}
 	}
 	// the sections the read-back asked for, every time: the five, never a chart's
 	asked := w.asked()
-	if len(asked) != 3 {
+	if len(asked) != 2 {
 		t.Fatalf("%d read-backs", len(asked))
 	}
 	for _, body := range asked {

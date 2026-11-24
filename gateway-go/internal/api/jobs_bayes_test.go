@@ -443,6 +443,14 @@ func TestABayesStepWaitsForItsBinaryRunsItsJobAndKeepsItsResults(t *testing.T) {
 	if fmt.Sprint(columns) != fmt.Sprint(slopesBindings) {
 		t.Errorf("the columns by node: %v", columns)
 	}
+	// the posterior checks run generate_quantities on the draws, which the 8 digits of CmdStan's CSV break for the correlated
+	// effects' Cholesky factor: the checks are off in the task, the program holds them (owner's decision of 2026-11-24)
+	var checks struct {
+		On bool `json:"on"`
+	}
+	if err := json.Unmarshal(task.Bayes.Checks, &checks); err != nil || checks.On {
+		t.Errorf("the checks of a program that cannot be reread are off: %s (%v)", task.Bayes.Checks, err)
+	}
 	compareTaskGolden(t, task, saved.Model.ID, id, flow)
 	// the import against bayes_model, then the step's files deleted by exact key, the binary's included
 	calls := strings.Join(w.engine.calls, "\n")
@@ -676,6 +684,9 @@ func TestPlanBayesRefusesBeforeAnything(t *testing.T) {
 		{"an output of its own", w.runner, node(map[string]any{"output": "wide"}), "manual", nil, "its output is the summary"},
 		{"a thinning beyond the draws", w.runner, node(map[string]any{"output": "replicated", "replicatedDraws": 1001}), "manual", nil,
 			"the replicated data keep from 1 to 1,000 draws a chain"},
+		{"the replicated data of correlated effects (the draws' 8 digits break the Cholesky factor's check)", w.runner,
+			node(map[string]any{"output": "replicated"}), "manual", nil,
+			"Bayesian model «School scores»: the replicated data are not available for this model: it has correlated effects"},
 		{"a timeout beyond the group's", w.runner, node(map[string]any{"timeoutSeconds": 7200}), "manual", nil,
 			"its timeout (7200 s) is longer than the group «bayes» allows (3600 s)"},
 		{"a compile that passed its limit", w.runner, node(nil), "manual", func() { w.binaries.states = []string{"refused"} },

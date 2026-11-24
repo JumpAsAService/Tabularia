@@ -70,6 +70,30 @@ type Quantity struct {
 	Triangle string `json:"triangle,omitempty"`
 	Check    string `json:"check,omitempty"`
 	Of       string `json:"of,omitempty"`
+	// GQReread is false, written, when generate_quantities cannot read this variable back from the CSV of the draws (the
+	// owner's decision of 2026-11-24, codegen version 4): CmdStan writes the CSV to 8 significant digits and checks the
+	// constrained type on reading, which the rounding can violate. GQRereadType is the Stan type that checks. Absent (nil)
+	// is the rule for every other variable, and for a manifest stored before.
+	GQReread     *bool  `json:"gq_reread,omitempty"`
+	GQRereadType string `json:"gq_reread_type,omitempty"`
+}
+
+// NoGQReread is the quantity's mark that generate_quantities cannot reread it: gq_reread false with the Stan type that checks.
+func NoGQReread(stanType string) (*bool, string) {
+	no := false
+	return &no, stanType
+}
+
+// GQRereadRefusal is the Stan type of the first variable of the manifest that generate_quantities cannot reread, with true; ""
+// and false when the program has none. The predictive checks and the replicated output run generate_quantities on the fitted
+// draws, so a program with such a variable runs without them (planBayes, the runner's plan).
+func GQRereadRefusal(quantities []Quantity) (string, bool) {
+	for _, q := range quantities {
+		if q.GQReread != nil && !*q.GQReread {
+			return q.GQRereadType, true
+		}
+	}
+	return "", false
 }
 
 // Dim is one dimension of a written variable, exactly one of its fields set: over a plate's units (the rows plate, a group

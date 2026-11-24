@@ -377,7 +377,9 @@
           {
             "component": "eff"
           }
-        ]
+        ],
+        "gq_reread": false,
+        "gq_reread_type": "cholesky_factor_corr"
       },
       {
         "stan": "a_g",

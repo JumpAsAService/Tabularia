@@ -43,7 +43,12 @@ import (
 // positions are among (Decl.RowsOf): predictive-checks' post_rows and prior_rows name in the data
 // manifest's `of` the rows plate, or Rows_lag for a lagged likelihood. The programs' bytes are
 // unchanged; the manifests a save stores change, so a save of a version stored before writes them.
-const CodegenVersion = 3
+//
+// 4 (the owner's decision of 2026-11-24, lot R6): the quantity manifest says, on the Cholesky factor of correlated effects, that
+// generate_quantities cannot reread the draws (gq_reread false, with its Stan type): CmdStan's CSV is written to 8 significant digits
+// and the factor's unit-norm check (1e-8) refuses the rounded rows. The programs' bytes are unchanged; the manifests a save stores
+// change for the models with correlated effects, so a save of a version stored before writes them.
+const CodegenVersion = 4
 
 var (
 	// ErrInvalidModel: the model has an error finding (or is nil); no program is written from it.

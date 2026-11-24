@@ -171,7 +171,11 @@ func (g *gen) writeEffectParameters(n *bayesgraph.Node) {
 	}
 	g.w.line("cholesky_factor_corr[" + k + "] " + e.l + ";")
 	g.mapping = append(g.mapping, g.internal(n, e.l, blockParameters, bayescontract.RoleInternal))
-	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.l, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Component: n.ID}, {Component: n.ID}}})
+	// CmdStan writes its CSV to 8 significant digits and generate_quantities checks the unit norm of each row of this factor to
+	// 1e-8 when it reads the draws back, which the rounding breaks: the manifest says the program cannot be reread (codegen 4)
+	noReread, rereadType := bayescontract.NoGQReread("cholesky_factor_corr")
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.l, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Component: n.ID}, {Component: n.ID}},
+		GQReread: noReread, GQRereadType: rereadType})
 }
 
 // effectSlots are the texts of the components' means and scales, in the node's order.
