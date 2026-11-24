@@ -380,3 +380,12 @@ None.
 - Formulas are written without the sub- and superscripts the report's font lacks (`Σ_t`, `E_n`, `var+`).
 - **For the review (opus)**: the quotations contain words of the common list («proven problematic», «recommend»); they are the sources', the
   sentences around them are ours. The values 1.01, 400 and 0.3 appear nowhere but in the method's quotations.
+
+## As built — lot Q5 (2026-11-24, kind trial)
+
+Same cluster as the node spec's «As built — lot F5». Memory is the `kubectl top` reading (metrics-server, every 2 to 3 s: a peak can be missed between two readings).
+
+- **The largest runs made on the development machine**, `hier_intercepts` on synthetic data (5 rows a group, then 2): **600 groups** (3,000 rows), trial of 285 s, the Job's memory at most 104 MiB, **1,204 summary rows**; the report: svg 8 pages in 5.1 s (4.2 MB), PDF 5.1 s (300 KB), Excel 6.1 s (121 KB), the engine's pods at most 193 MiB, the worker's 445 MiB. **2,100 groups** (4,200 rows), trial of 405 s, the Job's memory at most 120 MiB, **2,704 summary rows** (the summary and original-scale caps are in play), the report: svg 8 pages in 7.1 s (4.5 MB), PDF 7.1 s (324 KB), Excel 10.1 s (270 KB), the engine's pods at most 201 MiB, the worker's 572 MiB.
+- The contract's 93,490 rows (2,000 summary quantities, 12 charts at 8 chains, 8 unit charts of 1,000 points, six pairs, 4,044 check rows) were **not** reached by a real run of the machine (4 chains, the 12 charts and the pairs of one model); the run of 2,100 groups is the largest made. The engine's own cap test (`test_models_bayes_report.py`) stays the proof for the maximum.
+- **On screen**, the report of the 2,100-group run and of the 104,819-row regression in **Chrome and Firefox**: the pages ready in about 7.5 s (Chrome) and 8 s (Firefox) after opening the tab, the fit-to-width, the switch between the posterior and the prior predictive check (the PDF and Excel buttons were present; the files were taken through the same route by script); no error in either console. In the 2,100-group report the traces and rank histograms show one chain apart from the other three for the effect of the predictor and the typical level (the report states it as the charts and the R-hat; nothing is rated).
+- The ten templates' reports (4 to 8 pages) in the three formats took 2 to 5 s each.
