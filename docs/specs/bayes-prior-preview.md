@@ -394,3 +394,31 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
 ## Open questions
 
 None.
+
+## As built — lot P3 (the golden test against Stan)
+
+`frontend/tests/bayes-prior-golden.test.mjs`, `frontend/tests/fixtures/bayes-prior/<case>.json` (17 fixtures, about 4 MB),
+`gateway-go/cmd/bayesfixtures` (`prepare`), `gateway-go/scripts/bayes-prior-fixtures.sh` and `gateway-go/scripts/bayes_prior_fixtures.py`.
+
+- **The command differs from `bayes-predictive-checks.md`'s sketch**: `go run ./cmd/bayesfixtures prepare <dir>` writes, for each case,
+  the program a save stores for the graph **as it is now** (`bayescodegen.Generate` with `bayeschecks.Extension{}`) and the manifest's
+  quantities; the shell script starts one container per case (the image `tabularia-bayes-b0:local`, CmdStan 2.40.0, read-only root,
+  no network, uid 10001, 2 GiB, 2 CPUs, `/tmp` as an executable tmpfs) that runs `bayes_prior_fixtures.py`: it writes a minimal data
+  file read from the program's own data block (`Mode` 1, the checks off, no row named, 6 rows, 2 units a group plate, 3 levels a
+  category, a state's six rows chained), compiles as the Job does (`PRECOMPILED_HEADERS=false`), runs `fixed_param` (`init=0`,
+  4 chains × 1,000 draws, seed 4100 + the case's place) and keeps only the `prior_marginal` columns, as CmdStan wrote them
+  (`collect` is that script's last step: there is no second command). About 20 s a case, 6 minutes for the 17.
+- **The cases** (17): the ten templates, `hier_slopes_centred`, `ts_local_level_centred`, `free_truncated_hyper`,
+  `free_explicit_noncentred`, `free_category`, and the checks module's own `truncated` (every truncation form, single and on a plate)
+  and `effects3` (three correlated effects). 84 comparisons.
+- **The comparison** is as «The golden test against Stan» says: two-sample Kolmogorov–Smirnov, asymptotic, Holm over the 84
+  comparisons, alpha 0.001. A draw Stan wrote as `nan` or `inf` and a draw the browser rejects are left out on both sides
+  (`truncated`: 3,822 of 4,000 for the two quantities that sit under an infinite-mass truncation). Stan's marginal of a state is
+  its first value, compared with the plan's `<state>.init`. Smallest unadjusted p-value of the file: 2.5e-2 (`truncated`, `vg`);
+  every adjusted p-value is 1.
+- **A defect found, not in the browser**: the golden programs `bayeschecks/testdata/golden/checks_<template>.stan` of the hier_* and
+  ts_* templates are **stale**: lot T1 (`56ec7dd6`) changed the graphs of those cases from the templates opened with example numbers
+  (1200 / 300) to the templates at their default numbers, and did not regenerate the `checks_*` files, which still hold `normal(1200.0,
+  (2.5 * 300.0))`. The first run of this lot took them and the test failed with D between 0.5 and 0.99 on every quantity of those
+  cases, which is how the test is known to catch a wrong scale. The command now generates the programs itself. To refresh the
+  goldens: `BAYES_GOLDEN_WRITE=1 go test ./internal/bayeschecks -run TestGolden`, reviewed by hand (not done in this lot).
