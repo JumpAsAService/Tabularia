@@ -395,6 +395,45 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
 
 None.
 
+## As built — lot P2 (the timings in Chrome and Firefox, the choice of one draw path)
+
+Measured on 2026-11-24 on the development machine (16 GB, an old CPU, a lot of other software running), in Playwright's
+**Chromium 158.0.8127.18** and **Firefox 159.0**, headless, against the development server (`nuxt dev`: the code is not
+minified, so these times are a ceiling for the production build). **The slow laptop is not measured: the owner decided on
+2026-11-24 to postpone it** (the spec asked for it; the target below is therefore met on the development machine only and is
+still to be measured on a slow laptop whenever the owner wants it). Two runs of each browser, in the order Chromium, Firefox,
+Firefox, Chromium, one after the other.
+
+- **What was timed**: the real client and the real worker (`bayesPriorPreviewClient` with `bayesPrior.worker`), loaded by the page
+  of the editor, on the spec's three-level chain (`mu`, `tau_d` truncated at 0, `mu_d`, `tau_s`, `alpha`, 4,000 draws), asking for
+  `alpha`. A time runs from the call of `request` to the **next animation frame after the answer** reached the page: the 150 ms
+  debounce, the copy of the plan, the worker, the transfer of the arrays and one frame, which is what «the chart redrawn within
+  300 ms of the last keystroke» means (the drawing itself, a few SVG paths, comes on top and is not in these numbers). The warm
+  figures are 30 requests with a different seed each, 120 ms apart.
+- **Results** (the two runs of a browser, in ms):
+
+| | First request (worker started, modules loaded) | Warm, request to the next frame: median / max | Warm, worker's own `ms`: median / max | The core alone in the page's thread, median of 30 |
+|---|---|---|---|---|
+| Chromium | 378, 663 | 175 / 215 and 172 / 215 | 22 / 60 and 20 / 63 | 5.7 and 5.1 |
+| Firefox | 515, 541 | 188 / 230 and 184 / 231 | 36 / 76 and 32 / 79 | 7 and 7 |
+
+  Without the debounce, a warm redraw costs 22 to 25 ms in Chromium and 34 to 38 ms in Firefox, median; the largest warm time of
+  all four runs is 231 ms, **under the 300 ms target** with 70 ms to spare; the first request (a cold worker in the development
+  server) is 380 to 660 ms, which a person sees once, when the first prior's inspector opens. The worker's own time is higher than
+  the core's in the page's thread (22 to 36 ms against 5 to 7): the worker runs one request at a time with pauses in between,
+  and its code is cold each time (assumed: the same shape is not seen in Node, where the core takes 3.2 ms in a loop).
+- **The draw path is decided: one path, every draw by inversion** (`quantile` of a uniform, a truncation's bounds through the
+  CDF), as the core already does for truncated and untruncated draws alike. The stdlib generators' path was not kept: the
+  Node measurement (1.9 ms against 3.2 ms) gave a second path no time the browsers needed, and the browsers confirm that the
+  one path is well inside the target.
+- **The same plan and seed give the same chart in both browsers, and in Node**: the draws' histogram (the bins' edges to six
+  decimals and the counts) of the chain at seed 1 has the same fingerprint in Chromium, in Firefox and in Node (-860464308), and
+  the same quantiles (q5 -17.97, q50 0.167, q95 17.92); a second request at seed 1 in the same page gave the same fingerprint again.
+- **Not measured**: the slow laptop (postponed by the owner's decision of 2026-11-24, above); the keyboard access to «Draw
+  again» and the redraw of the real inspector by hand (the script drove the client and the worker, not the inspector). The
+  measuring script is not in the repository: the `frontend/tests/bench/bayes-prior-bench.mjs` of «Commands» was never written,
+  and the Node timings stay the diagnostic of `bayes-prior-preview.test.mjs`.
+
 ## As built — lot P3 (the golden test against Stan)
 
 `frontend/tests/bayes-prior-golden.test.mjs`, `frontend/tests/fixtures/bayes-prior/<case>.json` (17 fixtures, about 4 MB),
