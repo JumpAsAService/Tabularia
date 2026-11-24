@@ -265,6 +265,7 @@ free again.
 | Second pass | `pass_bytes` (`memory_bytes`/4) + `compute_bytes` (/8) + a row group, CmdStan exited | 727 MB above the start at 20,000 quantities × 4,000 draws with 2 GiB (X5) |
 | `generate_quantities` | CmdStan's (the data, one draw) and the follower's block | P0: 15.5 MiB at 100,000 rows |
 | Copies | one 8 MiB piece | the contract |
+| **The whole Job** (sample and prior predictive, with the checks, the replicated output and the original scale) | the stages above, never two at once | R6: 109.5 MB above the start at 2,013 columns × 4 chains × 1,000 draws and 108.3 MB at 10,000 (fake CmdStan, `memory_bytes` 192 MiB); 751.8 MB at 10,000 draws with the Job's 2 GiB (the budgets are the difference); «As built — lot R6» |
 
 The stages never overlap: CmdStan has exited before the second pass, the second pass ended before a `generate_quantities`
 run starts. The observed outcome's array (8 bytes a row) is P3a's and is freed before sampling (the checks spec).
@@ -316,10 +317,10 @@ All four are `omitempty`: the other groups' `task.json` keep their bytes (the ex
 ```bash
 # the runner's unit tests, outside any image (small data only; -I -B: no __pycache__ in the runner's tree)
 uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \
-  python -I -B -m unittest discover -s gateway-go/internal/modelgroups/groups/bayes/runner/tests -v
-# the Job's memory test, alone (a heavy job for this machine: one at a time, under the heavy-job lock)
-BAYES_MEMORY_TEST=1 uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \
-  python -I -B -m unittest gateway-go/internal/modelgroups/groups/bayes/runner/tests/test_run_memory.py -v
+  python -I -B -m unittest discover -s gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests -v
+# the whole Job's memory test, alone (a heavy job for this machine: one at a time, under the heavy-job lock; `spec` for the spec's sizes)
+BAYES_RUN_MEMORY_TEST=1 uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \
+  python -I -B gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests/test_run_memory.py -v
 # the Go side
 cd gateway-go && go test ./internal/bayeschecks/... ./internal/bayescontract/... ./internal/modelgroups/...
 cd gateway-go && scripts/test.sh ./internal/api/ -run 'BayesJob'          # on TEST_DATABASE_URL
@@ -337,7 +338,7 @@ gateway-go/internal/modelgroups/groups/bayes/runner/py/
   bayes_follow.py   (changed) cmdstan_args gains generate_quantities; `run` removed
   bayes_data.py     (changed) pass B records the offset of the extension's data
   bayes_task.py     (changed) the four task fields read; the prior predictive leaves out a quantity without a prior draw
-gateway-go/internal/modelgroups/groups/bayes/runner/tests/
+gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests/
   test_binary.py, test_run.py, test_gq.py, test_scale.py, test_run_memory.py (gated), fake_cmdstan.py (gains generate_quantities)
 gateway-go/internal/api/jobs_bayes.go           bayesJobManifest, the step's files, the /tmp in force
 gateway-go/internal/api/jobs_models.go          (changed) modelJobManifest takes the /tmp size
@@ -568,4 +569,127 @@ None.
   count of draws); the checks' draws are dropped as in `sample`. See the contract's «Correction of 2026-11-24 from R2».
 - **`replicated`** (lot R2's open point): a draw with a non-finite value is left out whole, counted in `note_replicated_dropped`; refused
   (`not_finite`) only when no draw is left.
+
+## As built — lot R6
+
+`reference/runner_tests/test_run_memory.py` (new, gated), a correction in `bayes_pass2.py` with its tests in `test_run.py` and `test_prior.py`,
+and the trial on the image `tabularia-bayes-b0:local` (CmdStan 2.40.0, `df1cf58a3244`), by hand, one container at a time under the heavy-job
+lock: read-only root, `/tmp` a 2 GiB tmpfs, uid 10001, no network, no capability, 2 CPUs, 2 GiB, `PYTHONHASHSEED=0`, `MALLOC_MMAP_THRESHOLD_` and
+`MALLOC_TRIM_THRESHOLD_` at 262,144, the code tree as the ConfigMap mounts it (`CodeFiles`), the compile Job then the sampling Job on the
+binary it left (`TABULARIA_BINARY_IN`). The tasks are the ten templates' own (`bayescodegen.Generate` with the checks' extension on the
+template's graph, `FiniteVariance` and `ScalePairs` of `bayeschecks`, the sampler 4 chains × 2,000 draws after 1,000 of warm-up), the input
+the template's reference table of lot T3.
+
+### The memory of the whole Job (criterion 5)
+
+`BAYES_RUN_MEMORY_TEST=spec`, on the fake CmdStan, `hier_intercepts` on 2,000 groups (a vector quantity of 2,000 elements: 2,013 columns, 4,071
+in the prior predictive, which draws the prior of each), 4 chains × 1,000 then × 10,000 draws, blocks of 1,048,576 values, `memory_bytes`
+192 MiB (budgets 48 and 24 MiB, reached at both sizes). Peak resident memory above the start, in MB; the lower of two runs, then the higher
+(the allocator only adds to a peak: two identical runs of the whole Job differed by up to 24 MB, 84.6 and 108.5 at ten times the draws); the
+tracemalloc peak of a third run (Python and numpy, which do not vary between identical runs):
+
+| Case | RSS × 1 | RSS × 10 | highest of two, × 1 and × 10 | tracemalloc × 1 | tracemalloc × 10 | seconds × 10 |
+|---|---|---|---|---|---|---|
+| sample, checks, original scale, output `draws` (217 MB) | 109.5 | 108.3 | 112.8 and 109.7 | 77.2 | 77.7 | 146 |
+| sample, checks, original scale, output `replicated` | 109.9 | 111.3 | 110.9 and 131.1 | 77.7 | 78.3 | 146 |
+| prior predictive (4,071 columns) | 102.2 | 102.0 | 103.5 and 102.2 | 55.2 | 57.0 | 73 |
+
+All three within the 5 MB (the largest difference of the deterministic measure: 1.8 MB, the prior's: the results writer's keys). With the
+Job's own 2 GiB (`memory_bytes`) the whole Job at 10,000 draws peaks at **751.8 MB** above the start (X5: 727 MB for the pass alone): the
+second pass's `pass_bytes` 512 MiB and `compute_bytes` 256 MiB are most of it; CmdStan's own memory is the container's, outside this process
+(the images' trial below reads the container's peak). The peak above the budgets is about 34 MB at the small budgets and does
+not depend on the draws.
+
+**What the test measures is only the growth.** Three sizes that look innocent made the smaller run smaller than the larger by a constant, each
+seen: the second pass's block (`pass_bytes` is a cap: at 2 GiB the smaller run holds all of itself, the larger 512 MiB), the follower's block
+(under `block_values` a chain's draws are one smaller block) and the copy's piece (a file under 8 MiB is one smaller piece). The test lowers
+`memory_bytes` and sets the sizes so that all three are full at both; a profile `small` (800 groups, 600 then 6,000 draws, 8 MiB) runs in six
+minutes and measured the same flat tracemalloc. At ten times the draws the draws file has about ten times the row groups (8 then 80 in the spec's profile) and their footers grow the
+resident memory (3.5 MB in the small profile, whose blocks are smaller: the cost K2 documented), inside the 5 MB.
+
+### A correction found by the trial: a state on the rows plate
+
+`ts_local_level`'s `level` (a value a row, no unit) crashed the Job in the sample and the prior predictive modes: the second pass wrote
+its elements as `summary|level||mean` 200 times and the results writer refused the second row of the key (`RuntimeError`, exit 1: a fault of
+the runner, never seen by the fake because no test had a quantity on the rows plate). `bayes_pass2.summary_unit` gives the `summary` rows of
+an element with no unit its position, `index` (the row's number the contract gives; «i,j» for a matrix), as `level_2`: `summary|level|17|mean`.
+The summary output keeps `unit` null and the position in `index`, as the contract says. Two tests (`test_run`, `test_prior`) run `ts_local_level`
+on the fake, red before the correction.
+
+### A defect found and not corrected: `generate_quantities` on a correlated effect
+
+**`hier_slopes` with the checks on (and with the replicated output) is refused by CmdStan: `sampler_failed`, «chain 1: `cholesky_corr_free:
+x is not a valid unit vector. The sum of the squares of the elements should be 1, but is 1`»**, at each of the seven seeds tried. A `generate_quantities`
+run reads the fitted draws and unconstrains them (`cholesky_corr_free` for `L_eff`, a `cholesky_factor_corr`), and Stan checks the unit vector
+within 1e-8; the sampling's CSV holds 8 significant digits, so each element of a row of `L` is rounded by up to 5e-9 of itself and the
+squares sum to 1 ± 1e-7. The same program with the checks off samples (`sample_nochecks`: the posterior below); the prior predictive (no
+fitted draws) runs. Any model with a `cholesky_factor_corr` (the correlated effects), a simplex or another constrained type with a tight check
+would be refused the same way. **Proposed correction** (not made: it changes the owner's decision of 2026-11-24, «8 significant digits, no
+`sig_figs`», the contract's «CSV precision» and the engine's report words that say it): the sampling run is given `output … sig_figs=10`
+when a `generate_quantities` run is planned (`bayes_follow.cmdstan_args(…, sig_figs)`, passed by `SampleJob` when `gq_runs` is not empty),
+the rows `model|||precision` says «10 significant digits» for it, and the engine's `report_texts/bayes_model.json` gains that text in the
+five languages. Tried on the image with `sig_figs=10` on `hier_slopes`, the same task: the checks and the replicated runs pass (4.9 and 2.8 s)
+and the summary equals the checks-off run's to 8 digits (the largest relative difference 2.7e-8); 10 digits rounds each element by 5e-11 of itself, the sums of squares are within 1e-9
+of 1 (ten times inside Stan's tolerance), and the CSV grows by about two bytes a value (10.3 to 12.3: the disk projection measures the first
+block's lines, so it follows; this figure is the arithmetic of the digits, not measured). Until it is made, a version with correlated effects must run with the checks off.
+
+### The ten templates (criterion 6)
+
+The comparison is lot T3's: the runner's summary output (mean, sd, `mcse_mean`, `mcse_sd`) against the hand-written program's posterior
+(`<id>.expected.json`'s source statistics), z = (run − reference) / √(mcse_run² + mcse_ref²), every comparison of the ten templates Holm-adjusted
+together, α = 0.001. **598 comparisons, the smallest adjusted p 1.0 (the smallest raw p 0.0064, `glm_logistic`), all ten pass.** Times are the
+container's wall clock (the runner's own seconds in brackets); peaks are the container's cgroup `memory.peak` (which counts CmdStan and the
+page cache), sampling 4 × (1,000 + 2,000):
+
+| Template | Compile (s) | Sample (s) | Sampling (s) | Divergences | Max R-hat | Min ESS bulk | Peak (MB) | Replicated run (s) | Prior predictive (s) |
+|---|---|---|---|---|---|---|---|---|---|
+| glm_linear | 15.8 | 2.3 | 0.11 | 0 | 1.0015 | 7,607 | 77 | 1.8 | 1.8 |
+| glm_logistic | 14.8 | 2.3 | 0.23 | 0 | 1.0009 | 4,888 | 68 | 1.8 | 1.8 |
+| glm_poisson | 15.3 | 1.8 | 0.13 | 0 | 1.0010 | 4,465 | 60 | 1.8 | 1.8 |
+| glm_negbin | 15.3 | 5.4 | 1.17 | 0 | 1.0007 | 6,641 | 77 | 2.8 | 1.8 |
+| hier_intercepts | 20.0 | 4.0 | 0.39 | 0 | 1.0028 | 1,851 | 90 | 2.4 | 1.8 |
+| hier_slopes (checks off) | 28.2 | 4.4 | 0.78 | 0 | 1.0020 | 1,484 | 106 | refused (above) | 1.8 |
+| hier_nested | 21.6 | 6.4 | 1.37 | 169 (2.1%) | 1.0128 | 465 | 105 | 3.3 | 1.8 |
+| ts_ar | 16.8 | 2.8 | 0.38 | 0 | 1.0016 | 5,698 | 78 | 2.3 | 1.8 |
+| ts_random_walk | 14.7 | 1.8 | 0.08 | 0 | 1.0010 | 6,288 | 67 | 1.8 | 1.9 |
+| ts_local_level (not centred) | 17.4 | 18.4 | 6.41 | 11 (0.14%) | 1.0017 | 1,931 | 266 | 7.5 | 2.3 |
+
+The «Replicated run» is the sample mode with output `replicated` (4 chains × 500 draws after 500, 50 draws a chain replicated) and the
+prior predictive 4 × 500 draws. The compile Job's peak is 0.8 to 1.3 GB (`hier_slopes` the highest), the binary 2.6 to 2.9 MB. The stages of a
+sample run, the runner's own seconds (`run.json`): data 0.01–0.04, warm-up and sampling as above, conversion 0.1–0.7, second pass 0.06–1.6,
+checks 0.07–0.2, the replicated run 0.07–0.11. T3's runs had 88 and 63 divergences on `hier_nested` (the hand-written and the generated program) and 14 on `ts_local_level` (the generated
+one: the owner left the template uncentred); the divergences of a six-district funnel vary with the seed (this run's replicated run, 4 × 500
+draws, had 22), and the posterior agrees all the same.
+
+**The original scale against a regression on the raw columns** (the GLMs: the task's `scale_pairs` on `b_x` and `alpha`; the raw regression is
+least squares for `glm_linear`, iteratively reweighted least squares for the others, the negative binomial at the posterior's mean `phi`):
+
+| Template | slope on the original scale (mean ± sd) | raw regression | difference in posterior sd | sd / se, slope and intercept |
+|---|---|---|---|---|
+| glm_linear | 0.080822 ± 0.006591 | 0.080814 ± 0.006646 | 0.001 | 0.992, 0.990 |
+| glm_logistic | 0.10821 ± 0.01411 | 0.10699 ± 0.01397 | 0.087 | 1.010, 1.010 |
+| glm_poisson | 0.041714 ± 0.003242 | 0.041769 ± 0.003232 | −0.017 | 1.003, 1.003 |
+| glm_negbin | 0.05708 ± 0.003274 | 0.05705 ± 0.003246 | 0.008 | 1.008, 1.007 |
+
+(the intercepts' differences: −0.007, −0.091, 0.014, −0.008 posterior sd). The linear regression is the least squares (its se times
+√((n − 2)/(n − 4)), the sd of the flat-prior posterior), within the Monte Carlo error; the others differ by the prior's pull and the posterior's
+skewness, under a tenth of a sd. For every template with a pair (the GLMs and the two hierarchical ones with `b_x`) the original slope's mean and sd
+are the standardized ones divided by the column's sd to nine digits (a linear map of the draws), and the vector intercepts (`a_g`, `u_s`) have
+their original rows, element by element.
+
+### The projections' constants, measured
+
+The constants of `bayes_run.py` «assumed until lot R6»: the CSV's comments, a CSV file's configuration, the adaptation and the timing are 1.4 KB
+(11 columns) to 2.0 KB (67 columns) of head and 0.25 to 0.5 KB after the header: the assumed 8 KB and 48 B a column are 3 to 4 times what
+CmdStan writes (kept: the projection errs on the side of refusing late); a value is 8.9 to 10.1 bytes of CSV (the 10.3 holds); a summary row
+150 to 300 bytes with its footer (256 holds); a results row 14 to 16 bytes (128 is 8 times over, kept); the copy's rate to the bucket
+(50 MB/s) is the network's, which a bind mount on the machine does not measure and so stays an assumption. **The original scale's time** is not
+in `seconds_left`'s projection, the spec not asking for it: 600 elements of a vector intercept and two coefficients over 8,000 draws add 0.4 to
+0.6 s to a second pass of 4.5 s (9 to 13%, 0.08 µs a value against the pass's 0.93), inside the projection's margin.
+
+### The prior predictive's cost by rows (P0 left it)
+
+`glm_linear`'s binary, 4 chains × 250 draws, the input of 1,000, 10,000 and 100,000 rows: 1.8, 1.8 and 6.4 s in the container (sampling 0.02, 0.19
+and 2.37 s, the data passes 0.01, 0.04 and 0.29 s), peak 58, 59 and 85 MB: about 24 ns a row-draw of sampling, linear in the rows, nothing held in
+proportion (the checks' statistics are accumulated in the program).
 
