@@ -21,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 import {
   pageSizeMm, placeHotspots, type PlacedHotspot, type ReportDefinition, type ReportHotspot,
 } from '~/composables/useReports'
+import { scrollOnSwap } from '~/composables/reportScroll'
 
 const props = withDefaults(defineProps<{
   pages: string[]
@@ -30,7 +31,10 @@ const props = withDefaults(defineProps<{
   definition?: ReportDefinition | null
   /** the region's name for assistive technology (the report's name) */
   label?: string
-}>(), { hotspots: () => [], zoom: 'fit', busy: false, definition: null, label: '' })
+  /** names the document the pages are of: when it changes, the view goes back to the top
+   *  (another report); without it, or the same, the place is kept (a sort, a group closed) */
+  docKey?: string | null
+}>(), { hotspots: () => [], zoom: 'fit', busy: false, definition: null, label: '', docKey: null })
 
 const emit = defineEmits<{
   (e: 'hotspot', h: ReportHotspot): void
@@ -49,6 +53,8 @@ const width = ref(0)
 const shown = ref<string[]>([])
 const shownSvgs = ref<string[]>([])
 let generation = 0
+// the document the pages on screen are of (see docKey)
+let shownDoc: string | null | undefined = props.docKey
 // the page most in view, from 1 (see «which page is in view» below)
 const current = ref(1)
 // the pages decoded before a swap: the one in view and its neighbours. The others load
@@ -67,6 +73,7 @@ function revokeLater(urls: string[]) {
 
 watch(() => props.pages, async (pages) => {
   const mine = ++generation
+  const doc = props.docKey
   swapping.value = true
   const urls = pages.map((svg) => URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })))
   const at = Math.min(current.value, urls.length) - 1
@@ -84,6 +91,11 @@ watch(() => props.pages, async (pages) => {
   shownSvgs.value = pages
   swapping.value = false
   revokeLater(old)
+  const move = scrollOnSwap(shownDoc, doc)
+  shownDoc = doc
+  if (move === 'top') {
+    nextTick(() => scroller.value?.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
+  }
 }, { immediate: true })
 
 onBeforeUnmount(() => {

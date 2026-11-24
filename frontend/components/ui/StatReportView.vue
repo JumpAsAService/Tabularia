@@ -367,6 +367,7 @@ const problemTitle = computed(() => {
       <ReportPages
         v-else
         :pages="shown?.pages ?? []"
+        :doc-key="shown?.key ?? null"
         :zoom="zoom"
         :busy="busy"
         :label="$t('statReport.pagesOf', { name: step || (model ? $t('modelReport.region') : $t('statReport.region')) })"
