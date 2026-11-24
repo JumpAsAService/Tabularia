@@ -894,6 +894,10 @@ export default {
         "name": "Flow assistant",
         "purpose": "Builds and changes steps in the flow editor"
       },
+      "bayes": {
+        "name": "Bayesian model assistant",
+        "purpose": "Explains and proposes changes to a Bayesian model in its editor"
+      },
       "script": {
         "name": "Script assistant",
         "purpose": "Writes and fixes Python or R code in the script editor"
@@ -5119,6 +5123,71 @@ export default {
     "noReports": "No report you may open: reports are made in a folder, and need VIEW on it.",
     "addReport": "Add a report",
     "removeCell": "Remove the cell",
+  },
+  "bayesAssistant": {
+    "tab": "Assistant",
+    "title": "Assistant for this model",
+    "emptyBody": "Ask about the model on the canvas: what a node is, what a prior says in numbers, what a finding means. The assistant reads the graph and proposes changes; you apply them or not.",
+    "example1": "Explain the model node by node, for someone new to Bayes",
+    "example1Selected": "Explain the selected node and its prior",
+    "example2": "What does each prior say, in numbers?",
+    "placeholder": "Ask about this model",
+    "inputLabel": "Message to the assistant",
+    "send": "Send",
+    "stop": "Stop",
+    "newConversation": "New conversation",
+    "model": "Model",
+    "working": "Working…",
+    "stopped": "Stopped.",
+    "noData": "What goes to the model: the graph, its findings and the numbers of the prior charts. No row of data goes.",
+    "noDataRun": "What goes to the model: the graph, its findings, the numbers of the prior charts and, of the run you chose, the sampler's facts and the extremes of R-hat and effective sample size. No row of data and no posterior number goes.",
+    "tooBig": "The graph is over the size the assistant takes ({limit} KiB), so it cannot be sent.",
+    "readOnly": "A version looked at cannot be changed: the assistant explains it, and nothing is applied.",
+    "proposal": "Proposed changes",
+    "kind": {
+      "prior": "Prior",
+      "bounds": "Bounds",
+      "form": "Form"
+    },
+    "form": {
+      "centred": "centred",
+      "non_centred": "non-centred"
+    },
+    "noBounds": "none",
+    "apply": "Apply",
+    "applyAll": "Apply all",
+    "discard": "Discard",
+    "applied": "Applied as one change of the editor. Undo: {keys}.",
+    "discarded": "Discarded.",
+    "outdated": "Made for an earlier graph: not applied.",
+    "checking": "The gateway is reading the graph this would make…",
+    "checkFailed": "The gateway could not read the graph this would make, so «Apply» is not offered.",
+    "checkRefused": "The gateway refuses the graph this would make, so «Apply» is not offered.",
+    "checkFindings": "The gateway reads the graph with this change and finds:",
+    "checkClean": "The gateway reads the graph with this change and adds no finding.",
+    "sendFindings": "Send the findings back",
+    "findingsMessage": "The gateway gives these findings for the graph your proposal makes. Please propose it again:\n{list}",
+    "place": {
+      "missing": "This node or field is not in the graph now.",
+      "moved": "The graph holds something else here now than what the assistant read: not applied.",
+      "same": "The graph already holds this."
+    },
+    "from": "from",
+    "to": "to",
+    "run": {
+      "label": "Read a run",
+      "none": "No run",
+      "hint": "Choose a node of a flow that uses this model: the assistant then reads the sampler's facts and, for each node, the extremes of R-hat and effective sample size. It never reads a posterior number.",
+      "empty": "No flow you can open uses this model yet.",
+      "hidden": "{n} more in flows you cannot open.",
+      "never": "not run yet",
+      "trial": "development run on a sample",
+      "version": "This run is of version {run}; the editor holds version {editor}.",
+      "loading": "Reading the run…",
+      "failed": "The run could not be read.",
+      "reading": "Reading: {flow}, {node}",
+      "listFailed": "The runs could not be listed."
+    }
   },
   "scriptAssistant": {
     "title": "Assistant",

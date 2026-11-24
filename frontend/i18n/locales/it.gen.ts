@@ -894,6 +894,10 @@ export default {
         "name": "Assistente dei flussi",
         "purpose": "Costruisce e modifica i passi nell'editor dei flussi"
       },
+      "bayes": {
+        "name": "Assistente del modello bayesiano",
+        "purpose": "Spiega e propone modifiche a un modello bayesiano nel suo editor"
+      },
       "script": {
         "name": "Assistente degli script",
         "purpose": "Scrive e corregge il codice Python o R nell'editor degli script"
@@ -5119,6 +5123,71 @@ export default {
     "noReports": "Nessun report che puoi aprire: i report si creano in una cartella e serve VIEW su di essa.",
     "addReport": "Aggiungi un report",
     "removeCell": "Togli la cella",
+  },
+  "bayesAssistant": {
+    "tab": "Assistente",
+    "title": "Assistente per questo modello",
+    "emptyBody": "Chiedi del modello sulla tela: cos'è un nodo, cosa dice un prior in numeri, cosa significa un rilievo. L'assistente legge il grafo e propone modifiche; tu le applichi o no.",
+    "example1": "Spiega il modello nodo per nodo, per chi è nuovo al bayesiano",
+    "example1Selected": "Spiega il nodo selezionato e il suo prior",
+    "example2": "Cosa dice ogni prior, in numeri?",
+    "placeholder": "Chiedi di questo modello",
+    "inputLabel": "Messaggio all'assistente",
+    "send": "Invia",
+    "stop": "Ferma",
+    "newConversation": "Nuova conversazione",
+    "model": "Modello",
+    "working": "Sto lavorando…",
+    "stopped": "Fermato.",
+    "noData": "Cosa va al modello: il grafo, i suoi rilievi e i numeri dei grafici dei prior. Nessuna riga di dati.",
+    "noDataRun": "Cosa va al modello: il grafo, i suoi rilievi, i numeri dei grafici dei prior e, dell'esecuzione scelta, i fatti del campionatore e gli estremi di R-hat e della dimensione campionaria efficace. Nessuna riga di dati e nessun numero a posteriori.",
+    "tooBig": "Il grafo è oltre la dimensione che l'assistente accetta ({limit} KiB): non si può inviare.",
+    "readOnly": "Una versione guardata non si cambia: l'assistente la spiega, e non si applica nulla.",
+    "proposal": "Modifiche proposte",
+    "kind": {
+      "prior": "Prior",
+      "bounds": "Limiti",
+      "form": "Forma"
+    },
+    "form": {
+      "centred": "centrata",
+      "non_centred": "non centrata"
+    },
+    "noBounds": "nessuno",
+    "apply": "Applica",
+    "applyAll": "Applica tutte",
+    "discard": "Scarta",
+    "applied": "Applicata come un'unica modifica dell'editor. Annulla: {keys}.",
+    "discarded": "Scartata.",
+    "outdated": "Fatta per un grafo precedente: non applicata.",
+    "checking": "Il gateway sta leggendo il grafo che ne risulterebbe…",
+    "checkFailed": "Il gateway non ha potuto leggere il grafo che ne risulterebbe, quindi «Applica» non è offerto.",
+    "checkRefused": "Il gateway rifiuta il grafo che ne risulterebbe, quindi «Applica» non è offerto.",
+    "checkFindings": "Il gateway legge il grafo con questa modifica e trova:",
+    "checkClean": "Il gateway legge il grafo con questa modifica e non aggiunge rilievi.",
+    "sendFindings": "Rimanda i rilievi",
+    "findingsMessage": "Il gateway dà questi rilievi per il grafo che la tua proposta produce. Riproponila, per favore:\n{list}",
+    "place": {
+      "missing": "Questo nodo o campo ora non è nel grafo.",
+      "moved": "Il grafo qui ora contiene altro rispetto a ciò che l'assistente ha letto: non applicata.",
+      "same": "Il grafo contiene già questo."
+    },
+    "from": "da",
+    "to": "a",
+    "run": {
+      "label": "Leggi un'esecuzione",
+      "none": "Nessuna esecuzione",
+      "hint": "Scegli un nodo di un flusso che usa questo modello: l'assistente legge i fatti del campionatore e, per ogni nodo, gli estremi di R-hat e della dimensione campionaria efficace. Non legge mai un numero a posteriori.",
+      "empty": "Nessun flusso che puoi aprire usa ancora questo modello.",
+      "hidden": "Altri {n} in flussi che non puoi aprire.",
+      "never": "non ancora eseguito",
+      "trial": "esecuzione di sviluppo su un campione",
+      "version": "Questa esecuzione è della versione {run}; l'editor tiene la versione {editor}.",
+      "loading": "Leggo l'esecuzione…",
+      "failed": "Non è stato possibile leggere l'esecuzione.",
+      "reading": "In lettura: {flow}, {node}",
+      "listFailed": "Non è stato possibile elencare le esecuzioni."
+    }
   },
   "scriptAssistant": {
     "title": "Assistente",

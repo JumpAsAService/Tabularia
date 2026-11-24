@@ -3,6 +3,7 @@
 // gateway's (api/bayes_models.go): a model is seen by whoever has VIEW on its folder AND
 // may use the `bayes` group; for anyone else it does not exist (404, one body for absent
 // and not seen). Saving a graph with an error is refused (422 with its findings).
+import type { BayesRunFacts, BayesRunListed } from '~/composables/bayesAssist'
 
 /** What the graph is, derived by the gateway at every save, never chosen by the person. */
 export type BayesFamily = 'hierarchical' | 'series' | 'glm' | 'free'
@@ -185,6 +186,10 @@ export function useBayesModels() {
     compile: (id: number, version: number) =>
       apiFetch<BayesCompile>(`/bayes-models/${id}/versions/${version}/compile`, { method: 'POST' }),
     uses: (id: number) => apiFetch<BayesUses>(`/bayes-models/${id}/uses`),
+    /** the Bayesian nodes of flows the person may open that pin the model, each with its latest sampling run */
+    runs: (id: number) => apiFetch<{ runs: BayesRunListed[], hidden: number }>(`/bayes-models/${id}/runs`),
+    /** one run's sampler facts and each node's extremes of R-hat and effective sample size (no summary row, no data) */
+    runFacts: (id: number, run: number) => apiFetch<BayesRunFacts>(`/bayes-models/${id}/runs/${run}/facts`),
     /** the graph's findings and its program, nothing saved */
     check: (graph: Record<string, any>) =>
       apiFetch<BayesCheck>('/bayes-models/check', { method: 'POST', body: { graph } }),

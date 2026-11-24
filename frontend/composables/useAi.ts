@@ -89,7 +89,7 @@ export function aiProviders(status: AiStatus | null | undefined): string[] {
 
 // an agent's instructions (Administration → AI): the text, editable by the administrators,
 // and the context Tabularia adds at every request, shown with example values
-export type AiAgent = 'assistant' | 'flow' | 'script' | 'title' | 'dbt_describe' | 'dbt_translate' | 'comment'
+export type AiAgent = 'assistant' | 'flow' | 'script' | 'bayes' | 'title' | 'dbt_describe' | 'dbt_translate' | 'comment'
 
 export interface AiPrompt {
   agent: AiAgent
@@ -195,7 +195,8 @@ export interface AiDone {
   // and every setting of a test or model step on the canvas the turn changed, from the canvas itself
   settings_changed?: FlowSettingChange[]
   // the script editor's assistant: the files it proposes (null when it proposed none), and
-  // that it did not get the error of the failed run (metadata-only mode)
+  // that it did not get the error of the failed run (metadata-only mode). The Bayesian model
+  // editor's assistant puts its proposal of changes here too; `bayesReadProposal` reads it.
   proposal?: ScriptProposal | null
   error_withheld?: boolean
   // the Assistant page's agent: the questions that ended the turn, the plan it proposed or changed
@@ -345,6 +346,9 @@ export function useAi() {
   /** One turn of the script editor's assistant: its proposal of files comes in `done`. */
   const scriptAssist = (body: ScriptAssistBody, handlers: AiChatHandlers, signal?: AbortSignal) =>
     stream('/ai/script-assist', body, handlers, signal)
+  /** One turn of the Bayesian model editor's assistant (`bayesAssistBody` builds the body): its proposal comes in `done.proposal`. */
+  const bayesAssist = (body: Record<string, unknown>, handlers: AiChatHandlers, signal?: AbortSignal) =>
+    stream('/ai/bayes-assist', body, handlers, signal)
 
   function dispatch(block: string, h: AiChatHandlers) {
     let event = 'message'
@@ -401,6 +405,7 @@ export function useAi() {
     chat,
     flowAssist,
     scriptAssist,
+    bayesAssist,
     /** The user's latest conversation with the flow editor's assistant about a flow, or null. */
     latestFlowChat: (flowId: number) => apiFetch<AiChatDetail | null>(`/ai/flow-chats/latest?flow_id=${flowId}`),
     chats,

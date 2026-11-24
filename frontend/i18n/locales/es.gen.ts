@@ -894,6 +894,10 @@ export default {
         "name": "Asistente de flujos",
         "purpose": "Construye y modifica pasos en el editor de flujos"
       },
+      "bayes": {
+        "name": "Asistente del modelo bayesiano",
+        "purpose": "Explica y propone cambios a un modelo bayesiano en su editor"
+      },
       "script": {
         "name": "Asistente de scripts",
         "purpose": "Escribe y corrige código Python o R en el editor de scripts"
@@ -5119,6 +5123,71 @@ export default {
     "noReports": "Ningún informe que puedas abrir: los informes se crean en una carpeta y necesitan VIEW sobre ella.",
     "addReport": "Añadir un informe",
     "removeCell": "Quitar la celda",
+  },
+  "bayesAssistant": {
+    "tab": "Asistente",
+    "title": "Asistente de este modelo",
+    "emptyBody": "Pregunta por el modelo del lienzo: qué es un nodo, qué dice un prior en números, qué significa un hallazgo. El asistente lee el grafo y propone cambios; tú los aplicas o no.",
+    "example1": "Explica el modelo nodo por nodo, para quien empieza con bayesiano",
+    "example1Selected": "Explica el nodo seleccionado y su prior",
+    "example2": "¿Qué dice cada prior, en números?",
+    "placeholder": "Pregunta por este modelo",
+    "inputLabel": "Mensaje al asistente",
+    "send": "Enviar",
+    "stop": "Parar",
+    "newConversation": "Nueva conversación",
+    "model": "Modelo",
+    "working": "Trabajando…",
+    "stopped": "Detenido.",
+    "noData": "Lo que va al modelo: el grafo, sus hallazgos y los números de los gráficos de los priors. Ninguna fila de datos.",
+    "noDataRun": "Lo que va al modelo: el grafo, sus hallazgos, los números de los gráficos de los priors y, de la ejecución elegida, los hechos del muestreador y los extremos de R-hat y del tamaño muestral efectivo. Ninguna fila de datos ni número a posteriori.",
+    "tooBig": "El grafo está por encima del tamaño que acepta el asistente ({limit} KiB): no se puede enviar.",
+    "readOnly": "Una versión que se mira no se cambia: el asistente la explica y no se aplica nada.",
+    "proposal": "Cambios propuestos",
+    "kind": {
+      "prior": "Prior",
+      "bounds": "Límites",
+      "form": "Forma"
+    },
+    "form": {
+      "centred": "centrada",
+      "non_centred": "no centrada"
+    },
+    "noBounds": "ninguno",
+    "apply": "Aplicar",
+    "applyAll": "Aplicar todos",
+    "discard": "Descartar",
+    "applied": "Aplicado como un solo cambio del editor. Deshacer: {keys}.",
+    "discarded": "Descartado.",
+    "outdated": "Hecho para un grafo anterior: no se aplica.",
+    "checking": "La pasarela está leyendo el grafo que resultaría…",
+    "checkFailed": "La pasarela no pudo leer el grafo que resultaría, así que no se ofrece «Aplicar».",
+    "checkRefused": "La pasarela rechaza el grafo que resultaría, así que no se ofrece «Aplicar».",
+    "checkFindings": "La pasarela lee el grafo con este cambio y encuentra:",
+    "checkClean": "La pasarela lee el grafo con este cambio y no añade ningún hallazgo.",
+    "sendFindings": "Devolver los hallazgos",
+    "findingsMessage": "La pasarela da estos hallazgos para el grafo que produce tu propuesta. Propónla de nuevo, por favor:\n{list}",
+    "place": {
+      "missing": "Este nodo o campo no está ahora en el grafo.",
+      "moved": "El grafo contiene aquí ahora algo distinto de lo que leyó el asistente: no se aplica.",
+      "same": "El grafo ya contiene esto."
+    },
+    "from": "de",
+    "to": "a",
+    "run": {
+      "label": "Leer una ejecución",
+      "none": "Ninguna ejecución",
+      "hint": "Elige un nodo de un flujo que usa este modelo: el asistente lee entonces los hechos del muestreador y, de cada nodo, los extremos de R-hat y del tamaño muestral efectivo. Nunca lee un número a posteriori.",
+      "empty": "Ningún flujo que puedas abrir usa todavía este modelo.",
+      "hidden": "{n} más en flujos que no puedes abrir.",
+      "never": "aún sin ejecutar",
+      "trial": "ejecución de desarrollo sobre una muestra",
+      "version": "Esta ejecución es de la versión {run}; el editor tiene la versión {editor}.",
+      "loading": "Leyendo la ejecución…",
+      "failed": "No se pudo leer la ejecución.",
+      "reading": "Leyendo: {flow}, {node}",
+      "listFailed": "No se pudieron listar las ejecuciones."
+    }
   },
   "scriptAssistant": {
     "title": "Asistente",

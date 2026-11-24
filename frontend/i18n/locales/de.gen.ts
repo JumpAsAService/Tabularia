@@ -894,6 +894,10 @@ export default {
         "name": "Flow-Assistent",
         "purpose": "Erstellt und ändert Schritte im Flow-Editor"
       },
+      "bayes": {
+        "name": "Assistent für Bayes-Modelle",
+        "purpose": "Erklärt ein Bayes-Modell im Editor und schlägt Änderungen vor"
+      },
       "script": {
         "name": "Skript-Assistent",
         "purpose": "Schreibt und korrigiert Python- oder R-Code im Skript-Editor"
@@ -5119,6 +5123,71 @@ export default {
     "noReports": "Kein Bericht, den Sie öffnen dürfen: Berichte entstehen in einem Ordner und brauchen VIEW darauf.",
     "addReport": "Bericht hinzufügen",
     "removeCell": "Zelle entfernen",
+  },
+  "bayesAssistant": {
+    "tab": "Assistent",
+    "title": "Assistent für dieses Modell",
+    "emptyBody": "Fragen Sie zum Modell auf der Zeichenfläche: was ein Knoten ist, was ein Prior in Zahlen sagt, was ein Befund bedeutet. Der Assistent liest den Graphen und schlägt Änderungen vor; Sie wenden sie an oder nicht.",
+    "example1": "Erkläre das Modell Knoten für Knoten, für jemanden, der Bayes nicht kennt",
+    "example1Selected": "Erkläre den gewählten Knoten und seinen Prior",
+    "example2": "Was sagt jeder Prior in Zahlen?",
+    "placeholder": "Fragen Sie zu diesem Modell",
+    "inputLabel": "Nachricht an den Assistenten",
+    "send": "Senden",
+    "stop": "Stopp",
+    "newConversation": "Neue Unterhaltung",
+    "model": "Modell",
+    "working": "Arbeitet…",
+    "stopped": "Angehalten.",
+    "noData": "Was an das Modell geht: der Graph, seine Befunde und die Zahlen der Prior-Diagramme. Keine Datenzeile.",
+    "noDataRun": "Was an das Modell geht: der Graph, seine Befunde, die Zahlen der Prior-Diagramme und, vom gewählten Lauf, die Fakten des Samplers und die Extremwerte von R-hat und effektiver Stichprobengröße. Keine Datenzeile und keine Posterior-Zahl.",
+    "tooBig": "Der Graph überschreitet, was der Assistent annimmt ({limit} KiB), und kann nicht gesendet werden.",
+    "readOnly": "Eine angesehene Version lässt sich nicht ändern: der Assistent erklärt sie, angewendet wird nichts.",
+    "proposal": "Vorgeschlagene Änderungen",
+    "kind": {
+      "prior": "Prior",
+      "bounds": "Grenzen",
+      "form": "Form"
+    },
+    "form": {
+      "centred": "zentriert",
+      "non_centred": "nicht zentriert"
+    },
+    "noBounds": "keine",
+    "apply": "Anwenden",
+    "applyAll": "Alle anwenden",
+    "discard": "Verwerfen",
+    "applied": "Als eine Änderung des Editors angewendet. Rückgängig: {keys}.",
+    "discarded": "Verworfen.",
+    "outdated": "Für einen früheren Graphen gemacht: nicht angewendet.",
+    "checking": "Das Gateway liest den Graphen, der daraus würde…",
+    "checkFailed": "Das Gateway konnte den Graphen, der daraus würde, nicht lesen; «Anwenden» wird daher nicht angeboten.",
+    "checkRefused": "Das Gateway weist den Graphen, der daraus würde, zurück; «Anwenden» wird daher nicht angeboten.",
+    "checkFindings": "Das Gateway liest den Graphen mit dieser Änderung und findet:",
+    "checkClean": "Das Gateway liest den Graphen mit dieser Änderung und fügt keinen Befund hinzu.",
+    "sendFindings": "Befunde zurücksenden",
+    "findingsMessage": "Das Gateway nennt diese Befunde für den Graphen, den Ihr Vorschlag ergibt. Bitte schlagen Sie ihn neu vor:\n{list}",
+    "place": {
+      "missing": "Dieser Knoten oder dieses Feld ist jetzt nicht im Graphen.",
+      "moved": "Der Graph enthält hier jetzt etwas anderes als das, was der Assistent gelesen hat: nicht angewendet.",
+      "same": "Der Graph enthält das schon."
+    },
+    "from": "von",
+    "to": "zu",
+    "run": {
+      "label": "Einen Lauf lesen",
+      "none": "Kein Lauf",
+      "hint": "Wählen Sie einen Knoten eines Flows, der dieses Modell nutzt: der Assistent liest dann die Fakten des Samplers und, je Knoten, die Extremwerte von R-hat und effektiver Stichprobengröße. Eine Posterior-Zahl liest er nie.",
+      "empty": "Noch kein Flow, den Sie öffnen können, nutzt dieses Modell.",
+      "hidden": "{n} weitere in Flows, die Sie nicht öffnen können.",
+      "never": "noch nicht gelaufen",
+      "trial": "Entwicklungslauf auf einer Stichprobe",
+      "version": "Dieser Lauf gehört zu Version {run}; der Editor hält Version {editor}.",
+      "loading": "Lauf wird gelesen…",
+      "failed": "Der Lauf konnte nicht gelesen werden.",
+      "reading": "Gelesen wird: {flow}, {node}",
+      "listFailed": "Die Läufe konnten nicht aufgelistet werden."
+    }
   },
   "scriptAssistant": {
     "title": "Assistent",

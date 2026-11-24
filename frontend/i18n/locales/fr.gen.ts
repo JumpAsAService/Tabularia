@@ -894,6 +894,10 @@ export default {
         "name": "Assistant des flux",
         "purpose": "Construit et modifie les étapes dans l'éditeur de flux"
       },
+      "bayes": {
+        "name": "Assistant du modèle bayésien",
+        "purpose": "Explique un modèle bayésien dans son éditeur et propose des changements"
+      },
       "script": {
         "name": "Assistant des scripts",
         "purpose": "Écrit et corrige le code Python ou R dans l'éditeur de scripts"
@@ -5119,6 +5123,71 @@ export default {
     "noReports": "Aucun rapport que vous pouvez ouvrir : les rapports se créent dans un dossier et demandent VIEW sur celui-ci.",
     "addReport": "Ajouter un rapport",
     "removeCell": "Retirer la cellule",
+  },
+  "bayesAssistant": {
+    "tab": "Assistant",
+    "title": "Assistant pour ce modèle",
+    "emptyBody": "Interrogez le modèle du canevas : ce qu'est un nœud, ce que dit un prior en chiffres, ce que signifie un constat. L'assistant lit le graphe et propose des changements ; vous les appliquez ou non.",
+    "example1": "Explique le modèle nœud par nœud, pour quelqu'un qui découvre le bayésien",
+    "example1Selected": "Explique le nœud sélectionné et son prior",
+    "example2": "Que dit chaque prior, en chiffres ?",
+    "placeholder": "Interrogez ce modèle",
+    "inputLabel": "Message à l'assistant",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "newConversation": "Nouvelle conversation",
+    "model": "Modèle",
+    "working": "Travail en cours…",
+    "stopped": "Arrêté.",
+    "noData": "Ce qui part vers le modèle : le graphe, ses constats et les chiffres des graphiques des priors. Aucune ligne de données.",
+    "noDataRun": "Ce qui part vers le modèle : le graphe, ses constats, les chiffres des graphiques des priors et, de l'exécution choisie, les faits de l'échantillonneur et les extrêmes de R-hat et de la taille d'échantillon effective. Aucune ligne de données ni chiffre a posteriori.",
+    "tooBig": "Le graphe dépasse ce que l'assistant accepte ({limit} KiB) : il ne peut pas être envoyé.",
+    "readOnly": "Une version consultée ne se modifie pas : l'assistant l'explique, et rien n'est appliqué.",
+    "proposal": "Changements proposés",
+    "kind": {
+      "prior": "Prior",
+      "bounds": "Bornes",
+      "form": "Forme"
+    },
+    "form": {
+      "centred": "centrée",
+      "non_centred": "non centrée"
+    },
+    "noBounds": "aucune",
+    "apply": "Appliquer",
+    "applyAll": "Tout appliquer",
+    "discard": "Écarter",
+    "applied": "Appliqué comme un seul changement de l'éditeur. Annuler : {keys}.",
+    "discarded": "Écarté.",
+    "outdated": "Fait pour un graphe antérieur : non appliqué.",
+    "checking": "La passerelle lit le graphe qui en résulterait…",
+    "checkFailed": "La passerelle n'a pas pu lire le graphe qui en résulterait : « Appliquer » n'est donc pas proposé.",
+    "checkRefused": "La passerelle refuse le graphe qui en résulterait : « Appliquer » n'est donc pas proposé.",
+    "checkFindings": "La passerelle lit le graphe avec ce changement et trouve :",
+    "checkClean": "La passerelle lit le graphe avec ce changement et n'ajoute aucun constat.",
+    "sendFindings": "Renvoyer les constats",
+    "findingsMessage": "La passerelle donne ces constats pour le graphe que produit votre proposition. Proposez-la de nouveau, s'il vous plaît :\n{list}",
+    "place": {
+      "missing": "Ce nœud ou ce champ n'est plus dans le graphe.",
+      "moved": "Le graphe contient ici autre chose que ce que l'assistant a lu : non appliqué.",
+      "same": "Le graphe contient déjà cela."
+    },
+    "from": "de",
+    "to": "à",
+    "run": {
+      "label": "Lire une exécution",
+      "none": "Aucune exécution",
+      "hint": "Choisissez un nœud d'un flux qui utilise ce modèle : l'assistant lit alors les faits de l'échantillonneur et, pour chaque nœud, les extrêmes de R-hat et de la taille d'échantillon effective. Il ne lit jamais un chiffre a posteriori.",
+      "empty": "Aucun flux que vous pouvez ouvrir n'utilise encore ce modèle.",
+      "hidden": "{n} de plus dans des flux que vous ne pouvez pas ouvrir.",
+      "never": "pas encore exécuté",
+      "trial": "exécution de développement sur un échantillon",
+      "version": "Cette exécution est de la version {run} ; l'éditeur tient la version {editor}.",
+      "loading": "Lecture de l'exécution…",
+      "failed": "L'exécution n'a pas pu être lue.",
+      "reading": "Lecture : {flow}, {node}",
+      "listFailed": "Les exécutions n'ont pas pu être listées."
+    }
   },
   "scriptAssistant": {
     "title": "Assistant",

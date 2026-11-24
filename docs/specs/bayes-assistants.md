@@ -386,3 +386,29 @@ schema has no such field and ids outside the shown graph are refused.
 - **Remedies on the assistant's own initiative** only for facts: divergences above zero, tree depth reached, the E-BFMI as the number
   measured (never against a threshold). For R-hat and effective sample sizes it says what they measure and where they are largest, and
   proposes a remedy only if the person asks, never saying a value is high or low. The prompt does not name the forbidden words; the test does.
+
+**Lot A3 (the tab, 2026-11-24).** `components/bayes/BayesAssistant.vue` (the tab of the editor's side panel, after Problems; it appears only
+when the installation's AI is configured with a model, the person is not an observer and the editor is not a template's preview; mounted when
+first opened and kept while the tabs change), `composables/bayesAssist.ts` (pure), `useAi.bayesAssist`, the keys `bayesAssistant.*` and
+`aiPrompts.agents.bayes` in five languages (the admin panel's row of the new agent had no name), `tests/bayes-assistant.test.mjs`.
+- **The body** is `bayesAssistBody`: the graph without its layout (measured in UTF-8 bytes against `max_graph_bytes` before sending), the
+  findings with their words in the person's language, the selection, the preview (the quantiles the prior chart shows, drawn by the chart's own
+  worker, for the selected node only and at most 12 quantities), the version the editor holds and whether the graph is saved.
+- **A proposal is read, placed and applied** by node id and slot name as the gateway sends them (`prior.sigma`, `terms[0].coef`,
+  `<node>.<component>` with `mean`/`scale`, `<node>.correlation` with `eta`; the older `coef:<i>` and `arg:<p>` are read too). A prior's
+  `prior_distribution` and `prior_args` are one **unit**. Each unit is `ok`, `missing` (node or slot gone), `moved` (the graph no longer holds
+  the «before» the assistant read: never overwritten) or `same`. Applying writes through the editor's own edit functions and **never adds or
+  deletes a node**; it is one `editor.edit` step, so Ctrl+Z / ⌘Z takes the whole proposal back (a version looked at takes no edit).
+- **The check comes first**: the whole proposal, and each unit when there are several, is sent as a graph to `POST /bayes-models/check`; the
+  findings the proposed graph adds to those the canvas already has are shown with it; a new error (or a check that could not be made) leaves
+  «Apply» disabled; a warning does not. A change of the graph under a pending proposal asks again after 500 ms. «Send the findings back» puts
+  them in the next message; a new message marks the earlier proposal as made for an earlier graph.
+- **Words**: no verdict word in any language (a test scans the tab's words); «gateway» is said as the app's own languages say it.
+- **Panel**: six tabs do not fit 420 px; with the assistant's tab present, a panel under 540 px shows the name of the chosen tab only (the
+  others keep it as tooltip and for a screen reader).
+
+**Lot A4, the editor's half (2026-11-24).** «Read a run» is a disclosure at the top of the tab, only for a saved model: the entries of
+`GET /bayes-models/{id}/runs` as a group of radio buttons (the node never run is listed and disabled, a development run says so, the flows the
+person cannot open are counted); choosing one reads `.../runs/{run}/facts` and sends `run` = `{version, sampler, nodes}` with the numbers only;
+a run of another version than the editor's says so. Browser (Chrome and Firefox, dark and light, 1440 and 1280 px, routes intercepted with
+invented answers, no AI call): see the lot's handoff.

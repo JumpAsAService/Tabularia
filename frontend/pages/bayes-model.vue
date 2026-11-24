@@ -21,13 +21,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, type LocationQuery } from 'vue-router'
 import {
-  ArrowLeft, CircleAlert, Code, Eye, FolderClosed, History, Info, LayoutTemplate, LoaderCircle, Redo2, RotateCcw, Save, SlidersHorizontal, TriangleAlert, Undo2,
+  ArrowLeft, CircleAlert, Code, Eye, FolderClosed, History, Info, LayoutTemplate, LoaderCircle, Redo2, RotateCcw, Save, SlidersHorizontal, Sparkles, TriangleAlert, Undo2,
 } from 'lucide-vue-next'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import GridKeys from '~/components/ui/GridKeys.vue'
 import Modal from '~/components/ui/Modal.vue'
 import Select from '~/components/ui/Select.vue'
 import BayesCanvas from '~/components/bayes/BayesCanvas.vue'
+import BayesAssistant from '~/components/bayes/BayesAssistant.vue'
 import BayesCodePanel from '~/components/bayes/BayesCodePanel.vue'
 import BayesGlossary from '~/components/bayes/BayesGlossary.vue'
 import BayesInspector from '~/components/bayes/BayesInspector.vue'
@@ -39,6 +40,7 @@ import BayesVersions from '~/components/bayes/BayesVersions.vue'
 import { bayesKeyAction, bayesKeyScope } from '~/composables/bayesEditorKeys'
 import { bayesStanKey, bayesStanView } from '~/composables/bayesStanCode'
 import { bayesStanProgramOf, createBayesStanProgram, type BayesStanProgram } from '~/composables/bayesStanProgram'
+import { useAi, type AiStatus } from '~/composables/useAi'
 import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { useToast } from '~/composables/useToast'
 import { useFormat } from '~/composables/useFormat'
@@ -549,20 +551,20 @@ function redo () { editor.redo() }
 
 // ---------------------------------------------------------------- the panel
 
-type PanelTab = 'inspector' | 'code' | 'problems' | 'versions' | 'glossary'
+type PanelTab = 'inspector' | 'code' | 'assistant' | 'problems' | 'versions' | 'glossary'
 const tab = ref<PanelTab>('inspector')
 const errorCount = computed(() => findings.value.filter(f => f.severity === 'error').length)
 const problemCount = computed(() => findings.value.length)
 watch(() => mode.value, (m) => {
   if (m !== 'model' && tab.value === 'versions') tab.value = 'inspector'
-  if (m === 'preview' && tab.value === 'code') tab.value = 'inspector'
+  if (m === 'preview' && (tab.value === 'code' || tab.value === 'assistant')) tab.value = 'inspector'
 })
 watch(tab, (v) => { if (v === 'versions' && !versions.value.length) loadVersions() })
 /** A node selected on the canvas opens its inspector. */
 function selectFromCanvas (id: string | null) {
   selected.value = id
-  // on the Stan code tab a node chosen finds its rows and its lines there
-  if (id && tab.value !== 'code') tab.value = 'inspector'
+  // on the Stan code tab a node chosen finds its rows and its lines there; on the assistant's tab it is the node asked about
+  if (id && tab.value !== 'code' && tab.value !== 'assistant') tab.value = 'inspector'
 }
 /** «Show in the graph»: the node selected and brought into sight; the list stays open. */
 function showInGraph (id: string) {
@@ -573,6 +575,22 @@ function toProblems () {
   tab.value = 'problems'
   nextTick(() => document.getElementById('bt-problems')?.focus())
 }
+
+// ---------------------------------------------------------------- the assistant (docs/specs/bayes-assistants.md)
+
+// the tab appears where the installation has an assistant and the person may use it, as the other editors' do
+const { user } = useAuth()
+const aiStatus = ref<AiStatus | null>(null)
+onMounted(async () => {
+  try { aiStatus.value = await useAi().status() } catch { /* no assistant: the panel stays as it was */ }
+})
+const aiAvailable = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !user.value?.is_observer && mode.value !== 'preview')
+// mounted the first time it is opened (its notice asks then) and kept, so the conversation stays while the tabs change
+const assistantOpened = ref(false)
+watch(tab, (v) => { if (v === 'assistant') assistantOpened.value = true })
+watch(aiAvailable, (on) => { if (!on && tab.value === 'assistant') tab.value = 'inspector' })
+/** A proposal of the assistant: one change of the editor, as a typed one is (one Undo step). */
+function applyAssistant (fn: (d: BayesDoc) => void) { editor.edit((d) => { fn(d) }, true) }
 
 const selectedKind = computed(() => (selected.value ? nodeOf(selected.value)?.kind : undefined))
 // the panel opens at 600 px for a node with a chart, where the canvas keeps 560 px (a window of 1400 px or more)
@@ -828,19 +846,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             @mousedown="startPanelResize"
             @keydown="panelKeys"
           />
-          <div v-roving.main class="tabs" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
-            <button id="bt-inspector" type="button" role="tab" class="tab" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
-              <SlidersHorizontal :size="13" aria-hidden="true" />{{ t('bayes.editor.inspector.title') }}
+          <div v-roving.main class="tabs" :class="{ many: aiAvailable }" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
+            <button id="bt-inspector" type="button" role="tab" class="tab" :title="t('bayes.editor.inspector.title')" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
+              <SlidersHorizontal :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.inspector.title') }}</span>
             </button>
- <button v-if="mode !== 'preview'" id="bt-code" type="button" role="tab" class="tab" :aria-selected="tab === 'code'" aria-controls="bp-code" @click="tab = 'code'">
-              <Code :size="13" aria-hidden="true" />{{ t('bayes.editor.stan.tab') }}
+ <button v-if="mode !== 'preview'" id="bt-code" type="button" role="tab" class="tab" :title="t('bayes.editor.stan.tab')" :aria-selected="tab === 'code'" aria-controls="bp-code" @click="tab = 'code'">
+              <Code :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.stan.tab') }}</span>
             </button>
-            <button id="bt-problems" type="button" role="tab" class="tab" :aria-selected="tab === 'problems'" aria-controls="bp-problems" @click="tab = 'problems'">
-              <TriangleAlert :size="13" aria-hidden="true" />{{ t('bayes.editor.problems.title') }}
+            <button id="bt-problems" type="button" role="tab" class="tab" :title="t('bayes.editor.problems.title')" :aria-selected="tab === 'problems'" aria-controls="bp-problems" @click="tab = 'problems'">
+              <TriangleAlert :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.problems.title') }}</span>
               <span v-if="problemCount" class="cnt" :class="{ e: errorCount > 0 }" :aria-label="t('bayes.editor.problems.count', { n: problemCount })">{{ problemCount }}</span>
             </button>
-            <button v-if="mode === 'model'" id="bt-versions" type="button" role="tab" class="tab" :aria-selected="tab === 'versions'" aria-controls="bp-versions" @click="tab = 'versions'">
-              <History :size="13" aria-hidden="true" />{{ t('bayes.editor.versions.title') }}
+ <button v-if="aiAvailable" id="bt-assistant" type="button" role="tab" class="tab" :title="t('bayesAssistant.tab')" :aria-selected="tab === 'assistant'" aria-controls="bp-assistant" @click="tab = 'assistant'">
+              <Sparkles :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayesAssistant.tab') }}</span>
+            </button>
+            <button v-if="mode === 'model'" id="bt-versions" type="button" role="tab" class="tab" :title="t('bayes.editor.versions.title')" :aria-selected="tab === 'versions'" aria-controls="bp-versions" @click="tab = 'versions'">
+              <History :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.versions.title') }}</span>
             </button>
             <button
               id="bt-glossary"
@@ -856,7 +877,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
               <Info :size="14" aria-hidden="true" />
             </button>
           </div>
-          <div v-if="tab === 'problems'" id="bp-problems" class="sbody" role="tabpanel" aria-labelledby="bt-problems">
+          <div v-if="aiAvailable && aiStatus && assistantOpened" v-show="tab === 'assistant'" id="bp-assistant" class="sbody assist" role="tabpanel" aria-labelledby="bt-assistant">
+            <BayesAssistant
+              :status="aiStatus"
+              :doc="doc"
+              :findings="findings"
+              :selected="selected"
+              :plan="plan"
+              :model-id="mode === 'model' ? modelId : null"
+              :version="shownVersion"
+              :saved="!graphDirty"
+              :read-only="readonly"
+              :undo-keys="undoKeys"
+              :client="api"
+              @apply="applyAssistant"
+            />
+          </div>
+          <template v-if="tab === 'assistant'" />
+          <div v-else-if="tab === 'problems'" id="bp-problems" class="sbody" role="tabpanel" aria-labelledby="bt-problems">
             <p v-if="notSaved > 0" class="refused" role="status">
               <CircleAlert :size="14" aria-hidden="true" />
               <span>{{ t(notSaved === 1 ? 'bayes.editor.store.refusedOne' : 'bayes.editor.store.refusedMany', { n: notSaved }) }} {{ t('bayes.editor.store.refusedWhy') }}</span>
@@ -1065,7 +1103,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .tab {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted);
   border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: none;
-  transition: color var(--dur-1), background var(--dur-1), border-color var(--dur-1); white-space: nowrap;
+  transition: color var(--dur-1), background var(--dur-1), border-color var(--dur-1); white-space: nowrap; position: relative; position: relative;
 }
 .tab[aria-selected="true"] { color: var(--text); border-color: var(--border); border-bottom-color: var(--accent); background: var(--tint-accent); }
 @media (hover: hover) and (pointer: fine) { .tab:not([aria-selected="true"]):hover { color: var(--text); } }
@@ -1076,7 +1114,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 }
 .tab .cnt.e { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
 .tab.gl { margin-left: auto; padding: 5px 8px; }
+/* with the assistant's tab there are six: in a narrow panel only the chosen one says its name (the others keep it for a screen reader and as a tooltip) */
+.tabs { container: bayes-tabs / inline-size; }
+@container bayes-tabs (max-width: 540px) {
+  .tabs.many .tab:not([aria-selected="true"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 /* the panel's body is the container the inspector's two columns read (600 px: beside; less: under) */
+.sbody.assist { overflow: hidden; display: flex; flex-direction: column; padding-top: 10px; }
 .sbody { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; container: bayes-panel / inline-size; }
 .ins { border: 0; margin: 0; padding: 0; min-width: 0; }
 .refused {
