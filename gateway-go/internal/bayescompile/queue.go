@@ -114,7 +114,9 @@ func NextToStart(rows []Row, slots int) []Row {
 		switch r.State {
 		case StateRunning:
 			free--
-			busy[r.RequestedBy] = true
+			if r.RequestedBy != 0 {
+				busy[r.RequestedBy] = true
+			}
 		case StateQueued:
 			queued = append(queued, r)
 		}
@@ -133,10 +135,12 @@ func NextToStart(rows []Row, slots int) []Row {
 		if free == 0 {
 			break
 		}
-		if busy[r.RequestedBy] {
+		if r.RequestedBy != 0 && busy[r.RequestedBy] {
 			continue
 		}
-		busy[r.RequestedBy] = true
+		if r.RequestedBy != 0 {
+			busy[r.RequestedBy] = true
+		}
 		out = append(out, r)
 		free--
 	}

@@ -211,9 +211,26 @@ func TestNextToStart(t *testing.T) {
 	if got := NextToStart([]Row{old, x}, 0); len(got) != 0 {
 		t.Fatalf("no places: %v", ids(got))
 	}
-	// rows with no person count as one person
+	// rows with no person are persons of their own (see TestNextToStartNoPersonIsAPersonOfItsOwn)
 	n1, n2 := queuedRow(11, 0, 1, 1, at(1)), queuedRow(12, 0, 2, 1, at(2))
-	if got := ids(NextToStart([]Row{n1, n2}, 2)); !reflect.DeepEqual(got, []int64{11}) {
+	if got := ids(NextToStart([]Row{n1, n2}, 2)); !reflect.DeepEqual(got, []int64{11, 12}) {
 		t.Fatalf("no person: %v", got)
+	}
+}
+
+// A row with no person (requested_by NULL: the person was deleted) is a person of its own: two of them
+// run side by side, and neither holds back a person's compile.
+func TestNextToStartNoPersonIsAPersonOfItsOwn(t *testing.T) {
+	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+	n1, n2 := queuedRow(1, 0, 10, 1, at(1)), queuedRow(2, 0, 11, 1, at(2))
+	p := queuedRow(3, 5, 12, 1, at(3))
+	if got := ids(NextToStart([]Row{p, n2, n1}, 3)); !reflect.DeepEqual(got, []int64{1, 2, 3}) {
+		t.Fatalf("queued with no person: %v", got)
+	}
+	// one with no person running holds no one back: not another with no person, not a person
+	run := queuedRow(4, 0, 13, 1, at(0))
+	run.State = StateRunning
+	if got := ids(NextToStart([]Row{run, n1, p}, 3)); !reflect.DeepEqual(got, []int64{1, 3}) {
+		t.Fatalf("one with no person running: %v", got)
 	}
 }

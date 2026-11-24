@@ -147,7 +147,8 @@ lock of its own, asked once):
 - for each `running` row: follow its Job («Finishing a compile»);
 - free places = «Compiles at once» − rows `running`;
 - take the `queued` rows in `queued_at` order, **skipping a person who has a row `running`** (the owner's rule), until the
-  places are used; each: the group still usable (enabled and ready: `ReadyModelGroupImage`), the image still the
+  places are used (a row with `requested_by` NULL, the person deleted, is a person of its own: it neither waits for
+  another such row nor holds one back, only «Compiles at once» bounds it); each: the group still usable (enabled and ready: `ReadyModelGroupImage`), the image still the
   key's (a rebuild meanwhile makes the row `none`), the program read **from `bayes_model_versions` by its sha256** (the
   store spec: never from the request), the Job created, the row `running` with `job_name` and `started_at`.
 
