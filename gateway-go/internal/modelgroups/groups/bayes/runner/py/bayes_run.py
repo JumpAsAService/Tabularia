@@ -27,8 +27,13 @@ THE ORDER, and the owner's rule that nothing large is ever held («never everyth
 A refusal or a fault before step 7 leaves nothing at any address (bayes_main deletes `/tmp/run`); a failure during the copies is not a
 refusal (exit 1: the gateway deletes the step's files by key).
 
-Not here yet: the posterior checks' and the replicated `generate_quantities` runs (lot R2), the prior predictive mode (R3), the
-original scale (R4). `begin` refuses them as not built, before anything is fetched.
+After the second pass, when the program holds the predictive checks (lot R2, bayes_gq): the posterior checks' `generate_quantities` run on
+`ppc_draws` thinned draws (its checks file, then the `ppc` rows and the overlaid densities) and, with the output `replicated`, the replicated
+run on the thinned draws the node asked for. The thinned draw lines are written while the chains are followed (`on_line`); a run that would
+pass the time left is `too_slow` for the whole step, before any partial result.
+
+Not here yet: the prior predictive mode (R3), the original scale (R4). `begin` refuses the prior predictive as not built, before anything is
+fetched.
 """
 from __future__ import annotations
 
@@ -47,6 +52,7 @@ import bayes_checks
 import bayes_draws
 import bayes_facts
 import bayes_follow
+import bayes_gq
 import bayes_main
 import bayes_pass2
 import bayes_rows
@@ -61,6 +67,8 @@ from tab_protocol import ENV_ARTIFACTS, ENV_OUTPUT, ENV_RESULTS, PROTOCOL, Refus
 CSV_BYTES_A_VALUE = 10.3
 PARQUET_BYTES_A_VALUE = 7.75
 PASS2_SECONDS_A_VALUE = 0.93e-6
+# a `generate_quantities` draw against a sampling draw (lot P0: 0.08 of the run at 100,000 rows)
+GQ_SHARE = 0.08
 CONVERT_SECONDS_A_VALUE = 0.35e-6
 # Assumed until lot R6 measures them on the image: the copy's rate to the bucket, a CSV file's comments (the configuration, the adaptation's
 # step size and the mass matrix's diagonal, the elapsed times), and the summary's and the results' bytes.
@@ -82,10 +90,6 @@ def begin(task: Task) -> tuple[Any, str]:
     plan = bayes_checks.plan(task)
     if task.mode == "prior_predictive":
         raise not_built("the prior predictive check")
-    if task.output == "replicated":
-        raise not_built("the replicated output")
-    if plan.has_extension and plan.on:
-        raise not_built("the posterior predictive checks' run")
     return plan, "sample"
 
 
@@ -210,9 +214,14 @@ class Watch:
         rows = self.job.block_rows
         return self.chains * rows * self.columns * CONVERT_SECONDS_A_VALUE
 
+    def draw_seconds(self) -> float | None:
+        """The seconds a draw of the slowest chain takes, from the progress lines so far (sampling when seen, else warm-up); None before."""
+        rates = [r for c in self.chain_clock.values() if (r := c.rate("sampling") or c.rate("warmup")) is not None]
+        return max(rates) if rates else None
+
     def check_time(self) -> None:
         left = self.clock.left()
-        later = self.job.later_seconds()
+        later = self.job.later_seconds(self.draw_seconds())
         ahead = self.sampling_seconds() + self.tail_seconds() + later
         if left <= 0 or ahead > left:
             self.job.too_slow(self.clock.elapsed() + ahead)
@@ -236,7 +245,20 @@ class Watch:
         parquet = c * d * (len(layout.draws) + len(layout.marginals)) * PARQUET_BYTES_A_VALUE
         summary = layout.n_quantities * SUMMARY_BYTES_A_QUANTITY
         results = self.job.task.limit("max_result_rows") * RESULT_BYTES_A_ROW + self.job.task.limit("max_card_bytes")
-        return self.used + csv + parquet + summary + results
+        return self.used + csv + parquet + summary + results + self.gq_bytes()
+
+    def gq_bytes(self) -> float:
+        """The `generate_quantities` runs' files: their data file (a copy of the sampling one's head), the thinned lines of the draws, and each
+        run's output CSV and parquet (their generated columns × 10.3 × 2)."""
+        runs = self.job.gq_runs
+        if not runs:
+            return 0.0
+        per_line = (sum(self.csv_draw_bytes.values()) / len(self.csv_draw_bytes)) if self.csv_draw_bytes else self.columns * CSV_BYTES_A_VALUE
+        total = float(self.job.facts.data_bytes)
+        for g in runs:
+            lines = self.chains * g.per_chain
+            total += lines * per_line + lines * g.layout.n_columns * CSV_BYTES_A_VALUE * 2
+        return total
 
     def check_disk(self) -> None:
         most = self.job.task.limit("tmp_bytes")
@@ -250,6 +272,37 @@ class Watch:
         if info.block == 1 and info.chain_draws:
             self.csv_draw_bytes[info.chain] = info.chain_draw_bytes / info.chain_draws
             self.check_disk()
+
+
+class GqWatch:
+    """The time of a `generate_quantities` run, checked before it starts, at every idle tick and after every block. The run's chains write one
+    after the other, so the draws read so far over the time since its start give its own rate (the first estimate, before any draw, is the
+    sampling draw's seconds × the measured share); what is still to come after it (`after`: the later runs, the checks' second pass, the
+    copies) is added. A projection past the time left is `too_slow` for the whole step, before any partial result."""
+
+    def __init__(self, job: "SampleJob", run: bayes_gq.GqRun, after: float) -> None:
+        self.job, self.after = job, after
+        self.t0 = self.at = job.clock.now()
+        self.total = job.chains * run.per_chain
+        self.rest = job.gq_seconds(run, job.draw_seconds)
+        self.draws: dict[int, int] = {}
+        self.check()
+
+    def check(self) -> None:
+        job = self.job
+        remaining = max(0.0, self.rest - (job.clock.now() - self.at))
+        left = job.clock.left()
+        if left <= 0 or remaining + self.after > left:
+            job.too_slow(job.clock.elapsed() + remaining + self.after)
+
+    def on_block(self, info: bayes_follow.BlockInfo) -> None:
+        self.draws[info.chain] = info.chain_draws
+        done = sum(self.draws.values())
+        now = self.job.clock.now()
+        if done:
+            self.rest = max(0.0, (now - self.t0) / done * (self.total - done))
+            self.at = now
+        self.check()
 
 
 # ── the prior's draws ─────────────────────────────────────────────────────────
@@ -331,6 +384,8 @@ class SampleJob:
         self.chains, self.draws = int(s["chains"]), int(s["draws"])
         self.block_rows = bayes_follow.block_rows(task.limit("block_values"), self.layout.n_columns)
         self.seconds: dict[str, float] = {}
+        self.gq_runs: list[bayes_gq.GqRun] = []
+        self.draw_seconds = 0.0      # a sampling draw of the slowest chain, once the sampling run has ended
 
     # the stages after sampling, as projected before they start
     def pass2_seconds(self) -> float:
@@ -342,11 +397,25 @@ class SampleJob:
             out += self.chains * self.draws * len(self.layout.draws) * PARQUET_BYTES_A_VALUE
         elif self.task.write_output and self.task.output == "summary":
             out += self.layout.n_quantities * SUMMARY_BYTES_A_QUANTITY
+        elif self.task.write_output and self.task.output == "replicated":
+            out += sum(self.chains * g.per_chain * g.layout.replicated_rows * PARQUET_BYTES_A_VALUE for g in self.gq_runs
+                       if g.name == bayes_gq.REPLICATED)
         out += self.task.limit("max_result_rows") * RESULT_BYTES_A_ROW
         return out / COPY_BYTES_A_SECOND
 
-    def later_seconds(self) -> float:
-        return self.pass2_seconds() + self.copy_seconds()
+    def gq_seconds(self, run: "bayes_gq.GqRun", per_draw: float | None) -> float:
+        """A `generate_quantities` run: its draws × a sampling draw's seconds × the measured share (a chain after the other), then what its
+        rows take (the checks' second pass reads their file twice)."""
+        draws = self.chains * run.per_chain
+        seconds = draws * (per_draw or 0.0) * GQ_SHARE
+        if run.name == bayes_gq.CHECKS:
+            seconds += 2 * draws * len(run.layout.checks) * PASS2_SECONDS_A_VALUE
+        return seconds
+
+    def later_seconds(self, per_draw: float | None = None) -> float:
+        """The stages after sampling: the second pass, the `generate_quantities` runs (at `per_draw` seconds a sampling draw, once known) and
+        the copies."""
+        return self.pass2_seconds() + sum(self.gq_seconds(g, per_draw) for g in self.gq_runs) + self.copy_seconds()
 
     def too_slow(self, projected: float) -> None:
         s = self.task.sampler or {}
@@ -355,6 +424,49 @@ class SampleJob:
                                   f"iterations; the node's timeout is {_minutes(budget)} minutes: fewer draws, or a longer timeout",
                       {"projected_seconds": int(projected), "time_budget_seconds": int(budget)})
 
+    def _info(self) -> dict[str, Any]:
+        s = self.task.sampler or {}
+        return {"program_sha256": self.task.model.get("program_sha256"), "semantic_hash": self.task.model.get("semantic_hash"),
+                "seed": s.get("seed"), "sampler": {k: s.get(k) for k in ("chains", "warmup", "draws", "adapt_delta", "max_treedepth")}}
+
+    def _generate(self, g: bayes_gq.GqRun, thin: bayes_gq.ThinnedLines, writer: Any, after: float) -> None:
+        """One `generate_quantities` run into `writer` (a sink opened with the run's block): its data file, CmdStan on the thinned draws,
+        its time watched; the run's files go once it has ended."""
+        task, work = self.task, self.workdir
+        data = work / g.data_name
+        bayes_gq.write_data_file(work / "data.json", int(self.facts.extension_offset), g.entries, g.values, data)
+        watch = GqWatch(self, g, after)
+        bayes_gq.generate(self.prepared.binary_path, task.sampler, g, work, data, task.limit("block_values"), writer,
+                          on_idle=watch.check, on_block=watch.on_block)
+        writer.close()
+        bayes_gq.remove_files(work, g, self.chains)
+        thin.remove(g.fitted_stem)
+
+    def run_checks(self, g: bayes_gq.GqRun, thin: bayes_gq.ThinnedLines, w: Any, after: float) -> None:
+        """The posterior checks' run, followed into `checks.parquet` (the check columns alone: a draw the program failed on is NaN there and is
+        counted and dropped by the second pass, which writes the note `note_checks_dropped`), then the `ppc` rows and the overlaid densities (bayes_ppc)."""
+        t0 = time.monotonic()
+        layout, work = g.layout, self.workdir
+        block = bayes_follow.block_rows(self.task.limit("block_values"), layout.n_columns)
+        path = work / "checks.parquet"
+        writer = bayes_draws.DrawsWriter(path, layout.checks, layout.check_columns, self.chains, g.per_chain, block, self._info(),
+                                         n_unchecked=len(layout.checks), kind="checks")
+        after += 2 * self.chains * g.per_chain * len(layout.checks) * PASS2_SECONDS_A_VALUE
+        self._generate(g, thin, writer, after)
+        self.prepared.checks.rows(str(path), w, "ppc", self.clock.left() - self.copy_seconds())
+        path.unlink(missing_ok=True)
+        self.seconds["checks"] = time.monotonic() - t0
+
+    def run_replicated(self, g: bayes_gq.GqRun, thin: bayes_gq.ThinnedLines, after: float) -> None:
+        """The replicated run, followed into `replicated.parquet`: chain, draw (the thinned draw's number), row, outcome, value."""
+        t0 = time.monotonic()
+        layout = g.layout
+        block = bayes_follow.block_rows(self.task.limit("block_values"), layout.n_columns)
+        writer = bayes_draws.ReplicatedWriter(self.workdir / "replicated.parquet", layout.replicated_rows, self.chains, g.per_chain, block,
+                                              self._info(), outcomes=layout.replicated)
+        self._generate(g, thin, writer, after)
+        self.seconds["replicated"] = time.monotonic() - t0
+
     def run(self) -> int:
         t_job = time.monotonic()
         task, layout, work = self.task, self.layout, self.workdir
@@ -362,11 +474,13 @@ class SampleJob:
         if not results_to:
             raise Refusal("task_value", f"{ENV_RESULTS} is empty: the Job was not made by Tabularia", {"what": ENV_RESULTS})
         output_to = os.environ.get(ENV_OUTPUT, "")
-        writes_output = task.write_output and task.output in ("summary", "draws")
+        writes_output = task.write_output and task.output in ("summary", "draws", "replicated")
         if writes_output and not output_to:
             raise Refusal("task_value", f"{ENV_OUTPUT} is empty: the Job was not made by Tabularia", {"what": ENV_OUTPUT})
 
-        # 1. the projections before CmdStan starts
+        # 1. the projections before CmdStan starts; the runs of `generate_quantities` are planned first (a refusal of their data costs no sampling)
+        checks_plan = getattr(self.prepared, "checks", None)
+        self.gq_runs = bayes_gq.plan_runs(task, checks_plan, self.facts) if checks_plan is not None else []
         watch = Watch(self)
         watch.used = tree_bytes(work)
         watch.check_disk()
@@ -374,8 +488,7 @@ class SampleJob:
 
         # 2. the sampling run, followed into its sinks
         s = task.sampler or {}
-        info = {"program_sha256": task.model.get("program_sha256"), "semantic_hash": task.model.get("semantic_hash"),
-                "seed": s.get("seed"), "sampler": {k: s.get(k) for k in ("chains", "warmup", "draws", "adapt_delta", "max_treedepth")}}
+        info = self._info()
         draws_path, prior_path = work / "draws.parquet", work / "prior.parquet"
         draws_w = bayes_draws.DrawsWriter(draws_path, layout.draws, layout.draw_columns, self.chains, self.draws, self.block_rows, info,
                                           n_unchecked=layout.n_sampler)
@@ -389,11 +502,19 @@ class SampleJob:
             sinks.append(prior_w)
         acc = bayes_facts.FactsAccumulator(layout.header, self.chains, s.get("max_treedepth"))
         sinks.append(acc)
+        hooks: dict[str, Any] = {}
+        thin = None
+        if self.gq_runs:
+            thin = bayes_gq.ThinnedLines(work, layout.header, self.chains, self.draws, bayes_gq.thinned_wanted(self.gq_runs))
+            sinks.append(thin)
+            hooks["on_line"] = thin.on_line
         chain_facts = bayes_follow.sample(self.prepared.binary_path, s, task.algorithm, layout.header, task.limit("block_values"), work,
                                           self.prepared.data_path, self.threads, *sinks, check_header=layout.check_header,
-                                          on_progress=watch.on_progress, on_idle=watch.on_idle, on_block=watch.on_block)
+                                          on_progress=watch.on_progress, on_idle=watch.on_idle, on_block=watch.on_block, **hooks)
         t_followed = time.monotonic()
         draws_w.close()
+        if thin is not None:
+            thin.close()
         if prior_w is not None:
             prior_w.close()
         # 3. CmdStan has exited and every file was read to its end: the CSVs go before the second pass
@@ -403,14 +524,16 @@ class SampleJob:
         samp = [c.seconds_sampling for c in chain_facts if c.seconds_sampling is not None]
         self.seconds["warmup"] = max(warm) if warm else 0.0
         self.seconds["sampling"] = max(samp) if samp else 0.0
+        self.draw_seconds = self.seconds["sampling"] / self.draws
         # the conversion's tail: from the sampler's last progress line to the last block written and the files closed (the rest of the
         # conversion ran while the chains sampled)
         self.seconds["conversion"] = max(0.0, time.monotonic() - (watch.last_line if watch.last_line is not None else t_followed))
 
         # 4. the time before the second pass
         left = self.clock.left()
-        if left <= 0 or self.later_seconds() > left:
-            self.too_slow(self.clock.elapsed() + self.later_seconds())
+        later = self.later_seconds(self.draw_seconds)
+        if left <= 0 or later > left:
+            self.too_slow(self.clock.elapsed() + later)
 
         # 5. the second pass, with the prior's draws
         decl, shapes = bayes_main.results_declaration(task)
@@ -429,10 +552,17 @@ class SampleJob:
             if prior_w is not None:
                 prior_path.unlink(missing_ok=True)
 
+            # 5b. the `generate_quantities` runs on the thinned draws: the checks' (and their rows), then the replicated data
+            for k, g in enumerate(self.gq_runs):
+                after = sum(self.gq_seconds(h, self.draw_seconds) for h in self.gq_runs[k + 1:]) + self.copy_seconds()
+                if g.name == bayes_gq.CHECKS:
+                    self.run_checks(g, thin, w, after)
+                else:
+                    self.run_replicated(g, thin, after)
+
             # 6. the rows that remain, the card, run.json
             bayes_rows.model_section(w, task, self.facts, layout, self.threads, self.seconds)
-            plan = getattr(self.prepared, "checks", None)
-            if plan is None or not plan.has_extension:
+            if checks_plan is None or not checks_plan.has_extension:
                 w.note("no_checks", NO_CHECKS_NOTE)
             bayes_rows.data_section(w, task, self.facts)
             sampler_facts = acc.facts({c.chain: c.step_size for c in chain_facts})
@@ -465,7 +595,8 @@ class SampleJob:
         # 7. the copies, only now
         bayes_draws.copy_in_chunks(results_path, results_to)
         if writes_output:
-            bayes_draws.copy_in_chunks(summary_path if task.output == "summary" else draws_path, output_to)
+            source = {"summary": summary_path, "draws": draws_path, "replicated": work / "replicated.parquet"}[task.output]
+            bayes_draws.copy_in_chunks(source, output_to)
         if os.environ.get(ENV_ARTIFACTS, ""):
             for name in ("model.json", "MLmodel", "run.json"):
                 if (artifacts / name).exists():

@@ -1697,7 +1697,7 @@ _BAYES_MODEL_TEXTS = ["model", "variant", "rows_from", "group_version", "softwar
                       "program_sha256", "binary_sha256", "sampler", "metric", "precision", "note_*"]
 _BAYES_MODEL_NUMBERS = ["n", "n_missing", "n_not_finite", "chains", "warmup", "draws", "seed", "adapt_delta", "max_treedepth",
                         "threads", "n_quantities", "n_in_summary", "seconds_data", "seconds_warmup", "seconds_sampling",
-                        "seconds_conversion", "seconds_pass_2"]
+                        "seconds_conversion", "seconds_pass_2", "seconds_checks", "seconds_replicated"]
 _BAYES_QUANTITY = {"levels": None, "numbers": ["n_quantities", "rhat_max", "ess_bulk_min", "ess_tail_min"],
                    "texts": ["label", "name", "node_id", "kind", "plate", "plate_label"]}
 _BAYES_SUMMARY_NUMBERS = ["mean", "sd", "q5", "q25", "q50", "q75", "q95"]
@@ -1711,7 +1711,7 @@ _BAYES_READING = {"levels": None, "numbers": [], "texts": ["line_*"]}
 _BAYES_SUMMARY_COLUMNS = ["quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", "mean", "sd", "q5", "q25", "q50",
                           "q75", "q95", "mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail", "contraction"]
 _BAYES_DRAWS_COLUMNS = ["chain", "draw", "quantity", "node", "unit", "index", "index_2", "value"]
-_BAYES_REPLICATED_COLUMNS = ["chain", "draw", "row", "value"]
+_BAYES_REPLICATED_COLUMNS = ["chain", "draw", "row", "outcome", "value"]
 
 MODELS["bayes_model"] = {
     "group": "bayes",
@@ -1880,7 +1880,7 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
                     "contraction")}},
     "draws": {"chain": "Int32", "draw": "Int32", "quantity": "String", "node": "String", "unit": "String", "index": "Int32",
               "index_2": "Int32", "value": "Float64"},
-    "replicated": {"chain": "Int32", "draw": "Int32", "row": "Int32", "value": "Float64"},
+    "replicated": {"chain": "Int32", "draw": "Int32", "row": "Int32", "outcome": "String", "value": "Float64"},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type

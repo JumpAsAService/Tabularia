@@ -434,23 +434,13 @@ class TestRefusals(RunCase):
 
 
 class TestWhatLaterLotsBuild(RunCase):
-    def test_refused_before_the_binary_is_fetched(self):
-        cases = []
-        raw = golden_task("glm_linear")
-        raw["bayes"]["checks"]["on"] = True
-        cases.append((raw, "posterior predictive"))
-        raw = v1_task()
-        raw["output"] = raw["params"]["output"] = "replicated"
-        raw["bayes"]["replicated"] = {"draws_per_chain": 5}
-        cases.append((raw, "replicated"))
+    def test_the_prior_predictive_is_refused_before_the_binary_is_fetched(self):
         raw = json.loads((GO_TESTDATA / "tasks" / "prior_predictive.json").read_text(encoding="utf-8"))
-        cases.append((raw, "prior predictive"))
-        for raw, what in cases:
-            with mock.patch.object(bayes_main.bayes_binary, "fetch_binary") as fetch, self.assertRaises(Refusal) as e:
-                bayes_main.run_task(bayes_task.parse_task(raw), HERE, self.work)
-            self.assertEqual(e.exception.code, "not_built")
-            self.assertIn(what, e.exception.message)
-            fetch.assert_not_called()
+        with mock.patch.object(bayes_main.bayes_binary, "fetch_binary") as fetch, self.assertRaises(Refusal) as e:
+            bayes_main.run_task(bayes_task.parse_task(raw), HERE, self.work)
+        self.assertEqual(e.exception.code, "not_built")
+        self.assertIn("prior predictive", e.exception.message)
+        fetch.assert_not_called()
 
 
 # ── the projections, alone ────────────────────────────────────────────────────
@@ -464,7 +454,7 @@ class FakeJob:
         self.block_rows = 1
         self.later = later
 
-    def later_seconds(self):
+    def later_seconds(self, per_draw=None):
         return self.later
 
     def too_slow(self, projected):

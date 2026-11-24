@@ -510,10 +510,18 @@ def _number_text(x: Any) -> str:
 
 
 def cmdstan_args(binary: str | Path, sampler: dict[str, Any], algorithm: str, data: str | Path, out: str | Path, threads: int,
-                 init: str | Path | None = None) -> list[str]:
+                 init: str | Path | None = None, fitted: str | Path | None = None) -> list[str]:
     """The fixed argument list of a sampling run («The CSV files»): every value a number this function formats, no text of a
-    person. `algorithm` is `nuts` or `fixed_param` (the prior predictive: no adaptation, no tree); `init` is the path of init.json
-    when the initial values are an object, else the radius comes from `sampler["init"]` (null: CmdStan's default)."""
+    person. `algorithm` is `nuts` or `fixed_param` (the prior predictive: no adaptation, no tree) or `generate_quantities` (a run on
+    the thinned draws of `fitted`, which CmdStan opens as `<stem>_<c>.csv` for each of the `num_chains` chains, one after the other, and
+    which takes neither an init nor the threads of the sampler: one thread); `init` is the path of init.json when the initial values are
+    an object, else the radius comes from `sampler["init"]` (null: CmdStan's default)."""
+    if algorithm == "generate_quantities":
+        if fitted is None:
+            raise ValueError("generate_quantities needs the fitted draws")
+        return [str(binary), "method=generate_quantities", f"fitted_params={fitted}", f"num_chains={_number_text(int(sampler['chains']))}",
+                "data", f"file={data}", "random", f"seed={_number_text(int(sampler['seed']))}", "output", f"file={out}",
+                f"refresh={_number_text(int(sampler['refresh']))}", "num_threads=1"]
     args = [str(binary), "method=sample", f"num_samples={_number_text(int(sampler['draws']))}"]
     if algorithm == "fixed_param":
         args += ["num_warmup=0", "save_warmup=0", "algorithm=fixed_param"]

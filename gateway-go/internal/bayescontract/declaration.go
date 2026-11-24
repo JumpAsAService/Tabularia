@@ -54,12 +54,14 @@ var SummaryColumns = []Column{
 	{Name: "contraction", Type: "Float64", Nullable: true},
 }
 
-// ReplicatedColumns are the replicated output's columns: y_rep for a thinned set of draws, `row` the kept row (1…N, in the
-// input's order).
+// ReplicatedColumns are the replicated output's columns: y_rep for a thinned set of draws, `draw` the thinned draw's number in its
+// chain, `row` the kept row (1…N, in the input's order), `outcome` the observed data's Stan identifier (Correction of 2026-11-24 from
+// the step-5 specs).
 var ReplicatedColumns = []Column{
 	{Name: "chain", Type: "Int32"},
 	{Name: "draw", Type: "Int32"},
 	{Name: "row", Type: "Int32"},
+	{Name: "outcome", Type: "String", Dictionary: true},
 	{Name: "value", Type: "Float64"},
 }
 
@@ -140,7 +142,7 @@ var (
 		"semantic_hash", "program_sha256", "binary_sha256", "sampler", "metric", "precision", "note_*"}
 	modelNumbers = []string{"n", "n_missing", "n_not_finite", "chains", "warmup", "draws", "seed", "adapt_delta",
 		"max_treedepth", "threads", "n_quantities", "n_in_summary", "seconds_data", "seconds_warmup", "seconds_sampling",
-		"seconds_conversion", "seconds_pass_2"}
+		"seconds_conversion", "seconds_pass_2", "seconds_checks", "seconds_replicated"}
 	quantitySection = Section{Numbers: []string{"n_quantities", "rhat_max", "ess_bulk_min", "ess_tail_min"},
 		Texts: []string{"label", "name", "node_id", "kind", "plate", "plate_label"}}
 	summaryNumbers = []string{"mean", "sd", "q5", "q25", "q50", "q75", "q95", "mcse_mean", "mcse_sd", "rhat", "ess_bulk",

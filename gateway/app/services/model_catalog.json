@@ -1248,6 +1248,7 @@
       "chain": "Int32",
       "draw": "Int32",
       "row": "Int32",
+      "outcome": "String",
       "value": "Float64"
     }
   },
@@ -11132,7 +11133,9 @@
                 "seconds_warmup",
                 "seconds_sampling",
                 "seconds_conversion",
-                "seconds_pass_2"
+                "seconds_pass_2",
+                "seconds_checks",
+                "seconds_replicated"
               ],
               "texts": [
                 "model",
@@ -11306,6 +11309,7 @@
               "chain",
               "draw",
               "row",
+              "outcome",
               "value"
             ]
           }
@@ -11335,7 +11339,9 @@
                 "seconds_warmup",
                 "seconds_sampling",
                 "seconds_conversion",
-                "seconds_pass_2"
+                "seconds_pass_2",
+                "seconds_checks",
+                "seconds_replicated"
               ],
               "texts": [
                 "model",

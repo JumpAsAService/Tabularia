@@ -26,6 +26,16 @@ The spec (JSON), every key optional but `out`, `chains`, `draws`:
     malformed    {"chain", "draw"}: that draw line loses its last field
     extra        {"chain"}: that chain writes one draw more than asked
 
+`method=generate_quantities fitted_params=<stem>.csv num_chains=C` (lot R2: what lot P0 measured on CmdStan 2.40.0) reads `fitted_<c>.csv`
+(`<stem>.csv` with one chain: the follower's thinned draws, a header and one line a draw, comments allowed) and writes `<output stem>_<c>.csv`
+with the generated quantities alone, a row a fitted line, chains one after the other. The binary's own spec gives what a real binary knows:
+
+    gq           {<output stem>: {"header": [the generated columns], "echo": a fitted column (default lp__), "nan_rows": [[chain, row], …],
+                 "special": [[chain, row, column, "inf"|"nan"|"-inf"], …]}}: the value of the j-th generated column of a row is the echoed
+                 column's value of the fitted line plus j (so a test sees which fitted line a row came from), written with «%.8g»; a row in
+                 `nan_rows` is NaN in every column (a draw whose generator threw)
+    gq_require   fitted columns the file must hold (a missing parameter is refused, exit 1: «Mismatch between model and fitted_parameters csv»)
+
 The values are drawn from numpy's generator seeded by (seed, chain) and written with 8 significant digits («%.8g», CmdStan's
 default `sig_figs = 8`): the files' bytes depend on the spec's draws, never on its speeds or cuts.
 """
@@ -265,6 +275,62 @@ def main(spec_path: str) -> int:
     return 0
 
 
+def gq_text(spec: dict, chain: int, fitted: Path, gq: dict) -> Iterator[str]:
+    """The pieces of one chain's generate_quantities file: configuration, header, a row a fitted line, the elapsed times."""
+    names: list[str] = []
+    lines: list[list[str]] = []
+    for raw in fitted.read_text().splitlines():
+        if raw.startswith("#") or not raw.strip():
+            continue
+        if not names:
+            names = raw.split(",")
+        else:
+            lines.append(raw.split(","))
+    missing = [n for n in spec.get("gq_require", []) if n not in names]
+    if missing:
+        sys.stderr.write(f"Mismatch between model and fitted_parameters csv file {fitted}: {missing[0]}\n")
+        sys.stderr.flush()
+        raise SystemExit(1)
+    echo = names.index(gq.get("echo", "lp__"))
+    columns = list(gq["header"])
+    nan_rows = {(int(c), int(r)) for c, r in gq.get("nan_rows", [])}
+    special = {(int(c), int(r), int(k)): v for c, r, k, v in gq.get("special", [])}
+    yield "".join(f"# {line}\n" for line in ("stan_version_major = 2", "method = generate quantities", f"  fitted_params = {fitted}"))
+    yield ",".join(columns) + "\n"
+    for i, fields in enumerate(lines, start=1):
+        if (chain, i) in nan_rows:
+            row = ["nan"] * len(columns)
+        else:
+            base = float(fields[echo])
+            row = [fmt(base + j) for j in range(len(columns))]
+            for j in range(len(columns)):
+                if (chain, i, j + 1) in special:
+                    row[j] = special[(chain, i, j + 1)]
+        yield ",".join(row) + "\n"
+    yield f"# \n#  Elapsed Time: {0.01 * chain:.3g} seconds (Total)\n"
+
+
+def main_gq(spec_path: str) -> int:
+    spec = json.loads(Path(spec_path).read_text())
+    chains = int(spec["chains"])
+    out = sys.stdout
+    out.write("method = generate_quantities\n")
+    out.flush()
+    stem = Path(spec["out"]).stem
+    gq = spec["gq"][stem]
+    tick = float(spec.get("tick", 0.001))
+    fitted = csv_paths(spec["fitted"], chains)
+    paths = csv_paths(spec["out"], chains)
+    for c in range(1, chains + 1):
+        with open(paths[c - 1], "w") as f:
+            for piece in gq_text(spec, c, fitted[c - 1], gq):
+                f.write(piece)
+                f.flush()
+                if tick:
+                    time.sleep(tick)
+    return 0
+
+
 def cmdstan_spec(spec_path: str, args: list[str]) -> str:
     """The spec of a run from CmdStan's argument list and the binary's own spec file; written beside the output, its path returned."""
     spec = json.loads(Path(spec_path).read_text())
@@ -274,7 +340,13 @@ def cmdstan_spec(spec_path: str, args: list[str]) -> str:
             section = arg
             continue
         key, value = arg.split("=", 1)
-        if key == "num_samples":
+        if key == "method":
+            spec["method"] = value
+        elif key == "fitted_params":
+            spec["fitted"] = value
+        elif key == "num_threads":
+            spec["num_threads"] = int(value)
+        elif key == "num_samples":
             spec["draws"] = int(value)
         elif key == "num_warmup":
             spec["warmup"] = int(value)
@@ -291,12 +363,16 @@ def cmdstan_spec(spec_path: str, args: list[str]) -> str:
         elif key == "file" and section == "output":
             spec["out"] = value
     spec.setdefault("chains", 1)
-    path = Path(spec["out"]).with_name("fake_spec.json")
+    if spec.get("method") == "generate_quantities" and spec.get("num_threads") != 1:
+        sys.stderr.write("the fake wants num_threads=1 for generate_quantities\n")
+        raise SystemExit(2)
+    path = Path(spec["out"]).with_name("fake_spec.json" if spec.get("method") != "generate_quantities" else "fake_gq_spec.json")
     path.write_text(json.dumps(spec))
     return str(path)
 
 
 if __name__ == "__main__":
     if sys.argv[1] == "--cmdstan":
-        sys.exit(main(cmdstan_spec(sys.argv[2], sys.argv[3:])))
+        written = cmdstan_spec(sys.argv[2], sys.argv[3:])
+        sys.exit(main_gq(written) if written.endswith("fake_gq_spec.json") else main(written))
     sys.exit(main(sys.argv[1]))

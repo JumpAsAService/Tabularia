@@ -19,7 +19,7 @@ draw) when a quantity of the program holds a value that is not finite; the sampl
 facts and are not checked; the program's internal columns are never in `meta`, hence never checked. The writer holds one block at a
 time (the arrays of the row group being built) and a few numbers a row group (the footer's list): its memory does not grow with the
 draws. The checks file is a DrawsWriter with the checks' meta and columns and n_unchecked = 0; the replicated data are a
-ReplicatedWriter (chain, draw, row, value), called the same way with a block shaped (count, rows).
+ReplicatedWriter (chain, draw, row, outcome, value), called the same way with a block shaped (count, rows) or, with `outcomes`, the CSV's own block.
 
 The columns, as `bayescontract`'s declaration has them: chain (Int32), draw (Int32), quantity (dictionary of String), node, unit (the
 same, nullable), index, index_2 (Int32, nullable), value (Float64); within a row group the rows are quantity-major (all the block's
@@ -52,7 +52,8 @@ DRAWS_SCHEMA = pa.schema([
     pa.field("index", pa.int32()), pa.field("index_2", pa.int32()), pa.field("value", pa.float64(), nullable=False)])
 REPLICATED_SCHEMA = pa.schema([
     pa.field("chain", pa.int32(), nullable=False), pa.field("draw", pa.int32(), nullable=False),
-    pa.field("row", pa.int32(), nullable=False), pa.field("value", pa.float64(), nullable=False)])
+    pa.field("row", pa.int32(), nullable=False), pa.field("outcome", _DICT, nullable=False),
+    pa.field("value", pa.float64(), nullable=False)])
 
 
 def block_schedule(chains: int, draws: int, block_draws: int) -> Iterator[tuple[int, int, int]]:
@@ -206,31 +207,49 @@ class DrawsWriter(_BlockWriter):
 
 
 class ReplicatedWriter(_BlockWriter):
-    """The replicated data (y_rep): chain, draw, row (1…rows, the kept rows in the input's order), value; a block is (count, rows)."""
+    """The replicated data (y_rep): chain, draw, row (1…rows, the kept rows in the input's order), outcome (the observed data's Stan
+    identifier, dictionary-encoded), value. `rows` is the rows a draw holds in all. Without `outcomes` a block is (count, rows) of one
+    outcome named `y`; with `outcomes` (a list of (identifier, the CSV's columns of that outcome's rows)) a block is the generate_quantities
+    CSV's own block, and the writer takes each outcome's columns from it. A row group holds the block's outcomes one after the other, each
+    draw by draw (the draw's rows in order): the draw number is the thinned draw's number in its chain (1…its draws)."""
     kind = "replicated"
     schema = REPLICATED_SCHEMA
 
-    def __init__(self, path: str | Path, rows: int, chains: int, draws: int, block_draws: int, info: dict[str, Any] | None = None) -> None:
+    def __init__(self, path: str | Path, rows: int, chains: int, draws: int, block_draws: int, info: dict[str, Any] | None = None,
+                 outcomes: Sequence[tuple[str, np.ndarray]] | None = None) -> None:
         if rows < 1 or block_draws * rows > MAX_ROW_GROUP:
             raise ValueError("a block of draws of every row would pass a row group")
         self.rows = rows
-        super().__init__(path, chains, draws, block_draws, {**(info or {}), "rows": rows})
+        self.outcomes = [(name, np.asarray(cols, dtype=np.int64)) for name, cols in outcomes] if outcomes is not None else None
+        if self.outcomes is not None and sum(len(c) for _, c in self.outcomes) != rows:
+            raise ValueError("the outcomes' columns are not the rows a draw holds")
+        names = [n for n, _ in self.outcomes] if self.outcomes is not None else ["y"]
+        self._names, self._codes, _ = _dictionary(names)
+        super().__init__(path, chains, draws, block_draws, {**(info or {}), "rows": rows, "outcomes": names})
 
     def write_block(self, chain: int, first_draw: int, block: np.ndarray) -> None:
         count = int(block.shape[0])
         self._expect(chain, first_draw, count)
-        if block.shape[1] != self.rows:
+        parts = self.outcomes if self.outcomes is not None else [("y", np.arange(self.rows))]
+        if self.outcomes is None and block.shape[1] != self.rows:
             raise ValueError(f"a block has {self.rows} columns, not {block.shape[1]}")
-        if not np.isfinite(block).all():
-            draw = first_draw + int(np.argmax(~np.isfinite(block).all(axis=1)))
-            raise Refusal("not_finite", f"the replicated data of draw {draw} of chain {chain} are not finite numbers",
-                          {"quantity": "replicated", "chain": chain, "draw": draw})
+        taken = [block[:, cols] for _, cols in parts] if self.outcomes is not None else [block]
+        for values in taken:
+            if not np.isfinite(values).all():
+                draw = first_draw + int(np.argmax((~np.isfinite(values)).any(axis=1)))
+                raise Refusal("not_finite", f"the replicated data of draw {draw} of chain {chain} are not finite numbers",
+                              {"quantity": "replicated", "chain": chain, "draw": draw})
         n = count * self.rows
+        draw = np.concatenate([np.repeat(np.arange(first_draw, first_draw + count, dtype=np.int32), v.shape[1]) for v in taken])
+        row = np.concatenate([np.tile(np.arange(1, v.shape[1] + 1, dtype=np.int32), count) for v in taken])
+        outcome = np.concatenate([np.full(count * v.shape[1], k, dtype=np.int32) for k, v in enumerate(taken)])
+        value = np.concatenate([np.ascontiguousarray(v, dtype=np.float64).reshape(-1) for v in taken])
         table = pa.table({
             "chain": pa.array(np.full(n, chain, dtype=np.int32)),
-            "draw": pa.array(np.repeat(np.arange(first_draw, first_draw + count, dtype=np.int32), self.rows)),
-            "row": pa.array(np.tile(np.arange(1, self.rows + 1, dtype=np.int32), count)),
-            "value": pa.array(np.ascontiguousarray(block, dtype=np.float64).reshape(-1)),
+            "draw": pa.array(draw),
+            "row": pa.array(row),
+            "outcome": pa.DictionaryArray.from_arrays(pa.array(outcome, pa.int32()), self._names),
+            "value": pa.array(value),
         }, schema=self.schema)
         self._append(table, chain, first_draw, count)
 

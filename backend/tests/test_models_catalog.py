@@ -798,7 +798,7 @@ def test_the_bayesian_model_node_and_its_two_variants():
     with pytest.raises(EngineError, match="'output' only applies when mode = sample"):
         catalog.check_params("bayes_model", {"mode": "prior_predictive", "output": "draws"})
     # what the node hands on: the output's columns, or the ten of the results (the prior predictive's default included)
-    assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "sample", "output": "replicated"})[0]] == ["chain", "draw", "row", "value"]
+    assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "sample", "output": "replicated"})[0]] == ["chain", "draw", "row", "outcome", "value"]
     assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "prior_predictive"})[0]] == [n for n, _, _ in OUTPUT_COLUMNS]
     assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "sample", "output": "results"})[0]] == [n for n, _, _ in OUTPUT_COLUMNS]
     # every limit of the group starts with «bayes_» (the view of the catalogue the other groups get leaves those out)

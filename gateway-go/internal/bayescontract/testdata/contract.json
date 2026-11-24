@@ -159,6 +159,12 @@
         "nullable": false
       },
       {
+        "name": "outcome",
+        "type": "String",
+        "nullable": false,
+        "dictionary": true
+      },
+      {
         "name": "value",
         "type": "Float64",
         "nullable": false
@@ -591,7 +597,9 @@
           "seconds_warmup",
           "seconds_sampling",
           "seconds_conversion",
-          "seconds_pass_2"
+          "seconds_pass_2",
+          "seconds_checks",
+          "seconds_replicated"
         ],
         "texts": [
           "model",
@@ -710,7 +718,9 @@
           "seconds_warmup",
           "seconds_sampling",
           "seconds_conversion",
-          "seconds_pass_2"
+          "seconds_pass_2",
+          "seconds_checks",
+          "seconds_replicated"
         ],
         "texts": [
           "model",
