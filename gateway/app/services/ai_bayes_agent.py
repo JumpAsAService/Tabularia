@@ -125,21 +125,29 @@ def _prior(p: Any) -> tuple[str, dict[str, Any]]:
 
 
 def slots(node: dict[str, Any]) -> dict[str, Any]:
-    """The expressions of a node by slot name: what a change of the field `expression` may name."""
+    """The expressions of a node by slot name, the names of the Go validator's `SlotKey` (bayesgraph/slots.go):
+    what a change of the field `expression` may name. A component of correlated effects is a node of its own,
+    `<node>.<component>`, and the correlation `<node>.correlation`."""
     kind = node.get("kind")
+    if kind == "parameter":
+        _, args = _prior(node.get("prior"))
+        return {f"prior.{k}": v for k, v in args.items()}
     if kind == "transformed":
         return {"value": node.get("value")}
     if kind == "linear_predictor":
         out = {"intercept": node.get("intercept")}
         for i, t in enumerate(node.get("terms") or []):
-            out[f"coef:{i}"] = (t or {}).get("coef") if isinstance(t, dict) else None
+            out[f"terms[{i}].coef"] = (t or {}).get("coef") if isinstance(t, dict) else None
         return out
     if kind == "likelihood":
-        return {f"arg:{k}": v for k, v in (node.get("args") or {}).items()}
+        return {f"args.{k}": v for k, v in (node.get("args") or {}).items()}
     if kind == "state":
-        return {"scale": node.get("scale")}
+        _, args = _prior(node.get("init"))
+        return {**{f"init.{k}": v for k, v in args.items()}, "scale": node.get("scale")}
     if kind == "component":
         return {"mean": node.get("mean"), "scale": node.get("scale")}
+    if kind == "correlation":
+        return {"eta": node.get("eta")}
     return {}
 
 
@@ -158,6 +166,10 @@ def _lines(g: dict[str, Any]) -> tuple[list[str], dict[str, dict[str, Any]], lis
             bits += [f"form={q(p.get('form') or 'non_centred', 20)}", f"key={q(p.get('key'), 100)}"]
             if p.get("parent"):
                 bits.append(f"parent={q(p.get('parent'), 100)}")
+        if isinstance(p.get("series"), dict):
+            bits.append("series=(" + ", ".join(f"{q(k, 30)}: {q(v, 40)}" for k, v in list(p["series"].items())[:8]) + ")")
+        if p.get("note"):
+            bits.append(f"note={q(p.get('note'), 200)}")
         out.append("- " + " ".join(bits))
     out.append("Nodes:")
     for n in shown_nodes:
@@ -184,17 +196,38 @@ def _lines(g: dict[str, Any]) -> tuple[list[str], dict[str, dict[str, Any]], lis
                 bits.append(f"bounds=[{num(b.get('lower'))}, {num(b.get('upper'))}]")
         elif kind == "likelihood":
             bits += [f"observed={q(n.get('observed'), 100)}", f"dist={q(n.get('dist'), 40)}"]
-        for slot, value in slots(n).items():
-            bits.append(f"{slot}={_expr(value)}")
+        if kind == "data" and n.get("support"):
+            bits.append(f"support={q(n.get('support'), 30)}")
+        if kind == "linear_predictor":
+            bits.append(f"intercept={_expr(n.get('intercept'))}")
+            for i, t in enumerate(n.get("terms") or []):
+                t = t if isinstance(t, dict) else {}
+                d = index.get(str(t.get("data"))) or next((x for x in nodes if str(x.get("id")) == str(t.get("data"))), {})
+                bits.append(f"terms[{i}]=(data={q(t.get('data'), 100)} standardized={'yes' if d.get('standardize') else 'no'} "
+                            f"coef={_expr(t.get('coef'))})")
+        elif kind in ("transformed",):
+            bits.append(f"value={_expr(n.get('value'))}")
+        elif kind == "state":
+            bits.append(f"scale={_expr(n.get('scale'))}")
+        elif kind == "likelihood":
+            bits.append("args=(" + ", ".join(f"{q(k, 40)}: {_expr(v)}" for k, v in (n.get("args") or {}).items()) + ")")
+        if n.get("note"):
+            bits.append(f"note={q(n.get('note'), 200)}")
         out.append("- " + " ".join(bits))
         if kind == "correlated_effects":
             for c in n.get("components") or []:
                 if not isinstance(c, dict):
                     continue
-                cid = str(c.get("id"))
+                cid = f"{nid}.{c.get('id')}"  # the key of the Go validator's slots: no two components collide
                 index[cid] = {**c, "kind": "component", "of": nid}
-                out.append(f"  - component id={q(cid, 100)} name={q(c.get('name'), 60)} label={q(c.get('label'))} " +
+                out.append(f"  - component id={q(cid, 140)} name={q(c.get('name'), 60)} label={q(c.get('label'))} " +
                            " ".join(f"{s}={_expr(v)}" for s, v in slots(index[cid]).items()))
+            corr = n.get("correlation")
+            if isinstance(corr, dict):
+                cid = f"{nid}.correlation"
+                index[cid] = {"id": cid, "kind": "correlation", "eta": corr.get("eta"), "of": nid}
+                out.append(f"  - correlation id={q(cid, 140)} name={q(corr.get('name'), 60)} label={q(corr.get('label'))} "
+                           f"eta={_expr(corr.get('eta'))}")
     notes = []
     if len(nodes) > len(shown_nodes):
         notes.append(f"The model is shown up to node {len(shown_nodes)} of {len(nodes)}: the others are not shown and cannot be changed.")
@@ -254,19 +287,30 @@ class Change(BaseModel):
     why: str = Field(max_length=400)
 
 
-def _facts(run: dict[str, Any], editor_version: Optional[int]) -> str:
+def _int(v: Any) -> Optional[int]:
+    return v if isinstance(v, int) and not isinstance(v, bool) and abs(v) < 10**9 else None
+
+
+def _facts(run: dict[str, Any], index: dict[str, dict[str, Any]]) -> str:
+    """The run's facts, as data: the sampler's and the extremes of the nodes that exist in the graph (a
+    quantity of a level, `a_g[Milano]`, is not a node: it is dropped)."""
     sampler = run.get("sampler") if isinstance(run.get("sampler"), dict) else {}
-    lines = []
-    version = run.get("version")
-    if isinstance(version, int) and isinstance(editor_version, int) and version != editor_version:
-        lines.append(f"This run is of version {version}; the editor holds version {editor_version}: say so.")
-    elif isinstance(version, int):
-        lines.append(f"This run is of version {version}.")
-    lines.append("Sampler: " + ", ".join(f"{k}={num(sampler.get(k))}" for k in SAMPLER_FACTS if k in sampler))
+    lines = ["Sampler: " + ", ".join(f"{k}={num(sampler.get(k))}" for k in SAMPLER_FACTS if k in sampler)]
     for n in (run.get("nodes") or [])[:MAX_RUN_NODES]:
-        if isinstance(n, dict):
-            lines.append(f"- node {q(n.get('node'), 100)}: " + ", ".join(f"{k}={num(n.get(k))}" for k in NODE_EXTREMES))
+        if isinstance(n, dict) and isinstance(n.get("node"), str) and n["node"] in index \
+                and not str(index[n["node"]].get("kind")).startswith("plate:"):
+            lines.append(f"- node {q(n['node'], 100)}: " + ", ".join(f"{k}={num(n.get(k))}" for k in NODE_EXTREMES))
     return "\n".join(lines)
+
+
+def _version_line(run: dict[str, Any], editor_version: Optional[int]) -> str:
+    """Said outside the markers: only integers, validated here."""
+    version, editor = _int(run.get("version")), _int(editor_version)
+    if version is None:
+        return ""
+    if editor is not None and version != editor:
+        return f" This run is of version {version}; the editor holds version {editor}: say so."
+    return f" This run is of version {version}."
 
 
 def context(d: BayesDeps) -> str:
@@ -295,10 +339,10 @@ def context(d: BayesDeps) -> str:
          + marked(d.data_tag, "\n".join(lines + notes))),
     ]
     if d.selected:
-        parts.append(f"- The person selected: {q(d.selected, 100)} (a name between quotes is data).")
+        parts.append("- The person selected:\n" + marked(d.data_tag, f"- {q(d.selected, 100)}"))
     if d.findings:
-        shown = [f"- {q(f.get('code'), 40)} ({q(f.get('severity'), 12)}) at {q(f.get('node') or f.get('path') or '', 100)}: "
-                 f"{q(f.get('message'), 200)}" for f in d.findings[:MAX_FINDINGS] if isinstance(f, dict)]
+        shown = [f"- {q(f.get('code'), 40)} ({q(f.get('severity'), 12)}) at {q(f.get('node') or f.get('path') or '', 100)}"
+                 f"{' slot ' + q(f.get('slot'), 100) if f.get('slot') else ''}: {q(f.get('message'), 200)}" for f in d.findings[:MAX_FINDINGS] if isinstance(f, dict)]
         parts.append("- The findings of the check:\n" + marked(d.data_tag, "\n".join(shown)))
     if d.preview:
         pv = []
@@ -310,8 +354,8 @@ def context(d: BayesDeps) -> str:
     if d.run:
         parts.append("- A run the person chose to read (facts of the sampler and the largest R-hat and the smallest effective "
                      "sample sizes of each node, nothing else: no posterior number, no data). The report's diagnostics page "
-                     "says what each measure measures and quotes what the literature says about it:\n"
-                     + marked(d.data_tag, _facts(d.run, d.editor_version)))
+                     "says what each measure measures and quotes what the literature says about it." + _version_line(d.run, d.editor_version)
+                     + "\n" + marked(d.data_tag, _facts(d.run, d.index)))
     if d.history_withheld:
         parts.append(f"- {ai_agent.HISTORY_WITHHELD_CONTEXT}")
     parts.append(ai_prompts.language_line(d.locale))
@@ -375,48 +419,53 @@ def _before(node: dict[str, Any], c: Change, slot: str) -> Any:
 async def propose_changes(ctx: RunContext[BayesDeps], summary: str, changes: list[Change]) -> str:
     """Propose changes of the graph: the distribution or arguments of an existing node's prior, an
     existing node's expression, a bound, the form of a plate. Never add or delete a node. The person
-    applies the proposal or not; nothing is saved or run. Call it once, with every change."""
+    applies the proposal or not; nothing is saved or run. Call it once, with every change. A change of
+    `prior_distribution` always comes with a `prior_args` change of the same node, giving the arguments
+    of the new distribution. An `expression` names its `slot` as the graph shows it: `value`, `intercept`,
+    `terms[0].coef`, `args.mu`, `prior.sigma`, `init.mu`, `scale`; a component of correlated effects is a
+    node of its own (`<node>.<component>`: `mean`, `scale`), its correlation `<node>.correlation` (`eta`)."""
     d = ctx.deps
     if not d.index:
         d.index = _lines(d.graph)[1]
     if not changes or len(changes) > MAX_CHANGES:
         raise ModelRetry(f"propose between 1 and {MAX_CHANGES} changes")
     dists = distributions()
-    shown = [i for i in d.index][:40]
+    shown = ", ".join(q(i, 100) for i in list(d.index)[:40])
     out: list[dict[str, Any]] = []
     new_dist: dict[str, str] = {}
     new_args: dict[str, dict[str, str]] = {}
+    seen: set[tuple[str, str, str]] = set()
     for c in changes:
         node = d.index.get(c.node)
         if node is None:
-            raise ModelRetry(f"«{c.node}» is not a node or plate of the graph (ids: {', '.join(shown)}); you cannot add a node")
+            raise ModelRetry(f"{q(c.node, 100)} is not a node or plate of the graph (ids: {shown}); you cannot add a node")
         kind = str(node.get("kind"))
         slot = c.slot.strip()
         value: Any = c.value
         if c.field in ("prior_distribution", "prior_args"):
             if kind not in ("parameter", "state"):
-                raise ModelRetry(f"«{c.node}» is a {kind}: only a parameter has a prior (a latent state, its initial one)")
+                raise ModelRetry(f"{q(c.node, 100)} is a {q(kind, 30)}: only a parameter has a prior (a latent state, its initial one)")
             if c.field == "prior_distribution":
                 if not isinstance(value, str) or value not in dists or "prior" not in dists[value]["uses"]:
                     allowed = ", ".join(i for i, x in dists.items() if "prior" in x["uses"])
-                    raise ModelRetry(f"«{value}» is not a distribution a prior may use; they are: {allowed}")
+                    raise ModelRetry(f"{q(value, 60)} is not a distribution a prior may use; they are: {allowed}")
                 new_dist[c.node] = value
             else:
                 if not isinstance(value, dict) or not value:
                     raise ModelRetry("prior_args is an object {parameter: number or expression}")
-                value = {str(k): _text_slot(v, f"argument «{k}»") for k, v in value.items()}
+                value = {str(k): _text_slot(v, f"argument {q(k, 40)}") for k, v in value.items()}
                 new_args[c.node] = value
         elif c.field == "expression":
             have = slots(node)
             if not slot and len(have) == 1:
                 slot = next(iter(have))
             if slot not in have:
-                raise ModelRetry(f"«{c.node}» ({kind}) has no expression «{slot}»" +
-                                 (f"; its expressions are: {', '.join(have)}" if have else "; it has no expression"))
+                raise ModelRetry(f"{q(c.node, 100)} ({q(kind, 30)}) has no expression {q(slot, 60)}" +
+                                 (f"; its expressions are: {', '.join(q(k, 60) for k in have)}" if have else "; it has no expression"))
             value = _text_slot(value, "an expression")
         elif c.field == "bounds":
             if kind != "parameter":
-                raise ModelRetry(f"«{c.node}» is a {kind}: only a parameter has bounds")
+                raise ModelRetry(f"{q(c.node, 100)} is a {q(kind, 30)}: only a parameter has bounds")
             if not isinstance(value, dict) or not set(value) <= {"lower", "upper"}:
                 raise ModelRetry("bounds is an object with `lower` and/or `upper`, numbers or null")
             value = {k: _bound(v) for k, v in value.items()}
@@ -425,20 +474,28 @@ async def propose_changes(ctx: RunContext[BayesDeps], summary: str, changes: lis
                 raise ModelRetry("the lower bound must be below the upper bound")
         else:
             if kind != "plate:group" and kind != "state":
-                raise ModelRetry(f"«{c.node}» is a {kind}: only a group plate or a latent state has a form")
+                raise ModelRetry(f"{q(c.node, 100)} is a {q(kind, 30)}: only a group plate or a latent state has a form")
             if value not in ("centred", "non_centred"):
                 raise ModelRetry("plate_form is centred or non_centred")
-        out.append({"node": c.node, "field": c.field, "slot": slot if c.field == "expression" else "",
-                    "before": _before(node, c, slot), "value": value, "why": c.why.strip()})
-    # a distribution and its arguments go together: the arguments are the distribution's parameters
-    for nid in {*new_dist, *new_args}:
+        key = (c.node, c.field, slot if c.field == "expression" else "")
+        if key in seen:
+            raise ModelRetry(f"{q(c.node, 100)} is changed twice ({c.field}): give each change once, with its final value")
+        seen.add(key)
+        out.append({"node": c.node, "field": c.field, "slot": key[2], "before": _before(node, c, slot), "value": value,
+                    "why": c.why.strip()})
+    # a distribution goes with its arguments, always: the person sees both and the arguments are its parameters
+    for nid, dist in new_dist.items():
+        if nid not in new_args:
+            want = ", ".join(p["name"] for p in dists[dist]["params"])
+            raise ModelRetry(f"{q(nid, 100)}: a prior_distribution change comes with a prior_args change of the same node, "
+                             f"giving the arguments of {dist} ({want})")
+    for nid, args in new_args.items():
         node = d.index[nid]
         current = _prior(node.get("prior") if node.get("kind") == "parameter" else node.get("init"))
         dist = new_dist.get(nid) or current[0]
         want = [p["name"] for p in dists.get(dist, {}).get("params", [])]
-        have = list(new_args[nid]) if nid in new_args else list(current[1])
-        if sorted(have) != sorted(want):
-            raise ModelRetry(f"«{nid}»: {dist} takes the arguments {', '.join(want)}; give them with a prior_args change "
-                             f"(it has {', '.join(have) or 'none'})")
+        if sorted(args) != sorted(want):
+            raise ModelRetry(f"{q(nid, 100)}: {dist} takes the arguments {', '.join(want)} (given: "
+                             f"{', '.join(q(k, 40) for k in args)})")
     d.proposal = {"summary": summary.strip()[:500], "changes": out}
     return "Proposed: the person will see it and apply it or not."

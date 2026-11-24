@@ -906,7 +906,7 @@ async def bayes_assist(
         raise HTTPException(status_code=403, detail="Observers do not write models")
     if not ai_bayes_agent.group_usable(session, user):
         raise HTTPException(status_code=404, detail="Bayesian models are not available to you")
-    if len(json.dumps(body.graph, separators=(",", ":")).encode()) > ai_bayes_agent.limit("max_graph_bytes"):
+    if len(json.dumps(body.graph, separators=(",", ":"), ensure_ascii=False).encode()) > ai_bayes_agent.limit("max_graph_bytes"):
         raise HTTPException(status_code=422, detail="The graph is too large for the assistant")
     _check_spending(session, user)
     withheld = metadata_only.on("chat")

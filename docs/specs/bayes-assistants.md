@@ -365,3 +365,24 @@ The request: `message`, `model`, `chat_id`, `graph`, `findings`, `selected`, `pr
 `scale`, `mean`) and is empty for the other fields; `prior_args` values are the expression texts; `value` of `bounds` is
 `{lower, upper}` (numbers or null); a node id may be a component of correlated effects. Nothing adds or deletes a node: the
 schema has no such field and ids outside the shown graph are refused.
+
+### Correction of 2026-11-24 (the review of lot A2)
+
+- **Slot names are the Go validator's keys** (`bayesgraph/slots.go`, `SlotKey`): a change of the field `expression` names its `slot` as
+  `value`, `intercept`, `terms[<i>].coef`, `args.<arg>`, `prior.<arg>`, `init.<arg>`, `scale`; a component of correlated effects is a
+  node of its own, `<node>.<component>` (`mean`, `scale`), and the correlation is `<node>.correlation` (`eta`), so two components of
+  the same id in two nodes never collide, in the text, the index and the proposal. A3 uses them as they come.
+- **The graph shows** each term of a linear predictor with the data it multiplies and whether that data is standardized
+  (`terms[0]=(data=… standardized=… coef=…)`), the correlation's name, label and `eta`, the notes, the support of the data nodes and the
+  series of the rows plates.
+- **A new distribution always comes with its arguments**: a `prior_distribution` change needs a `prior_args` change of the same node in
+  the same proposal, even when the parameter names coincide (normal to lognormal). Two changes of the same node, field and slot are
+  refused.
+- **What of the request is data**: the selected node, the findings (with their `slot`), the preview's keys and the run's node ids are
+  between the markers; of a run only the ids of nodes that exist in the graph are kept (a level such as `a_g[Milano]` is dropped); the
+  sentence that says a run is of another version than the editor's is written outside the markers, from validated integers. Every
+  value that comes from the graph in a refusal sent to the model is quoted.
+- **The size of the graph** is measured in UTF-8 bytes, as the Go gateway measures it.
+- **Remedies on the assistant's own initiative** only for facts: divergences above zero, tree depth reached, the E-BFMI as the number
+  measured (never against a threshold). For R-hat and effective sample sizes it says what they measure and where they are largest, and
+  proposes a remedy only if the person asks, never saying a value is high or low. The prompt does not name the forbidden words; the test does.
