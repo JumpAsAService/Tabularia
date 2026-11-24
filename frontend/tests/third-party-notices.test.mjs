@@ -1,7 +1,7 @@
 // The notices of the npm packages (scripts/third-party-notices.mjs).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -62,4 +62,26 @@ test('the vendored Timestral code is in the notices, with the same NOTICE and Ap
     const line = scripts.prebuild ?? scripts.pregenerate
     assert.ok(line.includes('Timestral inference code') && line.includes('timestral.txt'), manifest)
   }
+})
+
+test('the CmdStan family is an extra of the three scripts, and its notices are the files the Bayesian group ships, unchanged', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const mine = readFileSync(join(here, '../assets/third-party/cmdstan.txt'), 'utf8')
+  for (const manifest of ['../package.json', '../../website/package.json']) {
+    const scripts = JSON.parse(readFileSync(join(here, manifest), 'utf8')).scripts
+    const line = scripts.prebuild ?? scripts.pregenerate
+    assert.ok(line.includes('CmdStan 2.40.0') && line.includes('cmdstan.txt') && line.includes('timestral.txt'), manifest)
+  }
+  // the group's folder is beside the frontend in the repository; in a build of the frontend alone it is not
+  const shipped = join(here, '../../gateway-go/internal/modelgroups/groups/bayes/licence')
+  if (existsSync(shipped)) {
+    const files = []
+    const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) e.isDirectory() ? walk(join(dir, e.name)) : files.push(join(dir, e.name)) }
+    walk(shipped)
+    assert.equal(files.length, 22)
+    for (const file of files) assert.ok(mine.includes(readFileSync(file, 'utf8').replace(/\r\n/g, '\n').trim()), file.slice(shipped.length))
+  }
+  // the four projects' own licences, and the libraries they bundle
+  for (const piece of ['Copyright (c) 2014, Stan', 'Copyright (c) 2011--2020, Stan Developers', 'Copyright (c) 2011-2020, Stan Developers', 'Copyright (c) 2011--2018, Stan Developers', 'Boost Software License', 'Mozilla Public License', 'Apache License'])
+    assert.ok(mine.includes(piece), piece)
 })

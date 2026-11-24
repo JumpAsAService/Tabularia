@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
-    "pregenerate": "node ../frontend/scripts/third-party-notices.mjs public/third-party-notices.txt --extra \"IBM Plex Sans|OFL-1.1|../frontend/assets/fonts/OFL.txt\" --extra \"Timestral inference code (Mistral AI), vendored in the pre-trained forecasting group|Apache-2.0|../frontend/assets/third-party/timestral.txt\"",
+    "pregenerate": "node ../frontend/scripts/third-party-notices.mjs public/third-party-notices.txt --extra \"IBM Plex Sans|OFL-1.1|../frontend/assets/fonts/OFL.txt\" --extra \"Timestral inference code (Mistral AI), vendored in the pre-trained forecasting group|Apache-2.0|../frontend/assets/third-party/timestral.txt\" --extra \"CmdStan 2.40.0 and stanc3 2.40.0 with the libraries they bundle, shipped in the Bayesian models group|BSD-3-Clause, and the licence of each bundled library, as listed below|../frontend/assets/third-party/cmdstan.txt\"",
     "generate": "nuxt generate",
     "preview": "node scripts/serve.mjs",
     "check-links": "node scripts/check-links.mjs",
