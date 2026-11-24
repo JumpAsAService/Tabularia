@@ -60,6 +60,9 @@ not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
 `models.group_rebuild`, `models.group_settings`, `models.group_access`, and `models.licence_accept` for a group whose weights have a licence).
 
+The Bayesian group has its own resources, compile cache and limits, described in
+[Bayesian models, for administrators](bayesian-models.md#for-administrators).
+
 What it takes first is the same as for the Python and R of [scripting](../scripting.md): the
 chart's `scripts.enabled` with its registry (see [Kubernetes](../deploy/kubernetes.md#statistical-models)),
 and the **scripts bucket** set in **Administration → Scripting environments**, because a model
@@ -1730,7 +1733,9 @@ deviation, three quantiles, R-hat, effective sample sizes, the standard error of
 data the model bound (with the mean and the standard deviation of a standardized column) and the notes. The diagnostics have
 their own pages and charts, and so do the predictive checks: the posterior predictive check after a `sample` run, and the prior
 predictive check of the `prior_predictive` variant, both drawn on the original scale of a response the model standardized.
-Every diagnostic is a measure or a fact with what it measures: the report gives no verdict.
+Every diagnostic is a measure or a fact with what it measures: the report gives no verdict. How to draw the model, its priors,
+its expressions, its saved versions and its assistant, and how an administrator sizes the group, are in
+[Bayesian models](bayesian-models.md).
 
 The node records in [MLflow](#mlflow) without the draws, and **Predict** does not apply a Bayesian model: a version that names
 one is refused.

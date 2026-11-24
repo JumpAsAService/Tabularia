@@ -58,6 +58,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/statistics-overview', 'Statistics: the whole picture'],
       ['/docs/capabilities/statistics', 'Hypothesis tests'],
       ['/docs/capabilities/models', 'Statistical models'],
+      ['/docs/capabilities/bayesian-models', 'Bayesian models'],
       ['/docs/connections/mlflow', 'MLflow connections'],
       ['/docs/licences', 'Licences of the components'],
     ],

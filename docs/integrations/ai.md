@@ -28,7 +28,7 @@ audit it.
 | **Data assistant** | **Assistant** page ([Ask your data](../capabilities/ask-your-data.md)) | the question and the conversation; names, folders, row counts and descriptions of the datasources the person can read; columns, types and field descriptions; 5 sample rows of each datasource it describes; the rows its queries return, up to `AI__MAX_RESULT_ROWS` (200), text cut at 300 characters; when it builds, what the flow assistant gets (the first rows of every step) and the names, types and folders of the connections the person may use | datasources the person cannot read; storage paths and credentials; a connection's address, user or secret |
 | **Flow assistant** | flow editor, right panel, **Assistant** tab | the request; the flow on the canvas (its nodes and their settings) and the selected node; the same catalogue tools as the data assistant (sample rows included); the first 5 rows of every step it adds or changes, and up to 30 rows when it previews a node | data the person cannot read; the flow's saved versions |
 | **Script assistant** | Script node and saved script editor, **Assistant** (Kubernetes only) | the request; the code; the environment's language, version and packages; the **names** of the variables the script finds; names and types of its inputs' columns; after a failed run, **only the error of its log** (the Python traceback, the R error) | any row of data; the values of variables; what the script printed |
-| **Bayesian model assistant** | the Bayesian model editor, **Assistant** tab | the request; the model's graph as the editor holds it (at most 256 KiB), with its names, labels, notes, units, columns and expressions as data and never as instructions; the findings of the editor's check; the selected node; the numbers of the prior preview; and, when the person picks a run, the sampler's facts and the largest R-hat and smallest effective sample sizes of each node | any row of data (the editor holds none); the posterior summary of a run; the draws |
+| **Bayesian model assistant** | the Bayesian model editor, **Assistant** tab | the request; the model's graph as the editor holds it (at most 256 KiB), with its names, labels, notes and expressions as data and never as instructions (up to 120 nodes, each text cut to 80 characters); the findings of the editor's check; the selected node; the numbers of the prior preview; and, when the person picks a run, the sampler's facts and the largest R-hat and smallest effective sample sizes of each node | any row of data (the editor holds none); the posterior summary of a run; the draws |
 | **Conversation titles** | data assistant | the first question of a conversation (up to 1,000 characters), once | anything else |
 | **dbt descriptions** | the dbt export dialog, when ticked ([dbt export](../dbt-export.md)) | each flow's structure (sources, steps with their settings cut at 300 characters, outputs); the columns without a description, with their type and up to 3 sample values of up to 40 characters each | full rows; columns that already have a description |
 | **dbt SQL translations** | the dbt export, when a query does not translate to the target dialect | the query (up to 20,000 characters), the two dialects and the output columns; on a second attempt, why the engine rejected the first | data |
@@ -72,7 +72,7 @@ audit log; every gateway replica applies a change within 10 seconds:
 
 | Variable | Covers | Whose model |
 |---|---|---|
-| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export, the AI comments | those configured in Tabularia, whichever the provider |
+| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the Bayesian model assistant, the dbt export, the AI comments | those configured in Tabularia, whichever the provider |
 | `MCP__METADATA_ONLY` | the [MCP server](mcp.md) | the client's, outside the administrator's control |
 
 Administration → AI models shows the state of both.
@@ -101,6 +101,11 @@ offered, and calling one over MCP anyway is refused; those that hold both, such 
   fails can be made to depend on one). The person checks the result on the canvas.
 - **Script assistant**: it loses the help on a failed run: the editor says so, and the person
   describes the problem in their own words.
+- **Bayesian model assistant**: nothing it receives is a row of data (the editor holds none), so it works as without the mode,
+  and its tab says so. What changes is the conversation: the turns made before the mode came on are not sent again, and the
+  assistant says it can no longer see them. A run the person chooses to read still goes as a set of facts of the sampler and
+  of each node's R-hat and effective sample size extremes, never a row of the posterior summary or a draw, in any mode. See
+  [the assistant](../capabilities/bayesian-models.md#the-assistant).
 - **dbt export**: columns are described from their name and type. Descriptions already written
   from sample values before the mode came on stay in the project: they are not sent again.
 - **AI comments**: a total is a value, so nothing is sent and no number is read for one: the element

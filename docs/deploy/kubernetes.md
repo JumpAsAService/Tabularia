@@ -216,7 +216,8 @@ compiler at a time, which fits the default build Pod (`SCRIPTS__BUILD_MEMORY` 4 
 for memory), and took about ten minutes on a modest 2018 laptop CPU with the default 2 CPUs and 4 GiB (seven and a half of
 them CmdStan's `make`, peak 3.2 GiB); the image weighs about 1.8 GB, half of it CmdStan's precompiled header, which saves about
 ten seconds on every compile. The group is supported on x86-64; arm64 is pinned but not yet built
-and self-tested on an arm64 node.
+and self-tested on an arm64 node. What the group's card shows (the compile limits, the cache of binaries, the sampling Job's
+disk) and the limits of a run are in [Bayesian models, for administrators](../capabilities/bayesian-models.md#for-administrators).
 
 ## Backend image (`backend/Dockerfile`)
 

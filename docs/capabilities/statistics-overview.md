@@ -54,7 +54,7 @@ Models are in groups, each turned on by an administrator in **Administration →
 | **Customer lifetime** | Customer lifetime value, BG/BB | For customers who leave without saying so: the purchases to expect, the probability of still being active and the discounted value | [CLV](models.md#customer-lifetime-value-r), [BG/BB](models.md#bgbb-r) |
 | **Experiments** | A/B test, A/B test planning | The result of a randomized experiment (the difference, its interval, the check of the split, CUPED, the Bayesian and sequential readings) and the size of the next one | [A/B tests](models.md#ab-tests-r) |
 | **Pre-trained forecasting** (Python) | Forecast (Timestral) | A forecast from a model trained in advance, with nothing fitted on your data. Its weights come under a licence of their own, quoted word for word in the section | [Timestral](models.md#pre-trained-forecasting-timestral) |
-| **Bayesian models** (Python) | Bayesian model | A model you draw as a graph of data, parameters and distributions, sampled with Stan: the draws of its posterior, its diagnostics and its predictive checks, before and after the data are seen | [Bayesian model](models.md#bayesian-model) |
+| **Bayesian models** (Python) | Bayesian model | A model you draw as a graph of data, parameters and distributions, sampled with Stan: the draws of its posterior, its diagnostics and its predictive checks, before and after the data are seen | [Bayesian models](bayesian-models.md) |
 
 **Predict** applies a model you registered in MLflow to new rows. It works for the models that make a model
 (linear, logistic, Kaplan–Meier, Cox, parametric survival, ARIMA, GARCH, customer lifetime value, BG/BB, XGBoost and CatBoost);
