@@ -14,8 +14,11 @@ package api
 //     time_budget_seconds.
 //  4. The task (task.json's `bayes` from the stored version: never regenerated), checked against the contract before
 //     anything leaves the gateway; the sampling Job (bayesJobManifest); the import of the results, checked by the engine
-//     against the catalogue's bayes_model; nothing logged to MLflow.
-//  5. The step's files leave the scripts bucket by exact key, the binary's included.
+//     against the catalogue's bayes_model.
+//  5. MLflow, for a flow run of a node that names a connection (docs/specs/bayes-mlflow.md): the plan checked before the
+//     compile is asked, `task.mlflow` so that the runner writes MLmodel, the record made by the gateway after the import
+//     (jobs_bayes_mlflow.go: the summary, never a draw), a FAILED run for a step that fails after its Job ran. Never a trial.
+//  6. The step's files leave the scripts bucket by exact key, the binary's included.
 
 import (
 	"context"
@@ -24,6 +27,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
@@ -140,8 +144,9 @@ const (
 // planBayes is «Before anything» for a Bayesian model node: the step, or why it cannot run (a *scriptFailed), before any
 // row, input or Job exists. `user` is the run's authority: the person who runs the flow or tries the node, or the
 // schedule's author; every right is checked again at every run. `check` is "" for the sampling, bayesCheckPrior for the
-// prior predictive check (a trial's alone).
-func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Object, check string) (*bayesStep, error) {
+// prior predictive check (a trial's alone). `flowRun` is a flow run's step (not a trial): only then is the node's MLflow
+// block read and checked (planMLflow), before the compile is asked.
+func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Object, check string, flowRun bool) (*bayesStep, error) {
 	label := modelLabel(node)
 	what := "Bayesian model «" + label + "»"
 	fail := func(format string, a ...any) error { return &scriptFailed{what + ": " + fmt.Sprintf(format, a...)} }
@@ -250,6 +255,18 @@ func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Obje
 	}
 	s.img, s.timeout, s.retries, s.delay, s.budget = img, timeout, retries, delay, budget
 
+	// MLflow: a flow run's sampling only (a trial, the prior predictive check among them, logs nothing), the connection
+	// checked with the run's authority before the compile is asked
+	if flowRun && s.mode == bayescontract.ModeSample {
+		if s.mlflow, err = q.planMLflow(ctx, user, node, label); err != nil {
+			var sf *scriptFailed
+			if errors.As(err, &sf) && strings.HasPrefix(sf.msg, "model «") {
+				sf.msg = "Bayesian " + sf.msg // planMLflow names a model node's step; this one is s.what()
+			}
+			return nil, err
+		}
+	}
+
 	// the compile, asked for now with the run's authority: the binary, or the state to wait on, or the refusal
 	if s.binaries = q.d.bayesBinaries(); s.binaries == nil {
 		return nil, &scriptFailed{"Bayesian models cannot be compiled on this installation"}
@@ -282,6 +299,7 @@ func (s *bayesStep) read() error {
 	}
 	s.graph = bayesgraph.BuildModel(g)
 	s.modelStep = &modelStep{model: bayescontract.Model, group: bayescontract.Group, bayes: true}
+	s.modelStep.bayesRun = s
 	return nil
 }
 
@@ -641,7 +659,7 @@ func (q *queue) bayesBinary(ctx context.Context, s *bayesStep, child *childRun, 
 // runBayes is a flow's Bayesian model node as a step: where the nodes after it read, nil when it failed.
 func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.Source, error) {
 	d := q.d
-	s, err := q.planBayes(ctx, r.user, r.node, r.check)
+	s, err := q.planBayes(ctx, r.user, r.node, r.check, r.trial == 0)
 	if err != nil {
 		return nil, err
 	}
@@ -735,6 +753,7 @@ func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if err != nil {
 			return nil, err
 		}
+		task.MLflow = s.mlflow != nil // the runner writes MLmodel beside the card; the gateway logs them
 		runID := r.orchestrationOf(childID)
 		task.IDs = modelgroups.IDs{FlowID: r.flow.ID, NodeID: pyjson.Str(nodeID), RunID: runID, StepRunID: childID}
 		if in.rows != nil {
@@ -807,5 +826,8 @@ func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		}
 		return q.importModel(ctx, r, &step, child, storage, resultsKey, outKey, artifacts, engineResultsKey, engineOutKey, writeOutput)
 	}()
+	if err != nil {
+		q.logFailedModel(ctx, r, s.modelStep, child, err)
+	}
 	return q.closeChild(ctx, child, out, err, s.what())
 }

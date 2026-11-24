@@ -300,3 +300,37 @@ M0, M2 and M3 can start at once; M4 is the only heavy lot (one heavy job at a ti
 ## Open questions
 
 None. The four questions of the draft were answered by the owner on 2026-11-24 (see «Decisions»).
+
+## As built — lot M1 (2026-11-24)
+
+- **The plan**: `planBayes` gained `flowRun bool` (the trial route passes `false`, `runBayes` passes `r.trial == 0`); for a flow
+  run's sampling it calls `planMLflow` after the limits and **before `Binaries.Need`**, so a connection the run's authority may
+  not use, a block without an experiment or a connection gone stop the step before the compile is asked, with no run, no Job
+  and no call to MLflow. The refusal reads «Bayesian model «x»: …» (`planMLflow`'s «model «x»: …» prefixed, `planMLflow`
+  untouched). A trial, the prior predictive check among them, never reads the block.
+- **The Job**: `task.mlflow = s.mlflow != nil`, so the runner writes `MLmodel` beside the card; the golden task (no block)
+  is unchanged. `runBayes` calls `logFailedModel` when the step fails after its Job ran (a FAILED run with `tabularia.error`,
+  the parameters of `bayesParams(step, nil)` and `tabularia.bayes_model_name`; no metric, no file).
+- **`modelStep.bayesRun`** (`*bayesStep`, set by `read`) is what the log reads of the step; `mlflowLog` branches on
+  `modelStep.bayes`: the read-back asks for `bayesResultSections` alone (`resultRowsOf`, which replaced `modelResultRows` with
+  the sections as a parameter); then **before anything reaches MLflow** `bayesLogOf` reads `model.json` from the step's
+  artifacts (`bayescontract.Card` from its `bayes` object; none when the runner wrote none) and checks the stored program with
+  `bayesProgramFile` against the version's hash and the card's. A program that is not theirs, or a card that does not read,
+  is a `bayesFault` (read as a `*scriptFailed`): the step fails **whether «Continue without MLflow» is on or not**, nothing
+  is created in MLflow, and the run page's record says «… a fault of Tabularia, nothing was logged».
+- The run's parameters are `bayesParams`, its metrics `bayesMetrics` (their key warnings in the run page's `warnings`, as
+  `modelMetricsChecked`'s), its tags the common ones and `bayesTags(card, saved model's name)`.
+- **The files** (`bayesArtifacts`, in place of `mlflowArtifacts`, which is unchanged): `tabularia/summary.csv` first (the call
+  that tells a server without the proxy; a header alone when there is no summary row), then, with a card, `model/MLmodel`
+  (with the run's id), `model/model.json` (the bytes read and checked above) and `model/program.stan` (the version's), then
+  `tabularia/report.pdf`. Never `results.parquet`, never the output's parquet, never another file of the Job. Without a card:
+  the summary and the report, the warning «The runner wrote no model card», nothing registered.
+- **The version**: the common tags (`tabularia.model`, `.group`, `.group_version`, `.variant` = `sample`, `.card_sha256`)
+  and the `tabularia.bayes_*` ones (`bayesVersionTags`: id, version, name, semantic hash); no `tabularia.model_file_sha256`.
+- `logModelMLflow`'s failure sentence names the step with `s.what()` (the same text for a model node).
+- **Tests** (`internal/api/jobs_bayes_mlflow_run_test.go`, on the database, the Bayesian step's world with the fake MLflow and
+  the report spec's `bayes_model-sample.json` rows): the run's content and exactly five files; no draw for the outputs
+  `summary`, `draws`, `replicated` (no curve value in a file, a metric or a parameter, no parquet, the read-back's sections);
+  the program not the card's, with and without «Continue without MLflow»; no card; 401, «Continue without MLflow», no proxy;
+  a failed sampling Job; the trial and the prior predictive check (also with a broken block); the connection refused before
+  the compile; the fingerprint unmoved by the block. `jobs_models_mlflow_test.go` and `jobs_predict_test.go` unchanged.

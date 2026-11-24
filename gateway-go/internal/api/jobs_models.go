@@ -89,6 +89,9 @@ type modelStep struct {
 	mlflow  *mlflowPlan // a flow run's MLflow block, nil when it logs nothing (always for a trial)
 	predict bool        // a Predict step's (jobs_predict.go): its sentences name it so
 	bayes   bool        // a Bayesian model step's (jobs_bayes.go): likewise
+	// bayesRun is the Bayesian step this is the model step of (its version, sampler, program): what its MLflow record is
+	// made of (jobs_bayes_mlflow.go); nil for every other model
+	bayesRun *bayesStep
 }
 
 // what names the step in its sentences: «model «Elasticity»», «Predict «Prices next month»»,

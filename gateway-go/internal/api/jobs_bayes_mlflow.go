@@ -2,10 +2,14 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,9 +19,10 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
 )
 
-// What a Bayesian run puts in MLflow, as pure functions of the step and of the results' rows
-// (docs/specs/bayes-mlflow.md, lot M0). Nothing here talks to MLflow and nothing here is wired yet (lot M1 calls them from
-// logModelMLflow). The rule of the whole file: **never a draw**. Every function reads the sections `summary`, `sampler`,
+// What a Bayesian run puts in MLflow (docs/specs/bayes-mlflow.md): pure functions of the step and of the results' rows (lot
+// M0), and the step's files as MLflow gets them (lot M1: bayesLogOf, bayesArtifacts), which mlflowLog calls for a step whose
+// modelStep.bayes is set; the machinery (the experiment, the run, the batches, the registration, the run page's record) is
+// the model nodes' own. The rule of the whole file: **never a draw**. Every function reads the sections `summary`, `sampler`,
 // `quantity`, `model` and `data` of the rows and no other (`curve`, `hist`, `point`, `ppc` and `prior_check` hold thinned
 // draws and the charts' bins), and none of them writes a threshold, a reference value or a verdict: a metric is a measure or
 // a fact.
@@ -30,7 +35,7 @@ const bayesMLflowQuantities = 100
 const bayesMLflowCSVQuantities = 2000
 
 // bayesResultSections are the sections of a Bayesian step's results that MLflow reads back from the engine (M1's
-// `modelResultRows` call): the posterior summary, the sampler's facts, the nodes' extremes, the run's counts and the data
+// `resultRowsOf` call): the posterior summary, the sampler's facts, the nodes' extremes, the run's counts and the data
 // bindings. Never `curve`, `hist`, `point`, `ppc` or `prior_check`.
 var bayesResultSections = []any{"summary", "sampler", "quantity", "model", "data"}
 
@@ -333,4 +338,156 @@ func bayesProgramFile(program string, versionSHA256 string, card *bayescontract.
 		}
 	}
 	return []byte(program), nil
+}
+
+// ── the step's files (lot M1) ────────────────────────────────────────────────
+
+// bayesLog is what a Bayesian step's MLflow record needs besides its rows: the card the runner wrote (nil when it was too
+// large and the runner wrote none), its bytes as they are uploaded, and the program the pinned version stores, checked
+// against both.
+type bayesLog struct {
+	step    *bayesStep
+	card    *bayescontract.Card
+	cardRaw []byte
+	program []byte
+}
+
+// bayesFault is a fault of Tabularia found before anything is logged (a program that is not the one the card and the version
+// name, a card that does not read): the step fails, «Continue without MLflow» or not, and nothing reaches MLflow. It reads as
+// a *scriptFailed (mlflowWhy says its sentence).
+type bayesFault struct{ msg string }
+
+func (e *bayesFault) Error() string { return e.msg }
+func (e *bayesFault) Unwrap() error { return &scriptFailed{e.msg} }
+
+// bayesCardOf reads the `bayes` object of a run's model.json.
+func bayesCardOf(raw []byte) (*bayescontract.Card, error) {
+	var c struct {
+		Bayes *bayescontract.Card `json:"bayes"`
+	}
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return nil, err
+	}
+	if c.Bayes == nil {
+		return nil, errors.New("it has no `bayes` object")
+	}
+	return c.Bayes, nil
+}
+
+// bayesModelName is the saved model's name, "" when the step holds none.
+func (s *bayesStep) bayesModelName() string {
+	if s.model == nil {
+		return ""
+	}
+	return s.model.Name
+}
+
+// bayesLogOf reads the card the runner left in the step's artifacts (none when it was too large) and checks the program the
+// gateway holds against the version's hash and the card's, before anything is logged.
+func (q *queue) bayesLogOf(ctx context.Context, s *modelStep, f modelFiles) (*bayesLog, error) {
+	b := s.bayesRun
+	if b == nil || b.version == nil {
+		return nil, &bayesFault{"the Bayesian step holds no version of its model: a fault of Tabularia"}
+	}
+	out := &bayesLog{step: b}
+	in, _, err := q.d.openScriptObject(ctx, f.storage, f.artifacts+"model.json")
+	if err != nil {
+		return nil, err
+	}
+	if in != nil {
+		raw, err := io.ReadAll(io.LimitReader(in, 4<<20))
+		in.Close()
+		if err != nil {
+			return nil, err
+		}
+		card, err := bayesCardOf(raw)
+		if err != nil {
+			return nil, &bayesFault{"the run's model card does not read (" + runes(err.Error(), 200) + "): a fault of Tabularia, nothing was logged"}
+		}
+		out.card, out.cardRaw = card, raw
+	}
+	program, err := bayesProgramFile(b.version.Program, b.version.ProgramSHA256, out.card)
+	if err != nil {
+		return nil, &bayesFault{err.Error() + "; a fault of Tabularia, nothing was logged"}
+	}
+	out.program = program
+	return out, nil
+}
+
+// bayesArtifacts uploads a Bayesian step's files through the artifact proxy, in place of mlflowArtifacts: the summary table
+// first (the call that tells a server without the proxy), then, when the runner wrote a card, model/MLmodel (with the run's
+// id), model/model.json and model/program.stan (the version's, checked by bayesLogOf), then the report. Never
+// results.parquet: it holds thinned draws and the charts' bins (owner, 2026-11-24); never a file of the Job but these two.
+func (q *queue) bayesArtifacts(ctx context.Context, tr *mlflowconn.Tracker, r *scriptNodeRun, s *modelStep, child *childRun, f modelFiles,
+	rows []resultRow, run *mlflowconn.Run, rec *mlflowRecord, bl *bayesLog) (uploadedFiles, error) {
+	var up uploadedFiles
+	where := mlflowconn.ArtifactPath(run.ArtifactURI)
+	noProxy := "This MLflow server keeps the runs' files where Tabularia does not write (no artifact proxy): parameters, metrics and tags were logged, no file."
+	if where == "" {
+		rec.warnings = append(rec.warnings, noProxy)
+		return up, nil
+	}
+	upload := func(name string, body []byte) error {
+		return tr.Upload(ctx, where, name, bytes.NewReader(body), int64(len(body)))
+	}
+	summary := bayesSummaryCSV(rows)
+	if summary == nil { // no quantity: the table's header alone
+		summary = []byte("quantity,unit," + strings.Join(bayesSummaryColumns, ",") + "\n")
+	}
+	err := upload("tabularia/summary.csv", summary)
+	if mlflowconn.Unsupported(err) {
+		rec.warnings = append(rec.warnings, noProxy)
+		return up, nil
+	}
+	if err != nil {
+		return up, err
+	}
+	rec.artifacts = true
+	if bl.cardRaw == nil {
+		rec.warnings = append(rec.warnings, "The runner wrote no model card: the model's files are not in the MLflow run.")
+	} else {
+		in, _, err := q.d.openScriptObject(ctx, f.storage, f.artifacts+"MLmodel")
+		if err != nil {
+			return up, err
+		}
+		if in != nil {
+			b, err := io.ReadAll(io.LimitReader(in, 4<<20))
+			in.Close()
+			if err != nil {
+				return up, err
+			}
+			if err := upload("model/MLmodel", withRunID(b, run.ID)); err != nil {
+				return up, err
+			}
+		}
+		if err := upload("model/model.json", bl.cardRaw); err != nil {
+			return up, err
+		}
+		up.card = bl.cardRaw
+		if err := upload("model/program.stan", bl.program); err != nil {
+			return up, err
+		}
+	}
+	pdf, err := q.modelReportPDF(ctx, r, s, child, f)
+	if err != nil {
+		if ctx.Err() != nil {
+			return up, ctx.Err()
+		}
+		rec.warnings = append(rec.warnings, "The report could not be rendered for MLflow: "+runes(mlflowWhy(err), 300))
+	} else if err := upload("tabularia/report.pdf", pdf); err != nil {
+		return up, err
+	}
+	return up, nil
+}
+
+// bayesVersionTags are the Bayesian tags a registered version carries beside the common ones: the saved model's
+// (`tabularia.bayes_*`), from the card.
+func bayesVersionTags(bl *bayesLog) []mlflowconn.Tag {
+	var out []mlflowconn.Tag
+	for _, t := range bayesTags(bl.card, bl.step.bayesModelName()) {
+		if strings.HasPrefix(t.Key, "tabularia.bayes_") {
+			out = append(out, t)
+		}
+	}
+	return out
 }

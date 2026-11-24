@@ -100,7 +100,7 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		// refused here, with its sentence, before any run exists; the compile asked for now, with the person's
 		// authority (docs/specs/bayes-flow-node.md, «From the node to the Job»)
 		qq := newQueue(d)
-		if _, err := qq.planBayes(q.ctx, &p.User, node, check); err != nil {
+		if _, err := qq.planBayes(q.ctx, &p.User, node, check, false); err != nil {
 			var sf *scriptFailed
 			if !errors.As(err, &sf) {
 				q.fail(err)

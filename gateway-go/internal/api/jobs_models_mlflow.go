@@ -52,6 +52,10 @@ import (
 // When MLflow fails the step fails, «the model was fitted but MLflow could not record it: …»,
 // unless the node's «Continue without MLflow» is on: then the step succeeds with a warning.
 // A step that fails after its Job ran is logged as a FAILED run, as far as MLflow answers.
+//
+// A Bayesian model step (modelStep.bayes, docs/specs/bayes-mlflow.md) goes through the same machinery with its own content:
+// its parameters, metrics, tags and files are jobs_bayes_mlflow.go's (the summary table, the card, the program; never
+// results.parquet, never a draw).
 
 // mlflowCallTimeout bounds each call to the tracking server (a variable: the tests shorten it).
 var mlflowCallTimeout = 30 * time.Second
@@ -208,14 +212,15 @@ func (q *queue) logModelMLflow(ctx context.Context, r *scriptNodeRun, s *modelSt
 		return ctx.Err()
 	}
 	rec.err = "the model was fitted but MLflow could not record it: " + mlflowWhy(err)
-	if s.mlflow.continueWithout {
+	var fault *bayesFault // a fault of Tabularia, not of MLflow: the step fails all the same
+	if s.mlflow.continueWithout && !errors.As(err, &fault) {
 		rec.continued = true
 		return rec.save(ctx, child)
 	}
 	if serr := rec.save(ctx, child); serr != nil {
 		return serr
 	}
-	return &scriptFailed{fmt.Sprintf("model «%s»: %s", s.label, rec.err)}
+	return &scriptFailed{fmt.Sprintf("%s: %s", s.what(), rec.err)}
 }
 
 // mlflowWhy is a failure as the run page says it: the tracking client's sentence, never a
@@ -235,9 +240,20 @@ func mlflowWhy(err error) string {
 
 // mlflowLog does the logging; rec holds what was done, even when it fails half-way.
 func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, child *childRun, f modelFiles, rec *mlflowRecord) error {
-	rows, err := q.d.modelResultRows(ctx, f.storage, f.results)
+	sections := resultSectionsLogged
+	if s.bayes {
+		sections = bayesResultSections // never the sections that hold draws or the charts' bins
+	}
+	rows, err := q.d.resultRowsOf(ctx, f.storage, f.results, sections)
 	if err != nil {
 		return err
+	}
+	// a Bayesian step: its card read and its program checked before anything reaches MLflow (jobs_bayes_mlflow.go)
+	var bl *bayesLog
+	if s.bayes {
+		if bl, err = q.bayesLogOf(ctx, s, f); err != nil {
+			return err
+		}
 	}
 	tr := mlflowconn.NewTracker(s.mlflow.cfg)
 	if rec.experimentID, rec.experimentCreated, err = tr.Experiment(ctx, s.mlflow.experiment); err != nil {
@@ -261,14 +277,28 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err != nil {
 		return err
 	}
-	params, paramWarnings := flattenParams(s.checked)
-	params = append(append(append(params, modelFormula(rows)...), modelDistribution(rows)...), customerLifetimeParams(rows, s.checked)...)
-	metrics, metricWarnings := modelMetricsChecked(rows, started)
+	var params []mlflowconn.Tag
+	var metrics []mlflowconn.Metric
+	var paramWarnings, metricWarnings []string
+	if bl != nil { // the Bayesian run's own: the node and its version, the summary and the sampler's facts (never a draw)
+		params, paramWarnings = bayesParams(bl.step, rows)
+		metrics, metricWarnings = bayesMetrics(rows, started)
+		tags = append(tags, bayesTags(bl.card, bl.step.bayesModelName())...)
+	} else {
+		params, paramWarnings = flattenParams(s.checked)
+		params = append(append(append(params, modelFormula(rows)...), modelDistribution(rows)...), customerLifetimeParams(rows, s.checked)...)
+		metrics, metricWarnings = modelMetricsChecked(rows, started)
+	}
 	rec.warnings = append(append(rec.warnings, paramWarnings...), metricWarnings...)
 	if err := tr.LogBatch(ctx, run.ID, params, metrics, tags); err != nil {
 		return err
 	}
-	up, err := q.mlflowArtifacts(ctx, tr, r, s, child, f, rows, run, rec)
+	var up uploadedFiles
+	if bl != nil {
+		up, err = q.bayesArtifacts(ctx, tr, r, s, child, f, rows, run, rec, bl)
+	} else {
+		up, err = q.mlflowArtifacts(ctx, tr, r, s, child, f, rows, run, rec)
+	}
 	if err != nil {
 		return err
 	}
@@ -306,6 +336,9 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 			}
 			if up.fileSHA != "" {
 				tags = append(tags, mlflowconn.Tag{Key: "tabularia.model_file_sha256", Value: up.fileSHA})
+			}
+			if bl != nil {
+				tags = append(tags, bayesVersionTags(bl)...)
 			}
 			version, err := tr.Register(ctx, s.mlflow.registerAs, strings.TrimRight(run.ArtifactURI, "/")+"/model", run.ID, tags)
 			switch {
@@ -1079,13 +1112,13 @@ func containsString(list []string, s string) bool {
 // maxSeriesMetrics series are logged as `series.<label>.<stat>`.
 var resultSectionsLogged = []any{"model", "assumption", "coef", "importance", "curve", "candidate", "parameter", "series"}
 
-// modelResultRows are the sections of the step's results MLflow reads (resultSectionsLogged),
-// read back by the engine from the scripts bucket (small by construction: the results' ceiling).
-func (d *Deps) modelResultRows(ctx context.Context, storage *scriptStorage, key string) ([]resultRow, error) {
+// resultRowsOf are the sections of the step's results MLflow reads (resultSectionsLogged, a Bayesian step's
+// bayesResultSections), read back by the engine from the scripts bucket (small by construction: the results' ceiling).
+func (d *Deps) resultRowsOf(ctx context.Context, storage *scriptStorage, key string, sections []any) ([]resultRow, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/scripts/results/rows", pyjson.Object{{Key: "connection", Value: storage.payload()},
-		{Key: "key", Value: key}, {Key: "sections", Value: resultSectionsLogged}})
+		{Key: "key", Value: key}, {Key: "sections", Value: sections}})
 	if err != nil {
 		return nil, err
 	}
@@ -1252,6 +1285,10 @@ func (q *queue) logFailedModel(ctx context.Context, r *scriptNodeRun, s *modelSt
 		}
 		tags = append(tags, mlflowconn.Tag{Key: "tabularia.error", Value: why})
 		params, _ := flattenParams(s.checked)
+		if b := s.bayesRun; b != nil { // the node's and its version's parameters, the saved model's name: no row, no card
+			params, _ = bayesParams(b, nil)
+			tags = append(tags, bayesTags(nil, b.bayesModelName())...)
+		}
 		logErr := tr.LogBatch(ctx, run.ID, params, nil, tags)
 		if err := tr.EndRun(ctx, run.ID, true, time.Now()); err != nil {
 			return err
