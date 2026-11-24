@@ -794,7 +794,17 @@ const history = createFlowHistory({
 watch(serializeCanvas, () => history.touch())
 // a settled change of the flow (or of its engine) may change which nodes are cached
 watch([currentSnap, flowEngine], () => scheduleCacheStatus())
-onUnmounted(() => history.dispose())
+// a key or a click of the person inside the settle window after an undo is a step of its own (see adoptSettled)
+const adoptSettled = () => history.adoptSettled()
+onMounted(() => {
+  window.addEventListener('keydown', adoptSettled, true)
+  window.addEventListener('pointerdown', adoptSettled, true)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', adoptSettled, true)
+  window.removeEventListener('pointerdown', adoptSettled, true)
+  history.dispose()
+})
 
 function restoreSnapshot(snapshot: string) {
   // preview and columns in flight concern a canvas that is no longer there

@@ -144,8 +144,12 @@ async function useNewer() {
   if (modelId.value == null || moving.value) return
   moving.value = true
   moveError.value = ''
+  // the node this was asked for: the panel stays mounted when another node is chosen, and the patch of the parent goes to
+  // the node selected WHEN it arrives, so it must not arrive at all if the person has moved on
+  const forNode = props.node.id
   try {
     const v = await api.version(modelId.value, 0)
+    if (props.node.id !== forNode) return
     const next = bayesNodeVariables(v.graph)
     const move = bayesNodeMove(bindings.value, next, columns.value)
     const model = bayesNodeRead(v.graph)
@@ -268,7 +272,9 @@ const prior = computed(() => props.outputs?.prior_check ?? null)
 const priorFailedEarly = computed(() => priorTrial.value?.status === 'FAILURE' && !!priorTrial.value.error
   && (priorTrial.value.runId == null || prior.value?.run_id !== priorTrial.value.runId))
 async function runPrior() {
+  const forNode = props.node.id
   await commitFocusedField()
+  if (props.node.id !== forNode) return
   emit('check')
 }
 </script>

@@ -258,3 +258,19 @@ test('the prior predictive check is wired: the button in the panel, the trial\'s
     }
   }
 })
+
+test('the panel emits nothing for a node the person has left while a request was in flight (review of the editor)', () => {
+  const src = read('components/bayes/BayesNodePanel.vue')
+  // «Use version N»: the id is remembered before the await and checked right after it, before anything is emitted
+  const fn = src.slice(src.indexOf('async function useNewer'), src.indexOf('// ── the columns'))
+  const iId = fn.indexOf('const forNode = props.node.id')
+  const iAwait = fn.indexOf('await api.version')
+  const iCheck = fn.indexOf('if (props.node.id !== forNode) return')
+  const iEmit = fn.indexOf("emit('update'")
+  assert.ok(iId > -1 && iId < iAwait && iAwait < iCheck && iCheck < iEmit, 'useNewer')
+  // the prior predictive check, after the focused field is committed
+  const run = src.slice(src.indexOf('async function runPrior'), src.indexOf('</script>'))
+  assert.ok(run.indexOf('const forNode') > -1 && run.indexOf('const forNode') < run.indexOf('await commitFocusedField') && run.indexOf('props.node.id !== forNode') < run.indexOf("emit('check')"), 'runPrior')
+  // no other emit of an update comes after an await
+  for (const m of src.matchAll(/await [^\n]*\n[\s\S]{0,400}?emit\('update'/g)) assert.ok(/forNode/.test(m[0]), `an update after an await: ${m[0].slice(0, 80)}`)
+})

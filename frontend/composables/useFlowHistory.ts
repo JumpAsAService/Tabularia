@@ -109,6 +109,13 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
       arm()
     },
     flush,
+    /**
+     * A person acts (a key, a click) while the state is still settling after an undo or a redo: what is on the canvas
+     * now is adopted at once, so that what they do next is a step of its own. A step the person is typing stays open.
+     */
+    adoptSettled() {
+      if (settling && timer !== null) flush()
+    },
     /** The editor closes: no step must close any more. */
     dispose() {
       if (timer !== null) cancel(timer)

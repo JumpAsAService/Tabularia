@@ -133,8 +133,10 @@ export function useBayesEditor (opts: BayesEditorOptions = {}) {
     markSaved,
     answer,
     edit,
-    undo: () => (readonly.value ? false : history.undo()),
-    redo: () => (readonly.value ? false : history.redo()),
+    // the document put back is what the editor writes: adopted at once (the canvas adjusts nothing of the JSON), so typing
+    // right after an undo is a step of its own and a redo does not overwrite it
+    undo: () => { if (readonly.value) return false; const ok = history.undo(); history.flush(); return ok },
+    redo: () => { if (readonly.value) return false; const ok = history.redo(); history.flush(); return ok },
     /** Closes a pending step at once (before leaving, before a save). */
     flush: () => history.flush(),
     dispose: () => history.dispose(),

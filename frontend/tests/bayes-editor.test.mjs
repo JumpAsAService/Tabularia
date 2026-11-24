@@ -363,3 +363,27 @@ test('the inspector\'s «Inside» moves a box, and what it holds, into its new c
   }
   assert.equal(E.bayesNestInBox(g, outerId, inner.id), false, 'never into what it holds')
 })
+
+test('typing right after an undo is a step of its own: it undoes and a redo does not overwrite it (review of the editor)', async () => {
+  const timers = new Map(); let id = 0
+  const schedule = (fn) => { timers.set(++id, fn); return id }
+  const cancel = (h) => timers.delete(h)
+  const tick = () => { const fns = [...timers.values()]; timers.clear(); fns.forEach(f => f()) }
+  const ed = useBayesEditor({ schedule, cancel })
+  ed.load(bayesOpenTemplate('hier_intercepts'))
+  await nextTick(); tick()
+  const n = ed.doc.value.nodes[0].id
+  const lab = () => ed.doc.value.nodes.find(x => x.id === n).label
+  const orig = lab()
+  ed.edit(d => { d.nodes.find(x => x.id === n).label = 'A' })
+  await nextTick(); tick()
+  ed.undo()
+  await nextTick()
+  ed.edit(d => { d.nodes.find(x => x.id === n).label = orig + ' typed' }, false)
+  await nextTick(); tick()
+  assert.equal(ed.canRedo.value, false)
+  ed.undo(); await nextTick(); tick()
+  assert.equal(lab(), orig, 'the typing is undone')
+  ed.redo(); await nextTick(); tick()
+  assert.equal(lab(), orig + ' typed', 'the redo brings the typing back, not the older step')
+})
