@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, garch, risk_simulation, xgboost, catboost, clv, bg_bb, ab_test, ab_plan, timestral)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, garch, risk_simulation, xgboost, catboost, clv, bg_bb, ab_test, ab_plan, timestral, bayes_model)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -6635,6 +6635,70 @@
     "value": "close"
    },
    "error": "risk_simulation: 'frequency' is required"
+  },
+  {
+   "what": "the Bayesian model node: the sample mode and its summary output are the defaults (lot Q1)",
+   "model": "bayes_model",
+   "params": {},
+   "checked": {
+    "mode": "sample",
+    "output": "summary"
+   }
+  },
+  {
+   "what": "the sample mode's draws output (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "mode": "sample",
+    "output": "draws"
+   },
+   "checked": {
+    "mode": "sample",
+    "output": "draws"
+   }
+  },
+  {
+   "what": "the prior predictive writes the ten columns alone: `output` is left out of what is checked (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "mode": "prior_predictive"
+   },
+   "checked": {
+    "mode": "prior_predictive"
+   }
+  },
+  {
+   "what": "an output given to the prior predictive is refused (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "mode": "prior_predictive",
+    "output": "draws"
+   },
+   "error": "bayes_model: 'output' only applies when mode = sample"
+  },
+  {
+   "what": "a mode the node does not have (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "mode": "optimize"
+   },
+   "error": "bayes_model: 'mode' must be one of sample, prior_predictive"
+  },
+  {
+   "what": "an output the node does not have (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "output": "chains"
+   },
+   "error": "bayes_model: 'output' must be one of summary, draws, replicated, results"
+  },
+  {
+   "what": "the sampler's settings are the gateway's, not the engine's: a key the catalogue does not take (lot Q1)",
+   "model": "bayes_model",
+   "params": {
+    "chains": 4
+   },
+   "error": "bayes_model: there is no parameter 'chains' (it takes: mode, output)"
   }
  ]
 }

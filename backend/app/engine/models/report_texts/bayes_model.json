@@ -1,0 +1,607 @@
+{
+  "en": {
+    "name": "Bayesian model",
+    "about": {
+      "sample": "posterior sampling",
+      "prior_predictive": "draws from the priors alone"
+    },
+    "sections": {
+      "posterior": "Posterior summary",
+      "prior": "Summary of the prior draws",
+      "data": "Data"
+    },
+    "kpi": {
+      "rows": "Rows used",
+      "rows_under": "{left} left out",
+      "draws": "Draws",
+      "draws_under": "chains × draws, after {warmup} warm-up iterations",
+      "draws_prior": "Prior draws",
+      "draws_prior_under": "chains × draws, no warm-up",
+      "quantities": "Quantities drawn",
+      "divergences": "Divergences",
+      "divergences_under": "of {total} draws",
+      "rhat": "Largest R-hat",
+      "ess_under": "smallest ESS: bulk {bulk}, tail {tail}"
+    },
+    "facts": {
+      "sample": "Saved model {model}, version {version} · sampler {sampler}, {metric} metric, target acceptance {delta}, tree depth up to {depth} · seed {seed} · {precision} · {warmup} s of warm-up, {sampling} s of sampling",
+      "prior_predictive": "Saved model {model}, version {version} · draws from the priors alone, before the data are seen: no warm-up, no diagnostics of a sampler ({sampler}) · seed {seed} · {precision}"
+    },
+    "posterior_note": {
+      "sample": "One row a quantity: the mean and the standard deviation of its posterior draws, three quantiles, R-hat, the effective sample sizes (ESS) of the bulk and of the tails, the standard error of the mean (MCSE) and the contraction of the prior, 1 − Var(posterior) / Var(prior), empty where the prior has no finite variance.",
+      "prior_predictive": "One row a quantity: the mean, the standard deviation and the five quantiles of the draws from the priors alone, before the data are seen."
+    },
+    "original_note": "The coefficients of a linear predictor on the column's scale: the coefficient divided by the standard deviation its predictor was standardized with (the table «Data» gives it).",
+    "data_note": "The variables the model binds to columns: how each was read and, for a number that was standardized, the mean and the standard deviation it was centred and divided by.",
+    "data_types": {
+      "real": "Number",
+      "int": "Whole number",
+      "group_index": "Group",
+      "category": "Category"
+    },
+    "tables": {
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "mean": "Mean",
+      "sd": "Sd",
+      "q5": "5 %",
+      "q25": "25 %",
+      "q50": "Median",
+      "q75": "75 %",
+      "q95": "95 %",
+      "rhat": "R-hat",
+      "ess_bulk": "ESS bulk",
+      "ess_tail": "ESS tail",
+      "mcse_mean": "MCSE of the mean",
+      "contraction": "Contraction",
+      "posterior": "Posterior summary of the scalars and the correlations",
+      "prior": "Summary of the prior draws of the scalars and the correlations",
+      "original": "On the column's scale",
+      "orig_mean": "Mean",
+      "orig_sd": "Sd",
+      "orig_q5": "5 %",
+      "orig_q50": "Median",
+      "orig_q95": "95 %",
+      "data": "Bound variables",
+      "variable": "Variable",
+      "column": "Column",
+      "type": "Type",
+      "standardized": "Standardized",
+      "count": "Units or levels",
+      "reference": "Reference level",
+      "missing": "Left out"
+    },
+    "stats": {
+      "model": {
+        "n": "Rows used",
+        "n_missing": "Rows left out (empty)",
+        "n_not_finite": "Rows left out (not finite)",
+        "chains": "Chains",
+        "warmup": "Warm-up iterations",
+        "draws": "Draws a chain",
+        "seed": "Seed",
+        "adapt_delta": "Target acceptance",
+        "max_treedepth": "Largest tree depth allowed",
+        "threads": "Threads",
+        "n_quantities": "Quantities",
+        "n_in_summary": "Quantities in the summary",
+        "seconds_data": "Reading the data (s)",
+        "seconds_warmup": "Warm-up (s)",
+        "seconds_sampling": "Sampling (s)",
+        "seconds_conversion": "Converting the draws (s)",
+        "seconds_pass_2": "Measuring the draws (s)",
+        "bayes_model": "Saved model",
+        "bayes_version": "Version",
+        "semantic_hash": "Semantic hash",
+        "program_sha256": "Program's sha256",
+        "binary_sha256": "Binary's sha256",
+        "sampler": "Sampler",
+        "metric": "Metric",
+        "precision": "Precision of the draws",
+        "note_summary_capped": "Note: quantities left out of the report",
+        "note_quantities_capped": "Note: nodes left out of the report",
+        "note_contraction_null": "Note: the contraction",
+        "note_density_cut": "Note: the density charts",
+        "note_no_checks": "Note: the predictive checks",
+        "note_checks_dropped": "Note: draws left out of the checks",
+        "note_prior_undrawn": "Note: quantities with no prior draw"
+      }
+    },
+    "values": {
+      "sampler": {
+        "nuts": "NUTS",
+        "fixed_param": "fixed parameters"
+      },
+      "metric": {
+        "diag_e": "diagonal"
+      },
+      "precision": {
+        "8 significant digits": "8 significant digits"
+      }
+    }
+  },
+  "it": {
+    "name": "Modello bayesiano",
+    "about": {
+      "sample": "campionamento della distribuzione a posteriori",
+      "prior_predictive": "estrazioni dalle sole distribuzioni a priori"
+    },
+    "sections": {
+      "posterior": "Riepilogo a posteriori",
+      "prior": "Riepilogo delle estrazioni a priori",
+      "data": "Dati"
+    },
+    "kpi": {
+      "rows": "Righe usate",
+      "rows_under": "{left} escluse",
+      "draws": "Estrazioni",
+      "draws_under": "catene × estrazioni, dopo {warmup} iterazioni di riscaldamento",
+      "draws_prior": "Estrazioni a priori",
+      "draws_prior_under": "catene × estrazioni, senza riscaldamento",
+      "quantities": "Quantità estratte",
+      "divergences": "Divergenze",
+      "divergences_under": "su {total} estrazioni",
+      "rhat": "R-hat massimo",
+      "ess_under": "ESS minimo: centro {bulk}, code {tail}"
+    },
+    "facts": {
+      "sample": "Modello salvato {model}, versione {version} · campionatore {sampler}, metrica {metric}, accettazione obiettivo {delta}, profondità dell'albero fino a {depth} · seme {seed} · {precision} · {warmup} s di riscaldamento, {sampling} s di campionamento",
+      "prior_predictive": "Modello salvato {model}, versione {version} · estrazioni dalle sole distribuzioni a priori, prima di vedere i dati: niente riscaldamento, nessuna diagnostica di un campionatore ({sampler}) · seme {seed} · {precision}"
+    },
+    "posterior_note": {
+      "sample": "Una riga per quantità: la media e la deviazione standard delle sue estrazioni a posteriori, tre quantili, R-hat, le dimensioni campionarie efficaci (ESS) del centro e delle code, l'errore standard della media (MCSE) e la contrazione rispetto alla distribuzione a priori, 1 − Var(posteriori) / Var(priori), vuota dove la distribuzione a priori non ha varianza finita.",
+      "prior_predictive": "Una riga per quantità: la media, la deviazione standard e i cinque quantili delle estrazioni dalle sole distribuzioni a priori, prima di vedere i dati."
+    },
+    "original_note": "I coefficienti di un predittore lineare sulla scala della colonna: il coefficiente diviso per la deviazione standard con cui il suo predittore è stato standardizzato (la tabella «Dati» la riporta).",
+    "data_note": "Le variabili che il modello collega alle colonne: come è stata letta ciascuna e, per un numero standardizzato, la media e la deviazione standard con cui è stato centrato e diviso.",
+    "data_types": {
+      "real": "Numero",
+      "int": "Numero intero",
+      "group_index": "Gruppo",
+      "category": "Categoria"
+    },
+    "tables": {
+      "quantity": "Quantità",
+      "unit": "Unità",
+      "mean": "Media",
+      "sd": "Dev. st.",
+      "q5": "5 %",
+      "q25": "25 %",
+      "q50": "Mediana",
+      "q75": "75 %",
+      "q95": "95 %",
+      "rhat": "R-hat",
+      "ess_bulk": "ESS centro",
+      "ess_tail": "ESS code",
+      "mcse_mean": "MCSE della media",
+      "contraction": "Contrazione",
+      "posterior": "Riepilogo a posteriori degli scalari e delle correlazioni",
+      "prior": "Riepilogo delle estrazioni a priori degli scalari e delle correlazioni",
+      "original": "Sulla scala della colonna",
+      "orig_mean": "Media",
+      "orig_sd": "Dev. st.",
+      "orig_q5": "5 %",
+      "orig_q50": "Mediana",
+      "orig_q95": "95 %",
+      "data": "Variabili collegate",
+      "variable": "Variabile",
+      "column": "Colonna",
+      "type": "Tipo",
+      "standardized": "Standardizzata",
+      "count": "Unità o livelli",
+      "reference": "Livello di riferimento",
+      "missing": "Escluse"
+    },
+    "stats": {
+      "model": {
+        "n": "Righe usate",
+        "n_missing": "Righe escluse (vuote)",
+        "n_not_finite": "Righe escluse (non finite)",
+        "chains": "Catene",
+        "warmup": "Iterazioni di riscaldamento",
+        "draws": "Estrazioni per catena",
+        "seed": "Seme",
+        "adapt_delta": "Accettazione obiettivo",
+        "max_treedepth": "Profondità massima dell'albero",
+        "threads": "Thread",
+        "n_quantities": "Quantità",
+        "n_in_summary": "Quantità nel riepilogo",
+        "seconds_data": "Lettura dei dati (s)",
+        "seconds_warmup": "Riscaldamento (s)",
+        "seconds_sampling": "Campionamento (s)",
+        "seconds_conversion": "Conversione delle estrazioni (s)",
+        "seconds_pass_2": "Misura delle estrazioni (s)",
+        "bayes_model": "Modello salvato",
+        "bayes_version": "Versione",
+        "semantic_hash": "Hash semantico",
+        "program_sha256": "sha256 del programma",
+        "binary_sha256": "sha256 del binario",
+        "sampler": "Campionatore",
+        "metric": "Metrica",
+        "precision": "Precisione delle estrazioni",
+        "note_summary_capped": "Nota: quantità escluse dal report",
+        "note_quantities_capped": "Nota: nodi esclusi dal report",
+        "note_contraction_null": "Nota: la contrazione",
+        "note_density_cut": "Nota: i grafici di densità",
+        "note_no_checks": "Nota: i controlli predittivi",
+        "note_checks_dropped": "Nota: estrazioni escluse dai controlli",
+        "note_prior_undrawn": "Nota: quantità senza estrazione a priori"
+      }
+    },
+    "values": {
+      "sampler": {
+        "nuts": "NUTS",
+        "fixed_param": "parametri fissi"
+      },
+      "metric": {
+        "diag_e": "diagonale"
+      },
+      "precision": {
+        "8 significant digits": "8 cifre significative"
+      }
+    }
+  },
+  "de": {
+    "name": "Bayessches Modell",
+    "about": {
+      "sample": "Ziehung aus der Posterior-Verteilung",
+      "prior_predictive": "Ziehungen allein aus den Priors"
+    },
+    "sections": {
+      "posterior": "Posterior-Zusammenfassung",
+      "prior": "Zusammenfassung der Prior-Ziehungen",
+      "data": "Daten"
+    },
+    "kpi": {
+      "rows": "Verwendete Zeilen",
+      "rows_under": "{left} ausgelassen",
+      "draws": "Ziehungen",
+      "draws_under": "Ketten × Ziehungen, nach {warmup} Warm-up-Iterationen",
+      "draws_prior": "Prior-Ziehungen",
+      "draws_prior_under": "Ketten × Ziehungen, ohne Warm-up",
+      "quantities": "Gezogene Größen",
+      "divergences": "Divergenzen",
+      "divergences_under": "von {total} Ziehungen",
+      "rhat": "Größtes R-hat",
+      "ess_under": "kleinste ESS: Mitte {bulk}, Ränder {tail}"
+    },
+    "facts": {
+      "sample": "Gespeichertes Modell {model}, Version {version} · Sampler {sampler}, Metrik {metric}, Ziel-Akzeptanz {delta}, Baumtiefe bis {depth} · Seed {seed} · {precision} · {warmup} s Warm-up, {sampling} s Sampling",
+      "prior_predictive": "Gespeichertes Modell {model}, Version {version} · Ziehungen allein aus den Priors, bevor die Daten gesehen werden: kein Warm-up, keine Diagnosen eines Samplers ({sampler}) · Seed {seed} · {precision}"
+    },
+    "posterior_note": {
+      "sample": "Eine Zeile je Größe: Mittelwert und Standardabweichung ihrer Posterior-Ziehungen, drei Quantile, R-hat, die effektiven Stichprobengrößen (ESS) der Mitte und der Ränder, der Standardfehler des Mittelwerts (MCSE) und die Kontraktion gegenüber dem Prior, 1 − Var(Posterior) / Var(Prior), leer, wo der Prior keine endliche Varianz hat.",
+      "prior_predictive": "Eine Zeile je Größe: Mittelwert, Standardabweichung und die fünf Quantile der Ziehungen allein aus den Priors, bevor die Daten gesehen werden."
+    },
+    "original_note": "Die Koeffizienten eines linearen Prädiktors auf der Skala der Spalte: der Koeffizient geteilt durch die Standardabweichung, mit der sein Prädiktor standardisiert wurde (die Tabelle «Daten» nennt sie).",
+    "data_note": "Die Variablen, die das Modell an Spalten bindet: wie jede gelesen wurde und, bei einer standardisierten Zahl, Mittelwert und Standardabweichung, mit denen sie zentriert und geteilt wurde.",
+    "data_types": {
+      "real": "Zahl",
+      "int": "Ganze Zahl",
+      "group_index": "Gruppe",
+      "category": "Kategorie"
+    },
+    "tables": {
+      "quantity": "Größe",
+      "unit": "Einheit",
+      "mean": "Mittelwert",
+      "sd": "Stdabw.",
+      "q5": "5 %",
+      "q25": "25 %",
+      "q50": "Median",
+      "q75": "75 %",
+      "q95": "95 %",
+      "rhat": "R-hat",
+      "ess_bulk": "ESS Mitte",
+      "ess_tail": "ESS Ränder",
+      "mcse_mean": "MCSE des Mittelwerts",
+      "contraction": "Kontraktion",
+      "posterior": "Posterior-Zusammenfassung der Skalare und der Korrelationen",
+      "prior": "Zusammenfassung der Prior-Ziehungen der Skalare und der Korrelationen",
+      "original": "Auf der Skala der Spalte",
+      "orig_mean": "Mittelwert",
+      "orig_sd": "Stdabw.",
+      "orig_q5": "5 %",
+      "orig_q50": "Median",
+      "orig_q95": "95 %",
+      "data": "Gebundene Variablen",
+      "variable": "Variable",
+      "column": "Spalte",
+      "type": "Typ",
+      "standardized": "Standardisiert",
+      "count": "Einheiten oder Stufen",
+      "reference": "Referenzstufe",
+      "missing": "Ausgelassen"
+    },
+    "stats": {
+      "model": {
+        "n": "Verwendete Zeilen",
+        "n_missing": "Ausgelassene Zeilen (leer)",
+        "n_not_finite": "Ausgelassene Zeilen (nicht endlich)",
+        "chains": "Ketten",
+        "warmup": "Warm-up-Iterationen",
+        "draws": "Ziehungen je Kette",
+        "seed": "Seed",
+        "adapt_delta": "Ziel-Akzeptanz",
+        "max_treedepth": "Größte erlaubte Baumtiefe",
+        "threads": "Threads",
+        "n_quantities": "Größen",
+        "n_in_summary": "Größen in der Zusammenfassung",
+        "seconds_data": "Daten lesen (s)",
+        "seconds_warmup": "Warm-up (s)",
+        "seconds_sampling": "Sampling (s)",
+        "seconds_conversion": "Ziehungen umwandeln (s)",
+        "seconds_pass_2": "Ziehungen vermessen (s)",
+        "bayes_model": "Gespeichertes Modell",
+        "bayes_version": "Version",
+        "semantic_hash": "Semantischer Hash",
+        "program_sha256": "sha256 des Programms",
+        "binary_sha256": "sha256 der Binärdatei",
+        "sampler": "Sampler",
+        "metric": "Metrik",
+        "precision": "Genauigkeit der Ziehungen",
+        "note_summary_capped": "Hinweis: im Bericht ausgelassene Größen",
+        "note_quantities_capped": "Hinweis: im Bericht ausgelassene Knoten",
+        "note_contraction_null": "Hinweis: die Kontraktion",
+        "note_density_cut": "Hinweis: die Dichtediagramme",
+        "note_no_checks": "Hinweis: die prädiktiven Prüfungen",
+        "note_checks_dropped": "Hinweis: aus den Prüfungen ausgelassene Ziehungen",
+        "note_prior_undrawn": "Hinweis: Größen ohne Prior-Ziehung"
+      }
+    },
+    "values": {
+      "sampler": {
+        "nuts": "NUTS",
+        "fixed_param": "feste Parameter"
+      },
+      "metric": {
+        "diag_e": "diagonal"
+      },
+      "precision": {
+        "8 significant digits": "8 signifikante Stellen"
+      }
+    }
+  },
+  "es": {
+    "name": "Modelo bayesiano",
+    "about": {
+      "sample": "muestreo de la distribución a posteriori",
+      "prior_predictive": "muestras solo de las distribuciones a priori"
+    },
+    "sections": {
+      "posterior": "Resumen a posteriori",
+      "prior": "Resumen de las muestras a priori",
+      "data": "Datos"
+    },
+    "kpi": {
+      "rows": "Filas usadas",
+      "rows_under": "{left} excluidas",
+      "draws": "Muestras",
+      "draws_under": "cadenas × muestras, tras {warmup} iteraciones de calentamiento",
+      "draws_prior": "Muestras a priori",
+      "draws_prior_under": "cadenas × muestras, sin calentamiento",
+      "quantities": "Cantidades muestreadas",
+      "divergences": "Divergencias",
+      "divergences_under": "de {total} muestras",
+      "rhat": "R-hat máximo",
+      "ess_under": "ESS mínimo: centro {bulk}, colas {tail}"
+    },
+    "facts": {
+      "sample": "Modelo guardado {model}, versión {version} · muestreador {sampler}, métrica {metric}, aceptación objetivo {delta}, profundidad del árbol hasta {depth} · semilla {seed} · {precision} · {warmup} s de calentamiento, {sampling} s de muestreo",
+      "prior_predictive": "Modelo guardado {model}, versión {version} · muestras solo de las distribuciones a priori, antes de ver los datos: sin calentamiento, sin diagnósticos de un muestreador ({sampler}) · semilla {seed} · {precision}"
+    },
+    "posterior_note": {
+      "sample": "Una fila por cantidad: la media y la desviación típica de sus muestras a posteriori, tres cuantiles, R-hat, los tamaños de muestra efectivos (ESS) del centro y de las colas, el error típico de la media (MCSE) y la contracción respecto de la distribución a priori, 1 − Var(posteriori) / Var(priori), vacía donde la distribución a priori no tiene varianza finita.",
+      "prior_predictive": "Una fila por cantidad: la media, la desviación típica y los cinco cuantiles de las muestras de las distribuciones a priori solas, antes de ver los datos."
+    },
+    "original_note": "Los coeficientes de un predictor lineal en la escala de la columna: el coeficiente dividido por la desviación típica con la que se estandarizó su predictor (la tabla «Datos» la da).",
+    "data_note": "Las variables que el modelo enlaza con columnas: cómo se leyó cada una y, para un número estandarizado, la media y la desviación típica con las que se centró y se dividió.",
+    "data_types": {
+      "real": "Número",
+      "int": "Número entero",
+      "group_index": "Grupo",
+      "category": "Categoría"
+    },
+    "tables": {
+      "quantity": "Cantidad",
+      "unit": "Unidad",
+      "mean": "Media",
+      "sd": "Desv. típ.",
+      "q5": "5 %",
+      "q25": "25 %",
+      "q50": "Mediana",
+      "q75": "75 %",
+      "q95": "95 %",
+      "rhat": "R-hat",
+      "ess_bulk": "ESS centro",
+      "ess_tail": "ESS colas",
+      "mcse_mean": "MCSE de la media",
+      "contraction": "Contracción",
+      "posterior": "Resumen a posteriori de los escalares y las correlaciones",
+      "prior": "Resumen de las muestras a priori de los escalares y las correlaciones",
+      "original": "En la escala de la columna",
+      "orig_mean": "Media",
+      "orig_sd": "Desv. típ.",
+      "orig_q5": "5 %",
+      "orig_q50": "Mediana",
+      "orig_q95": "95 %",
+      "data": "Variables enlazadas",
+      "variable": "Variable",
+      "column": "Columna",
+      "type": "Tipo",
+      "standardized": "Estandarizada",
+      "count": "Unidades o niveles",
+      "reference": "Nivel de referencia",
+      "missing": "Excluidas"
+    },
+    "stats": {
+      "model": {
+        "n": "Filas usadas",
+        "n_missing": "Filas excluidas (vacías)",
+        "n_not_finite": "Filas excluidas (no finitas)",
+        "chains": "Cadenas",
+        "warmup": "Iteraciones de calentamiento",
+        "draws": "Muestras por cadena",
+        "seed": "Semilla",
+        "adapt_delta": "Aceptación objetivo",
+        "max_treedepth": "Profundidad máxima del árbol",
+        "threads": "Hilos",
+        "n_quantities": "Cantidades",
+        "n_in_summary": "Cantidades en el resumen",
+        "seconds_data": "Lectura de los datos (s)",
+        "seconds_warmup": "Calentamiento (s)",
+        "seconds_sampling": "Muestreo (s)",
+        "seconds_conversion": "Conversión de las muestras (s)",
+        "seconds_pass_2": "Medida de las muestras (s)",
+        "bayes_model": "Modelo guardado",
+        "bayes_version": "Versión",
+        "semantic_hash": "Hash semántico",
+        "program_sha256": "sha256 del programa",
+        "binary_sha256": "sha256 del binario",
+        "sampler": "Muestreador",
+        "metric": "Métrica",
+        "precision": "Precisión de las muestras",
+        "note_summary_capped": "Nota: cantidades excluidas del informe",
+        "note_quantities_capped": "Nota: nodos excluidos del informe",
+        "note_contraction_null": "Nota: la contracción",
+        "note_density_cut": "Nota: los gráficos de densidad",
+        "note_no_checks": "Nota: los controles predictivos",
+        "note_checks_dropped": "Nota: muestras excluidas de los controles",
+        "note_prior_undrawn": "Nota: cantidades sin muestra a priori"
+      }
+    },
+    "values": {
+      "sampler": {
+        "nuts": "NUTS",
+        "fixed_param": "parámetros fijos"
+      },
+      "metric": {
+        "diag_e": "diagonal"
+      },
+      "precision": {
+        "8 significant digits": "8 cifras significativas"
+      }
+    }
+  },
+  "fr": {
+    "name": "Modèle bayésien",
+    "about": {
+      "sample": "échantillonnage de la loi a posteriori",
+      "prior_predictive": "tirages issus des seules lois a priori"
+    },
+    "sections": {
+      "posterior": "Résumé a posteriori",
+      "prior": "Résumé des tirages a priori",
+      "data": "Données"
+    },
+    "kpi": {
+      "rows": "Lignes utilisées",
+      "rows_under": "{left} écartées",
+      "draws": "Tirages",
+      "draws_under": "chaînes × tirages, après {warmup} itérations d'échauffement",
+      "draws_prior": "Tirages a priori",
+      "draws_prior_under": "chaînes × tirages, sans échauffement",
+      "quantities": "Quantités tirées",
+      "divergences": "Divergences",
+      "divergences_under": "sur {total} tirages",
+      "rhat": "R-hat maximal",
+      "ess_under": "ESS minimal : centre {bulk}, queues {tail}"
+    },
+    "facts": {
+      "sample": "Modèle enregistré {model}, version {version} · échantillonneur {sampler}, métrique {metric}, acceptation cible {delta}, profondeur de l'arbre jusqu'à {depth} · graine {seed} · {precision} · {warmup} s d'échauffement, {sampling} s d'échantillonnage",
+      "prior_predictive": "Modèle enregistré {model}, version {version} · tirages issus des seules lois a priori, avant de voir les données : pas d'échauffement, pas de diagnostics d'un échantillonneur ({sampler}) · graine {seed} · {precision}"
+    },
+    "posterior_note": {
+      "sample": "Une ligne par quantité : la moyenne et l'écart type de ses tirages a posteriori, trois quantiles, le R-hat, les tailles d'échantillon effectives (ESS) du centre et des queues, l'erreur standard de la moyenne (MCSE) et la contraction par rapport à la loi a priori, 1 − Var(a posteriori) / Var(a priori), vide là où la loi a priori n'a pas de variance finie.",
+      "prior_predictive": "Une ligne par quantité : la moyenne, l'écart type et les cinq quantiles des tirages issus des seules lois a priori, avant de voir les données."
+    },
+    "original_note": "Les coefficients d'un prédicteur linéaire sur l'échelle de la colonne : le coefficient divisé par l'écart type avec lequel son prédicteur a été standardisé (le tableau « Données » le donne).",
+    "data_note": "Les variables que le modèle relie à des colonnes : comment chacune a été lue et, pour un nombre standardisé, la moyenne et l'écart type avec lesquels il a été centré et divisé.",
+    "data_types": {
+      "real": "Nombre",
+      "int": "Nombre entier",
+      "group_index": "Groupe",
+      "category": "Catégorie"
+    },
+    "tables": {
+      "quantity": "Quantité",
+      "unit": "Unité",
+      "mean": "Moyenne",
+      "sd": "Éc. type",
+      "q5": "5 %",
+      "q25": "25 %",
+      "q50": "Médiane",
+      "q75": "75 %",
+      "q95": "95 %",
+      "rhat": "R-hat",
+      "ess_bulk": "ESS centre",
+      "ess_tail": "ESS queues",
+      "mcse_mean": "MCSE de la moyenne",
+      "contraction": "Contraction",
+      "posterior": "Résumé a posteriori des scalaires et des corrélations",
+      "prior": "Résumé des tirages a priori des scalaires et des corrélations",
+      "original": "Sur l'échelle de la colonne",
+      "orig_mean": "Moyenne",
+      "orig_sd": "Éc. type",
+      "orig_q5": "5 %",
+      "orig_q50": "Médiane",
+      "orig_q95": "95 %",
+      "data": "Variables liées",
+      "variable": "Variable",
+      "column": "Colonne",
+      "type": "Type",
+      "standardized": "Standardisée",
+      "count": "Unités ou niveaux",
+      "reference": "Niveau de référence",
+      "missing": "Écartées"
+    },
+    "stats": {
+      "model": {
+        "n": "Lignes utilisées",
+        "n_missing": "Lignes écartées (vides)",
+        "n_not_finite": "Lignes écartées (non finies)",
+        "chains": "Chaînes",
+        "warmup": "Itérations d'échauffement",
+        "draws": "Tirages par chaîne",
+        "seed": "Graine",
+        "adapt_delta": "Acceptation cible",
+        "max_treedepth": "Profondeur maximale de l'arbre",
+        "threads": "Fils",
+        "n_quantities": "Quantités",
+        "n_in_summary": "Quantités dans le résumé",
+        "seconds_data": "Lecture des données (s)",
+        "seconds_warmup": "Échauffement (s)",
+        "seconds_sampling": "Échantillonnage (s)",
+        "seconds_conversion": "Conversion des tirages (s)",
+        "seconds_pass_2": "Mesure des tirages (s)",
+        "bayes_model": "Modèle enregistré",
+        "bayes_version": "Version",
+        "semantic_hash": "Empreinte sémantique",
+        "program_sha256": "sha256 du programme",
+        "binary_sha256": "sha256 du binaire",
+        "sampler": "Échantillonneur",
+        "metric": "Métrique",
+        "precision": "Précision des tirages",
+        "note_summary_capped": "Note : quantités écartées du rapport",
+        "note_quantities_capped": "Note : nœuds écartés du rapport",
+        "note_contraction_null": "Note : la contraction",
+        "note_density_cut": "Note : les graphiques de densité",
+        "note_no_checks": "Note : les contrôles prédictifs",
+        "note_checks_dropped": "Note : tirages écartés des contrôles",
+        "note_prior_undrawn": "Note : quantités sans tirage a priori"
+      }
+    },
+    "values": {
+      "sampler": {
+        "nuts": "NUTS",
+        "fixed_param": "paramètres fixes"
+      },
+      "metric": {
+        "diag_e": "diagonale"
+      },
+      "precision": {
+        "8 significant digits": "8 chiffres significatifs"
+      }
+    }
+  }
+}

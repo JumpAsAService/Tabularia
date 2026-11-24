@@ -68,12 +68,12 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral", "bayes_model"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
 	for _, g := range Groups() {
-		if want := map[bool]string{true: "python", false: "r"}[g.ID == "boosting" || g.ID == "foundation_forecast"]; g.Language != want {
+		if want := map[bool]string{true: "python", false: "r"}[g.ID == "boosting" || g.ID == "foundation_forecast" || g.ID == "bayes"]; g.Language != want {
 			t.Errorf("%s: language %q", g.ID, g.Language)
 		}
 		for _, m := range g.Models {

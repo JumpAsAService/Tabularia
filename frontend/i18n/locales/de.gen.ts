@@ -6517,7 +6517,8 @@ export default {
       "boosting": "Boosting",
       "customer_lifetime": "Kundenlebensdauer",
       "experiments": "Experimente",
-      "foundation_forecast": "Prognosen mit vortrainierten Modellen"
+      "foundation_forecast": "Prognosen mit vortrainierten Modellen",
+      "bayes": "Bayessche Modelle"
     },
     "linear": {
       "name": "Lineare Regression",
@@ -6709,6 +6710,13 @@ export default {
         "threshold": "Eine Marke, deren Überschreiten gezählt wird, in der Einheit des Fächers (ein Preis, eine kumulierte Rendite, ein Niveau, eine laufende Summe). Leer: keine."
       }
     },
+    "bayes_model": {
+      "name": "Bayessches Modell",
+      "hint": "Zieht Stichproben aus der Posterior-Verteilung eines gespeicherten bayesschen Modells auf den Zeilen des Schritts: die Ziehungen jeder Unbekannten, eine Zusammenfassung zu jeder und die Prüfungen des Samplers, mit einem Bericht.",
+      "hints": {
+        "output": "Die Zusammenfassung jeder Größe, die Ziehungen (eine Zeile je Größe und Ziehung: sie kann groß werden), die replizierten Daten oder die Ergebnistabelle."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6736,6 +6744,7 @@ export default {
       }
     },
     "params": {
+      "mode": "Lauf",
       "series": "Spalte der Reihen",
       "season": "Saisonperiode",
       "size": "Modellgröße",
@@ -6915,6 +6924,7 @@ export default {
       "drawdown": "Maximaler Drawdown"
     },
     "hints": {
+      "mode": "Stichprobe: die Posterior-Verteilung, mit den Prüfungen des Samplers. Prior-Prädiktion: Ziehungen allein aus den Priors, bevor die Daten gesehen werden: ohne Warm-up und ohne Diagnosen.",
       "method": "STL: eine Saison, robust gegen Ausreißer. Klassisch: gleitende Durchschnitte, additiv oder multiplikativ. MSTL: mehrere Saisons zugleich. EMD: intrinsische Moden, keine Periode nötig.",
       "period": "Schritte einer Saison: 7 für die Tage einer Woche, 12 für die Monate eines Jahres. Leer: die der Frequenz (24, 7, 52, 12, 4); eine Jahres- oder Indexreihe hat keine, also angeben. Bei EMD dient sie nur dem Saisontest und dem Teilreihen-Diagramm.",
       "periods": "Bis zu 4 verschiedene ganze Perioden, in Schritten, z. B. 7, 365 für Tagesdaten. Sie werden von der kürzesten an sortiert.",
@@ -7062,6 +7072,11 @@ export default {
       "drawdown": "Der schlimmste Rückgang von einem Höchststand entlang jedes Pfads, mit seiner Verteilung."
     },
     "choice": {
+      "sample": "Posterior ziehen",
+      "prior_predictive": "Prior-Prädiktion",
+      "summary": "Zusammenfassung jeder Größe",
+      "draws": "Ziehungen",
+      "replicated": "Replizierte Daten",
       "5m": "5M",
       "28m": "28M",
       "123m": "123M",

@@ -6517,7 +6517,8 @@ export default {
       "boosting": "Boosting",
       "customer_lifetime": "Customer lifetime",
       "experiments": "Experiments",
-      "foundation_forecast": "Pre-trained forecasting"
+      "foundation_forecast": "Pre-trained forecasting",
+      "bayes": "Bayesian models"
     },
     "linear": {
       "name": "Linear regression",
@@ -6709,6 +6710,13 @@ export default {
         "threshold": "A level whose crossing is counted, in the unit of the fan (a price, a cumulative return, a level, a running total). Empty: none."
       }
     },
+    "bayes_model": {
+      "name": "Bayesian model",
+      "hint": "Samples the posterior of a saved Bayesian model on the rows of the step: the draws of every unknown, a summary of each, and the checks of the sampler, with a report.",
+      "hints": {
+        "output": "The summary of each quantity, the draws (a row for each quantity of each draw: it can be large), the replicated data, or the table of the results."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6736,6 +6744,7 @@ export default {
       }
     },
     "params": {
+      "mode": "Run",
       "series": "Series column",
       "season": "Seasonal period",
       "size": "Model size",
@@ -6915,6 +6924,7 @@ export default {
       "drawdown": "Maximum drawdown"
     },
     "hints": {
+      "mode": "Sample: the posterior, with the sampler's checks. Prior predictive: draws from the priors alone, before the data are seen: no warm-up and no diagnostics.",
       "method": "STL: one season, robust to outliers. Classical: moving averages, additive or multiplicative. MSTL: several seasons at once. EMD: intrinsic modes, no period needed.",
       "period": "Steps in one season: 7 for days in a week, 12 for months in a year. Empty: the frequency's own (24, 7, 52, 12, 4); a yearly or index series has none, so give it. For EMD it only serves the seasonality test and the subseries chart.",
       "periods": "Up to 4 different whole periods, in steps, e.g. 7, 365 for daily data. They are sorted from the shortest.",
@@ -7062,6 +7072,11 @@ export default {
       "drawdown": "The worst fall from a peak along each path, with its distribution."
     },
     "choice": {
+      "sample": "Sample the posterior",
+      "prior_predictive": "Prior predictive",
+      "summary": "Summary of each quantity",
+      "draws": "Draws",
+      "replicated": "Replicated data",
       "5m": "5M",
       "28m": "28M",
       "123m": "123M",

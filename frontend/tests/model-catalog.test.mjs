@@ -62,8 +62,8 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'garch', 'risk_simulation', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan', 'timestral'])
-  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments', 'foundation_forecast'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'garch', 'risk_simulation', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan', 'timestral', 'bayes_model'])
+  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments', 'foundation_forecast', 'bayes'])
 })
 
 test('every key of every model has a control the form draws', () => {
@@ -128,6 +128,35 @@ test('every model, group, preset, field, choice and reason has its words in the 
   }
   assert.ok(used.size > 40)
   assert.deepEqual([...used].filter((k) => !has(k)), [])
+})
+
+test('the Bayesian model is a node of its own: the Models palette leaves its group out, and a drag of it is no Model node', () => {
+  const bayes = m.modelOf('bayes_model')
+  assert.equal(bayes.group, 'bayes')
+  assert.deepEqual(Object.keys(bayes.needs), [])
+  assert.deepEqual(m.modelFields(bayes).map((f) => [f.key, f.control, f.choices]), [
+    ['mode', 'choice', ['sample', 'prior_predictive']], ['output', 'choice', ['summary', 'draws', 'replicated', 'results']],
+  ])
+  assert.deepEqual(m.modelDefaults('bayes_model'), { mode: 'sample', output: 'summary' })
+  // the prior predictive writes the ten columns alone: `output` does not apply to it
+  assert.deepEqual(m.modelParams(bayes, { mode: 'prior_predictive', output: 'draws' }), { mode: 'prior_predictive' })
+  assert.deepEqual(bayes.variants.map((v) => v.id), ['sample', 'prior_predictive'])
+  assert.equal(m.modelVariant(bayes, { mode: 'prior_predictive' }), 'prior_predictive')
+  assert.equal(m.modelVariant(bayes, {}), 'sample')
+  // nothing of the group in the palette, whatever is asked, on Compose or on a cluster
+  const on = (id) => ({ id, enabled: true, usable: true, ready: true })
+  const everyone = { disabled_reason: null, groups: [on('regression'), on('bayes')] }
+  assert.deepEqual(m.modelShownGroups(everyone).map((g) => g.id), ['regression'])
+  assert.deepEqual(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).map((g) => g.id).includes('bayes'), false)
+  assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, '', en).map((g) => g.group).includes('bayes'), false)
+  assert.equal(m.modelPalette(m.MODEL_CATALOG.groups, 'bayes', en).flatMap((g) => g.items.map((i) => i.model)).includes('bayes_model'), false)
+  assert.equal(m.modelFromKind('model:bayes_model'), null)
+  // its words in the five languages, and it hands on the columns the contract declares
+  for (const lang of LANGS) for (const key of ['models.groups.bayes', 'models.bayes_model.name', 'models.bayes_model.hint', 'models.params.mode', 'models.choice.prior_predictive']) {
+    assert.ok(WORDS[lang][key]?.trim(), `${lang} ${key}`)
+  }
+  assert.deepEqual(m.modelOutputColumns(bayes, { mode: 'sample', output: 'draws' }, null).columns.map((c) => c.name), ['chain', 'draw', 'quantity', 'node', 'unit', 'index', 'index_2', 'value'])
+  assert.equal(m.modelOutputColumns(bayes, { mode: 'prior_predictive' }, null).columns.length, 10)
 })
 
 test('a model added to the catalogue is asked for its words by name', () => {

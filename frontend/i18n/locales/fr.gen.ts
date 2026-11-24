@@ -6517,7 +6517,8 @@ export default {
       "boosting": "Boosting",
       "customer_lifetime": "Cycle de vie client",
       "experiments": "Expériences",
-      "foundation_forecast": "Prévisions par modèles pré-entraînés"
+      "foundation_forecast": "Prévisions par modèles pré-entraînés",
+      "bayes": "Modèles bayésiens"
     },
     "linear": {
       "name": "Régression linéaire",
@@ -6709,6 +6710,13 @@ export default {
         "threshold": "Un niveau dont on compte le franchissement, dans l'unité de l'éventail (un prix, un rendement cumulé, un niveau, un total cumulé). Vide : aucun."
       }
     },
+    "bayes_model": {
+      "name": "Modèle bayésien",
+      "hint": "Échantillonne la loi a posteriori d'un modèle bayésien enregistré sur les lignes de l'étape : les tirages de chaque inconnue, un résumé de chacune et les contrôles de l'échantillonneur, avec un rapport.",
+      "hints": {
+        "output": "Le résumé de chaque quantité, les tirages (une ligne par quantité et par tirage : il peut être volumineux), les données répliquées ou la table des résultats."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6736,6 +6744,7 @@ export default {
       }
     },
     "params": {
+      "mode": "Exécution",
       "series": "Colonne des séries",
       "season": "Période saisonnière",
       "size": "Taille du modèle",
@@ -6915,6 +6924,7 @@ export default {
       "drawdown": "Drawdown maximal"
     },
     "hints": {
+      "mode": "Échantillon : la loi a posteriori, avec les contrôles de l'échantillonneur. Prédictive a priori : tirages issus des seules lois a priori, avant de voir les données : sans échauffement ni diagnostics.",
       "method": "STL : une saison, robuste aux valeurs aberrantes. Classique : moyennes mobiles, additive ou multiplicative. MSTL : plusieurs saisons à la fois. EMD : modes intrinsèques, aucune période requise.",
       "period": "Pas d'une saison : 7 pour les jours d'une semaine, 12 pour les mois d'une année. Vide : celle de la fréquence (24, 7, 52, 12, 4) ; une série annuelle ou à indice n'en a pas, donnez-la. Pour EMD, elle ne sert qu'au test de saisonnalité et au graphique des sous-séries.",
       "periods": "Jusqu'à 4 périodes entières différentes, en pas, par exemple 7, 365 pour des données quotidiennes. Elles sont triées de la plus courte à la plus longue.",
@@ -7062,6 +7072,11 @@ export default {
       "drawdown": "La pire chute depuis un sommet le long de chaque trajectoire, avec sa distribution."
     },
     "choice": {
+      "sample": "Échantillonner la loi a posteriori",
+      "prior_predictive": "Prédictive a priori",
+      "summary": "Résumé de chaque quantité",
+      "draws": "Tirages",
+      "replicated": "Données répliquées",
       "5m": "5M",
       "28m": "28M",
       "123m": "123M",

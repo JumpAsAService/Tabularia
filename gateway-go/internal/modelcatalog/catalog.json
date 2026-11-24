@@ -79,7 +79,18 @@
     "max_series_charts": 12,
     "seed_block": 1000,
     "risk_bins": 1024,
-    "max_sample_paths": 20
+    "max_sample_paths": 20,
+    "bayes_max_summary_quantities": 2000,
+    "bayes_max_quantity_entries": 600,
+    "bayes_max_chart_quantities": 12,
+    "bayes_trace_points": 200,
+    "bayes_rank_bins": 20,
+    "bayes_density_points": 200,
+    "bayes_max_unit_charts": 8,
+    "bayes_unit_points": 1000,
+    "bayes_max_pair_quantities": 4,
+    "bayes_pair_points": 300,
+    "bayes_max_check_rows": 5000
   },
   "controls": [
     "column",
@@ -1000,6 +1011,22 @@
         "paths",
         "results"
       ]
+    },
+    "bayes_mode": {
+      "control": "choice",
+      "choices": [
+        "sample",
+        "prior_predictive"
+      ]
+    },
+    "output_bayes": {
+      "control": "choice",
+      "choices": [
+        "summary",
+        "draws",
+        "replicated",
+        "results"
+      ]
     }
   },
   "season_of_frequency": {
@@ -1183,6 +1210,45 @@
       "cumulative": "Float64",
       "price": "Float64",
       "sigma": "Float64"
+    },
+    "summary": {
+      "quantity": "String",
+      "node": "String",
+      "label": "String",
+      "unit": "String",
+      "index": "Int32",
+      "index_2": "Int32",
+      "kind": "String",
+      "scale": "String",
+      "mean": "Float64",
+      "sd": "Float64",
+      "q5": "Float64",
+      "q25": "Float64",
+      "q50": "Float64",
+      "q75": "Float64",
+      "q95": "Float64",
+      "mcse_mean": "Float64",
+      "mcse_sd": "Float64",
+      "rhat": "Float64",
+      "ess_bulk": "Float64",
+      "ess_tail": "Float64",
+      "contraction": "Float64"
+    },
+    "draws": {
+      "chain": "Int32",
+      "draw": "Int32",
+      "quantity": "String",
+      "node": "String",
+      "unit": "String",
+      "index": "Int32",
+      "index_2": "Int32",
+      "value": "Float64"
+    },
+    "replicated": {
+      "chain": "Int32",
+      "draw": "Int32",
+      "row": "Int32",
+      "value": "Float64"
     }
   },
   "rows_input_types": {
@@ -1339,6 +1405,42 @@
       "level": "required",
       "level_2": "optional",
       "indexed": false
+    },
+    "summary": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
+    },
+    "quantity": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "data": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "sampler": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "ppc": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": true,
+      "unindexed": [
+        "observed"
+      ]
+    },
+    "prior_check": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": true,
+      "unindexed": [
+        "observed"
+      ]
     }
   },
   "verdicts": [
@@ -1411,6 +1513,14 @@
       "label": "models.groups.foundation_forecast",
       "models": [
         "timestral"
+      ]
+    },
+    {
+      "id": "bayes",
+      "language": "python",
+      "label": "models.groups.bayes",
+      "models": [
+        "bayes_model"
       ]
     }
   ],
@@ -10966,6 +11076,357 @@
               "series": true
             }
           }
+        }
+      ]
+    },
+    {
+      "id": "bayes_model",
+      "group": "bayes",
+      "family": "bayes",
+      "label": "models.bayes_model.name",
+      "card": true,
+      "max_rows": null,
+      "needs": {},
+      "takes": {
+        "mode": "bayes_mode",
+        "output": "output_bayes"
+      },
+      "defaults": {
+        "mode": "sample",
+        "output": "summary"
+      },
+      "applies": {
+        "output": {
+          "mode": [
+            "sample"
+          ]
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [],
+      "presets": {},
+      "variants": [
+        {
+          "id": "sample",
+          "when": {
+            "mode": "sample"
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_not_finite",
+                "chains",
+                "warmup",
+                "draws",
+                "seed",
+                "adapt_delta",
+                "max_treedepth",
+                "threads",
+                "n_quantities",
+                "n_in_summary",
+                "seconds_data",
+                "seconds_warmup",
+                "seconds_sampling",
+                "seconds_conversion",
+                "seconds_pass_2"
+              ],
+              "texts": [
+                "model",
+                "variant",
+                "rows_from",
+                "group_version",
+                "software",
+                "bayes_model",
+                "bayes_version",
+                "semantic_hash",
+                "program_sha256",
+                "binary_sha256",
+                "sampler",
+                "metric",
+                "precision",
+                "note_*"
+              ]
+            },
+            "quantity": {
+              "levels": null,
+              "numbers": [
+                "n_quantities",
+                "rhat_max",
+                "ess_bulk_min",
+                "ess_tail_min"
+              ],
+              "texts": [
+                "label",
+                "name",
+                "node_id",
+                "kind",
+                "plate",
+                "plate_label"
+              ]
+            },
+            "summary": {
+              "levels": null,
+              "texts": [],
+              "numbers": [
+                "mean",
+                "sd",
+                "q5",
+                "q25",
+                "q50",
+                "q75",
+                "q95",
+                "mcse_mean",
+                "mcse_sd",
+                "rhat",
+                "ess_bulk",
+                "ess_tail",
+                "contraction",
+                "orig_mean",
+                "orig_sd",
+                "orig_q5",
+                "orig_q50",
+                "orig_q95"
+              ]
+            },
+            "data": {
+              "levels": null,
+              "numbers": [
+                "mean",
+                "sd",
+                "n_units",
+                "n_levels",
+                "n_missing"
+              ],
+              "texts": [
+                "column",
+                "type",
+                "reference",
+                "standardized"
+              ]
+            },
+            "sampler": {
+              "levels": null,
+              "numbers": [
+                "divergences",
+                "treedepth_hits",
+                "treedepth_max",
+                "e_bfmi",
+                "stepsize",
+                "accept_stat_mean",
+                "n_leapfrog_mean",
+                "seconds_warmup",
+                "seconds_sampling",
+                "draws"
+              ],
+              "texts": []
+            },
+            "ppc": {
+              "levels": null,
+              "numbers": [
+                "observed",
+                "count"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": null,
+              "numbers": [
+                "y"
+              ],
+              "texts": [
+                "unit"
+              ]
+            },
+            "curve": {
+              "levels": null,
+              "numbers": [
+                "y",
+                "value",
+                "count"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": null,
+              "numbers": [
+                "y",
+                "value",
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": null,
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [],
+          "outputs": {
+            "summary": [
+              "quantity",
+              "node",
+              "label",
+              "unit",
+              "index",
+              "index_2",
+              "kind",
+              "scale",
+              "mean",
+              "sd",
+              "q5",
+              "q25",
+              "q50",
+              "q75",
+              "q95",
+              "mcse_mean",
+              "mcse_sd",
+              "rhat",
+              "ess_bulk",
+              "ess_tail",
+              "contraction"
+            ],
+            "draws": [
+              "chain",
+              "draw",
+              "quantity",
+              "node",
+              "unit",
+              "index",
+              "index_2",
+              "value"
+            ],
+            "replicated": [
+              "chain",
+              "draw",
+              "row",
+              "value"
+            ]
+          }
+        },
+        {
+          "id": "prior_predictive",
+          "when": {
+            "mode": "prior_predictive"
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_not_finite",
+                "chains",
+                "warmup",
+                "draws",
+                "seed",
+                "adapt_delta",
+                "max_treedepth",
+                "threads",
+                "n_quantities",
+                "n_in_summary",
+                "seconds_data",
+                "seconds_warmup",
+                "seconds_sampling",
+                "seconds_conversion",
+                "seconds_pass_2"
+              ],
+              "texts": [
+                "model",
+                "variant",
+                "rows_from",
+                "group_version",
+                "software",
+                "bayes_model",
+                "bayes_version",
+                "semantic_hash",
+                "program_sha256",
+                "binary_sha256",
+                "sampler",
+                "metric",
+                "precision",
+                "note_*"
+              ]
+            },
+            "quantity": {
+              "levels": null,
+              "numbers": [
+                "n_quantities",
+                "rhat_max",
+                "ess_bulk_min",
+                "ess_tail_min"
+              ],
+              "texts": [
+                "label",
+                "name",
+                "node_id",
+                "kind",
+                "plate",
+                "plate_label"
+              ]
+            },
+            "summary": {
+              "levels": null,
+              "numbers": [
+                "mean",
+                "sd",
+                "q5",
+                "q25",
+                "q50",
+                "q75",
+                "q95"
+              ],
+              "texts": []
+            },
+            "data": {
+              "levels": null,
+              "numbers": [
+                "mean",
+                "sd",
+                "n_units",
+                "n_levels",
+                "n_missing"
+              ],
+              "texts": [
+                "column",
+                "type",
+                "reference",
+                "standardized"
+              ]
+            },
+            "prior_check": {
+              "levels": null,
+              "numbers": [
+                "observed",
+                "count"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": null,
+              "numbers": [
+                "y",
+                "value",
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": null,
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [],
+          "outputs": {}
         }
       ]
     }

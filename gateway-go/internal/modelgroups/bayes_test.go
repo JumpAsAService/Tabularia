@@ -15,10 +15,10 @@ import (
 )
 
 // The group `bayes` (docs/specs/bayes-image.md): its recipe loads, every package has its hashes, the toolchain, the two CmdStan
-// tarballs and the switches are the spec's; it is shipped ahead of the models' catalogue, with no model yet.
+// tarballs and the switches are the spec's; the catalogue names the group and its model `bayes_model` (lot Q1 of docs/specs/bayes-report.md).
 func TestTheBayesRecipe(t *testing.T) {
 	g, ok := Get("bayes")
-	if !ok || g.Recipe.Language != "python" || g.Recipe.Base != "3.14" || len(g.Models) != 0 {
+	if !ok || g.Recipe.Language != "python" || g.Recipe.Base != "3.14" || strings.Join(g.Models, ",") != "bayes_model" {
 		t.Fatalf("the group: %+v", g)
 	}
 	r := g.Recipe

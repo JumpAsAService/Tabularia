@@ -143,6 +143,9 @@ export const MODEL_CONTROLS: readonly ModelControl[] = [
 
 /** The node types of a flow that are models. */
 export const MODEL_NODE_TYPE = 'model'
+/** The groups whose models are a node of their own and not a Model node: the Models palette leaves them out (the node «Bayesian
+ *  model» is an item of its own in the palette, docs/specs/bayes-report.md, «Decisions»). One constant here, no field in the catalogue. */
+export const MODEL_GROUPS_OF_THEIR_OWN: ReadonlySet<string> = new Set(['bayes'])
 export const PREDICT_NODE_TYPE = 'model_predict'
 
 /** The colour of the models: the palette's items, the nodes, the minimap. */
@@ -888,9 +891,10 @@ export function modelOff(group: string, state: ModelGroupsState | null | undefin
  *  hidden). */
 export function modelShownGroups(state: ModelGroupsState | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): ModelGroupDef[] {
   if (!state) return []
-  if (state.disabled_reason === 'kubernetes') return catalog.groups
+  const own = catalog.groups.filter((g) => !MODEL_GROUPS_OF_THEIR_OWN.has(g.id))
+  if (state.disabled_reason === 'kubernetes') return own
   if (state.disabled_reason) return []
-  return catalog.groups.filter((g) => modelOff(g.id, state) === '')
+  return own.filter((g) => modelOff(g.id, state) === '')
 }
 
 /** One entry of the palette. `kind` is what a drag carries (application/tabularia). */
@@ -914,7 +918,7 @@ export function modelFromKind(kind: string, catalog: ModelCatalog = MODEL_CATALO
   const [head, id, preset] = kind.split(':')
   if (head !== 'model' || !id) return null
   const model = modelOf(id, catalog)
-  if (!model) return null
+  if (!model || MODEL_GROUPS_OF_THEIR_OWN.has(model.group)) return null // a model of a node of its own is no Model node's
   if (preset !== undefined && !(preset in model.presets)) return null
   return preset ? { model: id, preset } : { model: id }
 }
@@ -939,6 +943,7 @@ export function modelPalette(shown: readonly ModelGroupDef[], query: string, tex
   const has = (s: string) => s.toLowerCase().includes(q)
   const out: ModelPaletteGroup[] = []
   for (const group of shown) {
+    if (MODEL_GROUPS_OF_THEIR_OWN.has(group.id)) continue
     const groupHit = !!q && has(text(modelGroupKey(group.id)))
     const items: ModelPaletteItem[] = []
     for (const id of group.models) {
@@ -1135,7 +1140,8 @@ const numberLabel = (v: number): string => String(v)
 export function modelOutputColumns(model: ModelDef, params: Params | null | undefined, input: readonly ModelColumn[] | null | undefined,
   catalog: ModelCatalog = MODEL_CATALOG): { columns: ModelColumn[]; later: string[] } {
   const full = modelFull(model, modelParams(model, params, catalog))
-  const output = typeof full.output === 'string' && full.output ? full.output : 'results'
+  // (an output that does not apply is the ten columns: the Bayesian model's prior predictive writes them alone)
+  const output = typeof full.output === 'string' && full.output && modelApplies(model, 'output', full) ? full.output : 'results'
   const types = catalog.output_types?.[output] ?? {}
   if (output === 'results') return { columns: Object.entries(types).map(([name, dtype]) => ({ name, dtype })), later: [] }
   // (a metric type not chosen yet gives the first variant, whose outputs are those of every variant of the experiments)

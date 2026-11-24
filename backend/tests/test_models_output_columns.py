@@ -43,9 +43,9 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# Variants whose runner is not built yet: their case joins make_output_columns.py when it is (none now: the risk simulation's
-# runner is lot G3's of docs/specs/garch-risk.md).
-NOT_RUN_YET: set[tuple[str, str]] = set()
+# Variants whose columns no case of make_output_columns.py runs: the Bayesian model's sample mode samples with CmdStan, which the
+# groups' images of this script do not hold; its columns are bayescontract's, and a Go test compares them with the catalogue's.
+NOT_RUN_YET: set[tuple[str, str]] = {("bayes_model", "sample")}
 
 
 def test_every_variant_that_hands_on_columns_was_run():

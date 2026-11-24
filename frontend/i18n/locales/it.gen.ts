@@ -6517,7 +6517,8 @@ export default {
       "boosting": "Boosting",
       "customer_lifetime": "Ciclo di vita del cliente",
       "experiments": "Esperimenti",
-      "foundation_forecast": "Previsioni con modelli pre-addestrati"
+      "foundation_forecast": "Previsioni con modelli pre-addestrati",
+      "bayes": "Modelli bayesiani"
     },
     "linear": {
       "name": "Regressione lineare",
@@ -6709,6 +6710,13 @@ export default {
         "threshold": "Un livello di cui si conta il superamento, nell'unità del ventaglio (un prezzo, un rendimento cumulato, un livello, un totale cumulato). Vuoto: nessuno."
       }
     },
+    "bayes_model": {
+      "name": "Modello bayesiano",
+      "hint": "Campiona la distribuzione a posteriori di un modello bayesiano salvato sulle righe del passo: le estrazioni di ogni incognita, un riepilogo di ciascuna e i controlli del campionatore, con un report.",
+      "hints": {
+        "output": "Il riepilogo di ogni quantità, le estrazioni (una riga per ogni quantità di ogni estrazione: può essere grande), i dati replicati o la tabella dei risultati."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6736,6 +6744,7 @@ export default {
       }
     },
     "params": {
+      "mode": "Esecuzione",
       "series": "Colonna delle serie",
       "season": "Periodo stagionale",
       "size": "Dimensione del modello",
@@ -6915,6 +6924,7 @@ export default {
       "drawdown": "Massimo drawdown"
     },
     "hints": {
+      "mode": "Campionamento: la distribuzione a posteriori, con i controlli del campionatore. Predittiva a priori: estrazioni dalle sole distribuzioni a priori, prima di vedere i dati: niente riscaldamento né diagnostica.",
       "method": "STL: una stagione, robusta agli outlier. Classica: medie mobili, additiva o moltiplicativa. MSTL: più stagioni insieme. EMD: modi intrinseci, nessun periodo richiesto.",
       "period": "Passi di una stagione: 7 per i giorni di una settimana, 12 per i mesi di un anno. Vuoto: quello della frequenza (24, 7, 52, 12, 4); una serie annuale o a indice non ne ha, quindi indicalo. Per EMD serve solo al test della stagionalità e al grafico delle sottoserie.",
       "periods": "Fino a 4 periodi interi diversi, in passi, ad esempio 7, 365 per dati giornalieri. Vengono ordinati dal più breve.",
@@ -7062,6 +7072,11 @@ export default {
       "drawdown": "La peggiore discesa da un massimo lungo ogni percorso, con la sua distribuzione."
     },
     "choice": {
+      "sample": "Campiona la distribuzione a posteriori",
+      "prior_predictive": "Predittiva a priori",
+      "summary": "Riepilogo di ogni quantità",
+      "draws": "Estrazioni",
+      "replicated": "Dati replicati",
       "5m": "5M",
       "28m": "28M",
       "123m": "123M",

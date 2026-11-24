@@ -2,7 +2,10 @@ package modelcatalog
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -45,11 +48,48 @@ const fakeSchema = `{
 }
 `
 
-// a catalogue and a schema without anything of the group are returned as they are, byte for byte
-func TestAViewOfACatalogueWithoutTheGroupIsTheCatalogue(t *testing.T) {
-	if !bytes.Equal(CompactFor("regression"), Compact()) || !bytes.Equal(CompactFor("experiments"), Compact()) ||
-		!bytes.Equal(CompactFor(BayesGroup), Compact()) {
-		t.Error("the catalogue as it is shipped has nothing of the group `bayes`: every view is the compact catalogue")
+// the catalogue as it is shipped holds the group `bayes` (its entry, its limits, its shapes, its kinds, its outputs): the group gets it
+// whole, and every other group gets the catalogue as it was before the entry, byte for byte (recorded in testdata/before-bayes.json)
+func TestTheOtherGroupsViewIsTheCatalogueBeforeTheEntry(t *testing.T) {
+	var before struct {
+		Catalog struct {
+			Bytes  int    `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		} `json:"catalog_compact"`
+	}
+	b, err := os.ReadFile("testdata/before-bayes.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &before); err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range []string{"regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments", "foundation_forecast"} {
+		view := CompactFor(group)
+		sum := sha256.Sum256(view)
+		if len(view) != before.Catalog.Bytes || hex.EncodeToString(sum[:]) != before.Catalog.SHA256 {
+			t.Errorf("%s: the view is %d bytes, sha256 %x: not the catalogue before the entry (%d bytes, %s)", group, len(view), sum, before.Catalog.Bytes, before.Catalog.SHA256)
+		}
+	}
+	if !bytes.Equal(CompactFor(BayesGroup), Compact()) {
+		t.Error("the group bayes did not receive the catalogue whole")
+	}
+	whole := string(Compact())
+	for _, want := range []string{`"id":"bayes_model"`, `"bayes_max_pair_quantities"`, `"bayes_mode"`, `"output_bayes"`, `"prior_check":{`, `"replicated":{`} {
+		if !strings.Contains(whole, want) {
+			t.Errorf("the catalogue as shipped lacks %s", want)
+		}
+	}
+	// and the other groups' view holds none of the group's
+	view := string(CompactFor("regression"))
+	for _, gone := range []string{`"bayes_model"`, `"bayes_`, `output_bayes`, `"prior_check"`, `"replicated"`, `"sampler":{"level"`} {
+		if strings.Contains(view, gone) {
+			t.Errorf("the view still holds %s", gone)
+		}
+	}
+	// what another group's model writes with the same word stays: a reading block «summary» is no section «summary» of the shapes
+	if !strings.Contains(view, `"reading":{"level":"required"`) || !strings.Contains(view, `"bayes":{"level":"required"`) {
+		t.Error("the view lost a shape another group's model has")
 	}
 }
 

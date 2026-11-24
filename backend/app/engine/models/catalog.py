@@ -117,6 +117,19 @@ LIMITS: dict[str, int] = {
     "seed_block": 1000,              # paths of a seed block
     "risk_bins": 1024,               # bins of the pass-1 histograms: only memory and the fan's declared error, never an exact measure
     "max_sample_paths": 20,          # paths 1…20 drawn in the fan
+    # the Bayesian model node's (docs/specs/bayes-contract.md, «The report's scope and the caps»): every key starts with `bayes_`, the
+    # prefix the other groups' view of the catalogue leaves out (modelcatalog.CompactFor)
+    "bayes_max_summary_quantities": 2000,  # quantities with `summary` rows
+    "bayes_max_quantity_entries": 600,     # nodes with a `quantity` row (and, a linear predictor's, the original-scale numbers)
+    "bayes_max_chart_quantities": 12,      # quantities with a trace, a rank and a density chart
+    "bayes_trace_points": 200,             # thinned draws a chain in a trace
+    "bayes_rank_bins": 20,                 # bins of a rank histogram
+    "bayes_density_points": 200,           # points of a density curve
+    "bayes_max_unit_charts": 8,            # plates' quantities with a `units:` chart
+    "bayes_unit_points": 1000,             # units in a `units:` chart
+    "bayes_max_pair_quantities": 4,        # scalars whose pairs are drawn (4: six pairs)
+    "bayes_pair_points": 300,              # thinned draws a pair's chart holds
+    "bayes_max_check_rows": 5000,          # rows of the predictive checks
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -128,6 +141,7 @@ GROUPS: dict[str, dict[str, Any]] = {
     "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
     "experiments": {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]},
     "foundation_forecast": {"language": "python", "label": "models.groups.foundation_forecast", "models": ["timestral"]},
+    "bayes": {"language": "python", "label": "models.groups.bayes", "models": ["bayes_model"]},
 }
 
 # ── controls and kinds ──────────────────────────────────────────────────────
@@ -320,6 +334,10 @@ KINDS: dict[str, dict[str, Any]] = {
     "risk_threshold": {"control": "number", "min": -999_999_999_999_999, "max": 999_999_999_999_999},
     "risk_position": {"control": "number", "above": 0, "max": 999_999_999_999_999},
     "output_risk": _choice("risk_summary", "paths", "results"),
+    # the Bayesian model node's (docs/specs/bayes-contract.md, «The catalogue's declaration»): the run's variant, and what the node
+    # hands on besides the ten columns
+    "bayes_mode": _choice("sample", "prior_predictive"),
+    "output_bayes": _choice("summary", "draws", "replicated", "results"),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -368,6 +386,15 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     # or at a step (level_2 the step)
     "backtest": {"level": "required", "level_2": "null", "indexed": False},
     "risk": {"level": "required", "level_2": "optional", "indexed": False},
+    # the Bayesian model node's (docs/specs/bayes-contract.md, «Sections»): a quantity's node (its mapping, its extremes), a quantity
+    # (and a unit) of the summary, a bound data variable, a chain's facts, the predictive checks (the data's statistic unindexed, the
+    # bins of the draws' statistic indexed)
+    "summary": {"level": "required", "level_2": "optional", "indexed": False},
+    "quantity": {"level": "required", "level_2": "null", "indexed": False},
+    "data": {"level": "required", "level_2": "null", "indexed": False},
+    "sampler": {"level": "required", "level_2": "null", "indexed": False},
+    "ppc": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]},
+    "prior_check": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -1661,6 +1688,83 @@ MODELS["timestral"] = {
     }],
 }
 
+# ── the Bayesian model node (docs/specs/bayes-contract.md, «The catalogue's declaration»; docs/specs/bayes-report.md, lot Q1) ──
+# What the runner of the group `bayes` writes, equal to `internal/bayescontract`'s declaration (a Go test compares them). The node's
+# other settings (the saved model, its binding, the sampler) are the gateway's (`flow-node`) and travel in the task's `bayes` object:
+# `params` holds only what the engine's check of the results reads. `card: true` (a run registers a model card), and no Predict (the
+# model is not in `PREDICT`). `output` is the sample mode's; the prior predictive writes the ten columns alone.
+_BAYES_MODEL_TEXTS = ["model", "variant", "rows_from", "group_version", "software", "bayes_model", "bayes_version", "semantic_hash",
+                      "program_sha256", "binary_sha256", "sampler", "metric", "precision", "note_*"]
+_BAYES_MODEL_NUMBERS = ["n", "n_missing", "n_not_finite", "chains", "warmup", "draws", "seed", "adapt_delta", "max_treedepth",
+                        "threads", "n_quantities", "n_in_summary", "seconds_data", "seconds_warmup", "seconds_sampling",
+                        "seconds_conversion", "seconds_pass_2"]
+_BAYES_QUANTITY = {"levels": None, "numbers": ["n_quantities", "rhat_max", "ess_bulk_min", "ess_tail_min"],
+                   "texts": ["label", "name", "node_id", "kind", "plate", "plate_label"]}
+_BAYES_SUMMARY_NUMBERS = ["mean", "sd", "q5", "q25", "q50", "q75", "q95"]
+_BAYES_DATA = {"levels": None, "numbers": ["mean", "sd", "n_units", "n_levels", "n_missing"],
+               "texts": ["column", "type", "reference", "standardized"]}
+_BAYES_SAMPLER = {"levels": None, "numbers": ["divergences", "treedepth_hits", "treedepth_max", "e_bfmi", "stepsize", "accept_stat_mean",
+                                              "n_leapfrog_mean", "seconds_warmup", "seconds_sampling", "draws"], "texts": []}
+_BAYES_CHECK = {"levels": None, "numbers": ["observed", "count"], "texts": []}
+_BAYES_CHART = {"levels": None, "numbers": ["y", "value", "count"], "texts": []}
+_BAYES_READING = {"levels": None, "numbers": [], "texts": ["line_*"]}
+_BAYES_SUMMARY_COLUMNS = ["quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", "mean", "sd", "q5", "q25", "q50",
+                          "q75", "q95", "mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail", "contraction"]
+_BAYES_DRAWS_COLUMNS = ["chain", "draw", "quantity", "node", "unit", "index", "index_2", "value"]
+_BAYES_REPLICATED_COLUMNS = ["chain", "draw", "row", "value"]
+
+MODELS["bayes_model"] = {
+    "group": "bayes",
+    "family": "bayes",
+    "card": True,
+    "needs": {},
+    "takes": {"mode": "bayes_mode", "output": "output_bayes"},
+    "defaults": {"mode": "sample", "output": "summary"},
+    # the prior predictive writes the ten columns alone: `output` is the sample mode's
+    "applies": {"output": {"mode": ["sample"]}},
+    "requires": [],
+    "forbids": [],
+    "disjoint": [],
+    "variants": [
+        {
+            "id": "sample",
+            "when": {"mode": "sample"},
+            "sections": {
+                "model": {"levels": None, "numbers": list(_BAYES_MODEL_NUMBERS), "texts": list(_BAYES_MODEL_TEXTS)},
+                "quantity": dict(_BAYES_QUANTITY),
+                "summary": {"levels": None, "texts": [],
+                            "numbers": [*_BAYES_SUMMARY_NUMBERS, "mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail", "contraction",
+                                        "orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95"]},
+                "data": dict(_BAYES_DATA),
+                "sampler": dict(_BAYES_SAMPLER),
+                "ppc": dict(_BAYES_CHECK),
+                "point": {"levels": None, "numbers": ["y"], "texts": ["unit"]},
+                "curve": dict(_BAYES_CHART),
+                "hist": dict(_BAYES_CHART),
+                "reading": dict(_BAYES_READING),
+            },
+            "charts": [],
+            "outputs": {"summary": list(_BAYES_SUMMARY_COLUMNS), "draws": list(_BAYES_DRAWS_COLUMNS),
+                        "replicated": list(_BAYES_REPLICATED_COLUMNS)},
+        },
+        {
+            "id": "prior_predictive",
+            "when": {"mode": "prior_predictive"},
+            "sections": {
+                "model": {"levels": None, "numbers": list(_BAYES_MODEL_NUMBERS), "texts": list(_BAYES_MODEL_TEXTS)},
+                "quantity": dict(_BAYES_QUANTITY),
+                "summary": {"levels": None, "numbers": list(_BAYES_SUMMARY_NUMBERS), "texts": []},
+                "data": dict(_BAYES_DATA),
+                "prior_check": dict(_BAYES_CHECK),
+                "curve": dict(_BAYES_CHART),
+                "reading": dict(_BAYES_READING),
+            },
+            "charts": [],
+            "outputs": {},
+        },
+    ],
+}
+
 # the models in the order of their groups: the palette, the sentences and the snapshot list them so
 MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
 
@@ -1768,6 +1872,15 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
     # the simulated paths, rows sorted by path then step (docs/specs/garch-risk.md, «The Parquet file of the paths»)
     "paths": {"path": "Int32", "step": "Int32", "time": "=time", **{name: "Float64" for name in (
         "value", "cumulative", "price", "sigma")}},
+    # the Bayesian model node's (docs/specs/bayes-contract.md, «Outputs»): the summary of every quantity, the draws (always long: a row
+    # a quantity of a draw), the replicated data of the thinned draws. The columns are bayescontract's (a Go test compares them)
+    "summary": {"quantity": "String", "node": "String", "label": "String", "unit": "String", "index": "Int32", "index_2": "Int32",
+                "kind": "String", "scale": "String", **{name: "Float64" for name in (
+                    "mean", "sd", "q5", "q25", "q50", "q75", "q95", "mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail",
+                    "contraction")}},
+    "draws": {"chain": "Int32", "draw": "Int32", "quantity": "String", "node": "String", "unit": "String", "index": "Int32",
+              "index_2": "Int32", "value": "Float64"},
+    "replicated": {"chain": "Int32", "draw": "Int32", "row": "Int32", "value": "Float64"},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type
@@ -2196,6 +2309,8 @@ def output_columns(model: str, params: Mapping[str, Any] | None,
     given = {k: v for k, v in (params or {}).items() if v is not None}
     full = {k: given.get(k, spec["defaults"].get(k)) for k in {**spec["needs"], **spec["takes"]}}
     output = full.get("output") or "results"
+    if "output" in spec["takes"] and not applies(model, "output", full):  # the prior predictive writes the ten columns alone
+        output = "results"
     types = OUTPUT_TYPES[output]
     if output == "results":
         return list(types.items()), []

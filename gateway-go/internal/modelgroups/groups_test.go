@@ -32,7 +32,7 @@ var pinned = map[string]*regexp.Regexp{
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	// the catalogue's seven, and the group `bayes` shipped ahead of its entry (aheadOfCatalogue)
+	// the catalogue's eight (the group `bayes` among them since lot Q1), and the groups shipped ahead of their entry (none now)
 	if len(groups) != len(modelcatalog.Groups())+len(aheadOfCatalogue) || len(groups) != 8 {
 		t.Fatalf("groups: %d", len(groups))
 	}
@@ -107,6 +107,12 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 				if !paths["runner/R/"+m+".R"] {
 					t.Errorf("%s: no runner/R/%s.R", g.ID, m)
 				}
+			}
+		} else if g.ID == "bayes" {
+			// the group's own dispatcher (docs/specs/bayes-contract.md): one model, four modes, no route and no module a model
+			run := string(mustFile(t, code, "runner/run.py"))
+			if !strings.Contains(run, "bayes_main.main") || !paths["runner/py/bayes_main.py"] {
+				t.Errorf("bayes: run.py does not hand over to bayes_main")
 			}
 		} else {
 			// a module is never named as a library: `import xgboost` inside it must reach the library
@@ -194,10 +200,15 @@ func mustFile(t *testing.T, code []File, path string) []byte {
 func TestTheJobReceivesTheCatalogue(t *testing.T) {
 	code, _ := CodeFiles("survival", nil, false)
 	sent := mustFile(t, code, "catalog.json")
+	// a group other than `bayes` receives its view: the catalogue without what is the group `bayes`'s, without its indentation
+	if !bytes.Equal(sent, modelcatalog.CompactFor("survival")) || len(sent) >= len(modelcatalog.Raw()) || len(CardSchema()) == 0 || bytes.Contains(sent, []byte("bayes_model")) {
+		t.Error("catalog.json is not the group's view of the catalogue")
+	}
+	// the group `bayes` receives it whole, the same JSON as the file
+	whole, _ := CodeFiles("bayes", nil, false)
 	var got, want any
-	if json.Unmarshal(sent, &got) != nil || json.Unmarshal(modelcatalog.Raw(), &want) != nil || !reflect.DeepEqual(got, want) ||
-		len(sent) >= len(modelcatalog.Raw()) || len(CardSchema()) == 0 {
-		t.Error("catalog.json is not the catalogue, without its indentation")
+	if json.Unmarshal(mustFile(t, whole, "catalog.json"), &got) != nil || json.Unmarshal(modelcatalog.Raw(), &want) != nil || !reflect.DeepEqual(got, want) {
+		t.Error("the group bayes does not receive the catalogue whole")
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(CardSchema(), &schema); err != nil || schema["title"] != "Tabularia model card" {

@@ -3,6 +3,8 @@ package modelcatalog
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -13,12 +15,16 @@ import (
 //
 //   - the group of that id, in `groups`, and every model of it, in `models`;
 //   - in `limits`, the keys that start with «<group>_»;
-//   - in `section_shapes`, `kinds` and `output_types`, the entry that the group's models name (as a key or as a value) and that
-//     no other model, no `predict` and no `nodes` names, nor a kind that stays («of»): a shared entry stays;
-//   - in the card schema, the property named as the group (and its name in `required`), and the `allOf` rule that names that
-//     property or one of the group's models.
+//   - in `section_shapes`, `kinds` and `output_types`, the entry that the group's models name (as a key or as a value) and that no
+//     other model uses the way that section is used (the sections a variant writes, the outputs it hands on, the kinds a key takes),
+//     nor `predict`, nor a kind that stays («of»): a shared entry stays, and a word another model has for something else (a reading
+//     block called «summary») does not make a section «summary» shared;
+//   - in the card schema, the property named as the group (and its name in `required`), the group's and its models' names in the enums
+//     of `group` and `model`, and the `allOf` rule that names that property or one of the group's models.
 //
-// A catalogue and a schema that hold nothing of the group are returned as they are, byte for byte.
+// The catalogue is filtered as tokens and written compact, the schema is cut where it stands (its own bytes, its inline arrays and
+// its indentation as the file writes them): what is left is the file as it was before the group's entries were added. A catalogue and
+// a schema that hold nothing of the group are returned as they are, byte for byte.
 
 // ownedSections are the catalogue's sections whose entries a group's models can own by naming them alone.
 var ownedSections = []string{"section_shapes", "kinds", "output_types"}
@@ -189,17 +195,46 @@ func withoutGroup(root *obj, group string) bool {
 	for _, m := range own {
 		names(m, named)
 	}
-	shared := map[string]bool{}
+	// What the other models use of each owned section, the way that section is used: the sections a variant writes (the keys of
+	// `sections`) for `section_shapes`, the outputs a variant hands on (the keys of `outputs`) for `output_types`, the kinds a key
+	// takes (the values of `needs` and `takes`) for `kinds`. A name that another model uses only as a word (a reading block called
+	// «summary» is no section called «summary») does not make an entry shared.
+	shared := map[string]map[string]bool{"section_shapes": {}, "output_types": {}, "kinds": {}}
 	for _, m := range others {
-		names(m, shared)
+		mo := asObj(m)
+		if mo == nil {
+			continue
+		}
+		for _, field := range []string{"needs", "takes"} {
+			if kinds := asObj(mo.vals[field]); kinds != nil {
+				for _, k := range kinds.keys {
+					if kind, ok := kinds.vals[k].(string); ok {
+						shared["kinds"][kind] = true
+					}
+				}
+			}
+		}
+		variants, _ := mo.vals["variants"].([]any)
+		for _, v := range variants {
+			vo := asObj(v)
+			if vo == nil {
+				continue
+			}
+			for field, into := range map[string]string{"sections": "section_shapes", "outputs": "output_types"} {
+				if keys := asObj(vo.vals[field]); keys != nil {
+					for _, k := range keys.keys {
+						shared[into][k] = true
+					}
+				}
+			}
+		}
 	}
-	for _, k := range []string{"predict", "nodes"} {
-		names(root.vals[k], shared)
-	}
+	// Predict takes kinds too, and a kind may point at another key's kind with `of`: those stay as well
+	names(root.vals["predict"], shared["kinds"])
 	if kinds := asObj(root.vals["kinds"]); kinds != nil {
 		for _, k := range kinds.keys {
 			if of, ok := asObj(kinds.vals[k]).vals["of"].(string); ok {
-				shared[of] = true
+				shared["kinds"][of] = true
 			}
 		}
 	}
@@ -209,7 +244,7 @@ func withoutGroup(root *obj, group string) bool {
 			continue
 		}
 		for _, k := range append([]string{}, o.keys...) {
-			if named[k] && !shared[k] {
+			if named[k] && !shared[section][k] {
 				o.del(k)
 				changed = true
 			}
@@ -252,54 +287,236 @@ func schemaFor(schema, catalogue []byte, group string) []byte {
 	if group == BayesGroup {
 		return schema
 	}
-	root, err := parseOrdered(schema)
-	if err != nil {
-		panic("modelcatalog: card.schema.json: " + err.Error())
+	root, err := scanJSON(schema)
+	if err != nil || root.kind != '{' {
+		panic("modelcatalog: card.schema.json: not a JSON object")
 	}
-	o := asObj(root)
-	changed := false
-	if props := asObj(o.vals["properties"]); props != nil && props.del(BayesGroup) {
-		changed = true
+	own := map[string]bool{}
+	for _, m := range ownModelIDs(catalogue) {
+		own[m] = true
 	}
-	if req, ok := o.vals["required"].([]any); ok {
-		kept := make([]any, 0, len(req))
-		for _, r := range req {
-			if r != BayesGroup {
-				kept = append(kept, r)
+	var cuts []span
+	// the card's `bayes` object, and the names of the group and of its models in the enums of `group` and `model`
+	if props := root.member("properties"); props != nil && props.kind == '{' {
+		cuts = append(cuts, props.drop(func(key string, _ *jsonNode) bool { return key == BayesGroup })...)
+		for field, names := range map[string]map[string]bool{"group": {BayesGroup: true}, "model": own} {
+			if enum := props.member(field).member("enum"); enum != nil && enum.kind == '[' {
+				cuts = append(cuts, enum.drop(func(_ string, e *jsonNode) bool { return e.kind == '"' && names[e.str(schema)] })...)
 			}
 		}
-		if len(kept) != len(req) {
-			o.vals["required"] = kept
-			changed = true
-		}
 	}
-	if rules, ok := o.vals["allOf"].([]any); ok {
-		own := map[string]bool{}
-		for _, m := range ownModelIDs(catalogue) {
-			own[m] = true
-		}
-		kept := make([]any, 0, len(rules))
-		for _, r := range rules {
-			if namesGroup(r, own) {
-				changed = true
-				continue
-			}
-			kept = append(kept, r)
-		}
-		o.vals["allOf"] = kept
+	// its name in `required`
+	if req := root.member("required"); req != nil && req.kind == '[' {
+		cuts = append(cuts, req.drop(func(_ string, e *jsonNode) bool { return e.kind == '"' && e.str(schema) == BayesGroup })...)
 	}
-	if !changed {
+	// the rules that name that property, the group or one of its models
+	if rules := root.member("allOf"); rules != nil && rules.kind == '[' {
+		cuts = append(cuts, rules.drop(func(_ string, e *jsonNode) bool {
+			rule, err := parseOrdered(schema[e.start:e.end])
+			return err == nil && namesGroup(rule, own)
+		})...)
+	}
+	if len(cuts) == 0 {
 		return schema
 	}
-	var buf, out bytes.Buffer
-	writeOrdered(&buf, o)
-	if err := json.Indent(&out, buf.Bytes(), "", "  "); err != nil {
-		panic("modelcatalog: card.schema.json: " + err.Error())
+	sort.Slice(cuts, func(i, j int) bool { return cuts[i].from > cuts[j].from })
+	out := append([]byte{}, schema...)
+	for _, c := range cuts {
+		out = append(out[:c.from], out[c.to:]...)
 	}
-	if bytes.HasSuffix(schema, []byte("\n")) {
-		out.WriteByte('\n')
+	return out
+}
+
+// A span of the file to cut. The file is edited in place (a token filter, not a decode and an encode): what is left is the file's
+// own bytes, its indentation and its inline arrays as they are written.
+type span struct{ from, to int }
+
+// jsonNode is a value of a JSON text with the bytes it takes, and its children: the members of an object (with the key's start),
+// the elements of an array.
+type jsonNode struct {
+	kind       byte // { [ " or 0 for a number, a literal
+	start, end int
+	keys       []string
+	keyStart   []int
+	kids       []*jsonNode
+}
+
+func (n *jsonNode) str(src []byte) string {
+	var s string
+	_ = json.Unmarshal(src[n.start:n.end], &s)
+	return s
+}
+
+// member is the value of the key of an object, nil for none (and for a nil node: a chain of members is safe).
+func (n *jsonNode) member(key string) *jsonNode {
+	if n == nil || n.kind != '{' {
+		return nil
 	}
-	return out.Bytes()
+	for i, k := range n.keys {
+		if k == key {
+			return n.kids[i]
+		}
+	}
+	return nil
+}
+
+// drop cuts the children the test names (for an array its elements, with an empty key; for an object its members, by key): each
+// goes with the separator before it, the first kept one takes the place of the first of all, so that what stays reads as it did
+// without them.
+func (n *jsonNode) drop(test func(key string, child *jsonNode) bool) []span {
+	var cuts []span
+	first := -1 // the first child that stays
+	for i, c := range n.kids {
+		key := ""
+		if n.kind == '{' {
+			key = n.keys[i]
+		}
+		if !test(key, c) {
+			first = i
+			break
+		}
+	}
+	startOf := func(i int) int {
+		if n.kind == '{' {
+			return n.keyStart[i]
+		}
+		return n.kids[i].start
+	}
+	for i, c := range n.kids {
+		key := ""
+		if n.kind == '{' {
+			key = n.keys[i]
+		}
+		if !test(key, c) {
+			continue
+		}
+		switch {
+		case first < 0 && i == 0:
+			cuts = append(cuts, span{startOf(0), n.kids[len(n.kids)-1].end})
+		case first < 0:
+		case i < first && i == 0:
+			cuts = append(cuts, span{startOf(0), startOf(first)})
+		case i < first:
+		default:
+			cuts = append(cuts, span{n.kids[i-1].end, c.end})
+		}
+	}
+	return cuts
+}
+
+// scanJSON reads the structure of a JSON text: where each value begins and ends.
+func scanJSON(b []byte) (*jsonNode, error) {
+	p := &scanner{b: b}
+	p.space()
+	n, err := p.value()
+	if err != nil {
+		return nil, err
+	}
+	p.space()
+	if p.i != len(b) {
+		return nil, fmt.Errorf("text after the value at byte %d", p.i)
+	}
+	return n, nil
+}
+
+type scanner struct {
+	b []byte
+	i int
+}
+
+func (p *scanner) space() {
+	for p.i < len(p.b) && (p.b[p.i] == ' ' || p.b[p.i] == '\n' || p.b[p.i] == '\t' || p.b[p.i] == '\r') {
+		p.i++
+	}
+}
+
+func (p *scanner) str() error {
+	p.i++ // the opening quote
+	for p.i < len(p.b) {
+		switch p.b[p.i] {
+		case '\\':
+			p.i += 2
+		case '"':
+			p.i++
+			return nil
+		default:
+			p.i++
+		}
+	}
+	return fmt.Errorf("a string is not closed")
+}
+
+func (p *scanner) value() (*jsonNode, error) {
+	if p.i >= len(p.b) {
+		return nil, fmt.Errorf("the text ends where a value is due")
+	}
+	n := &jsonNode{start: p.i, kind: p.b[p.i]}
+	switch p.b[p.i] {
+	case '"':
+		if err := p.str(); err != nil {
+			return nil, err
+		}
+	case '{', '[':
+		closing := byte('}')
+		if n.kind == '[' {
+			closing = ']'
+		}
+		p.i++
+		p.space()
+		if p.i < len(p.b) && p.b[p.i] == closing {
+			p.i++
+			break
+		}
+		for {
+			p.space()
+			if n.kind == '{' {
+				if p.i >= len(p.b) || p.b[p.i] != '"' {
+					return nil, fmt.Errorf("a key is due at byte %d", p.i)
+				}
+				at := p.i
+				if err := p.str(); err != nil {
+					return nil, err
+				}
+				var key string
+				if err := json.Unmarshal(p.b[at:p.i], &key); err != nil {
+					return nil, err
+				}
+				p.space()
+				if p.i >= len(p.b) || p.b[p.i] != ':' {
+					return nil, fmt.Errorf("a colon is due at byte %d", p.i)
+				}
+				p.i++
+				p.space()
+				n.keys = append(n.keys, key)
+				n.keyStart = append(n.keyStart, at)
+			}
+			v, err := p.value()
+			if err != nil {
+				return nil, err
+			}
+			n.kids = append(n.kids, v)
+			p.space()
+			if p.i < len(p.b) && p.b[p.i] == ',' {
+				p.i++
+				continue
+			}
+			if p.i < len(p.b) && p.b[p.i] == closing {
+				p.i++
+				break
+			}
+			return nil, fmt.Errorf("a comma or the end is due at byte %d", p.i)
+		}
+	default:
+		n.kind = 0
+		for p.i < len(p.b) && !strings.ContainsRune(",]} \n\t\r", rune(p.b[p.i])) {
+			p.i++
+		}
+		if p.i == n.start {
+			return nil, fmt.Errorf("a value is due at byte %d", p.i)
+		}
+	}
+	n.end = p.i
+	return n, nil
 }
 
 // ownModelIDs are the ids of the models of the group `bayes` in the catalogue.

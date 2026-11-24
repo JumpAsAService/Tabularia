@@ -197,6 +197,8 @@ def test_a_layout_is_a_definition_the_report_engine_accepts(case, locale):
         if model in EXPERIMENTS:  # the decision (or the plan's answer) first, the explanation and the notes last
             assert body[0]["id"] in ("s_decision", "s_plan") and first["reading"] > first["s_how"]
             assert ("assumptions" in first) == (model == "ab_test")
+        elif model == "bayes_model":  # no assumption and no check: measures and facts (docs/specs/bayes-report.md): the summary first
+            assert body[0]["id"] == "s_summary" and "assumptions" not in first and first["s_summary"] < first["s_posterior"] < first["s_data"] < first["s_how"]
         else:  # the assumptions come before every coefficient, number of the fit and chart: the first page
             assert first["assumptions"] < min(i for i, it in enumerate(body) if it["type"] == "chart")
             assert first["assumptions"] < first["fit"] and first["assumptions"] < first.get("coef", 10**6)
@@ -240,11 +242,13 @@ def test_a_parametric_survival_with_delayed_entry_names_its_start_and_says_so_in
 def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, case, locale):  # noqa: F811
     out, page = draw(tmp_path, chart_service, monkeypatch, case, locale=locale, sample=[{"first": 500}], step="Prices compared")
     model = case.split("-")[0]
-    assert out.path.read_bytes().startswith(b"%PDF-") and 2 <= out.pages <= (12 if model in EXPLAINED else 8) and out.warnings == []
+    # (the Bayesian model's report is one page until its diagnostics and charts, lots Q2 to Q4 of docs/specs/bayes-report.md)
+    assert out.path.read_bytes().startswith(b"%PDF-") and (1 if model == "bayes_model" else 2) <= out.pages <= (12 if model in EXPLAINED else 8) \
+        and out.warnings == []
     said = set(strings(json.loads(page)))
     w = common.words(*case.split("-"), locale)
     assert any(s.startswith(w["footer"] + " · ") for s in said)
-    assert w["sections"]["how" if model == "ab_plan" else "assumptions"] in said
+    assert w["sections"]["how" if model in ("ab_plan", "bayes_model") else "assumptions"] in said
     if model in EXPLAINED:  # a p-value below what four decimals write is «p < 0.0001», never «p = < 0.0001»
         assert not [s for s in said if re.search(r"=\s*[<>]", s)], [s for s in said if re.search(r"=\s*[<>]", s)]
 

@@ -1713,6 +1713,21 @@ Six of them declare **GPL-2** only: `Rsolnp`, `kernlab`, `multicool`, `mvtnorm`,
 specification of this piece (`docs/specs/garch-risk.md` in the repository, «The package and the image») has the same list and the method of the check; it advises
 a legal reading before a built image is distributed, as for the pre-trained forecasting group.
 
+### Bayesian model
+
+Model id in the catalogue: `bayes_model`, in its own group, **Bayesian models** (Python). It is a node of its own in a flow
+(**Bayesian model**), not the Model node: a Model node that names it is refused, with the way out («add Bayesian model from the
+palette»). It has two variants, `sample` (the draws of the posterior, by Stan's No-U-Turn sampler) and `prior_predictive` (draws
+from the priors alone, before the data are seen), and it hands on its summary, its draws or its replicated data, or the ten
+columns alone.
+
+Its report is drawn from the ten columns the run wrote and nothing else: the first page says the saved model and its version, the
+rows used and left out, the draws and the facts of the sampler; then the posterior summary of each quantity (mean, standard
+deviation, three quantiles, R-hat, effective sample sizes, the standard error of the mean and the contraction of the prior),
+the data the model bound (with the mean and the standard deviation of a standardized column) and the notes. Every diagnostic is a
+measure or a fact with what it measures: the report gives no verdict. The charts of the diagnostics and of the predictive checks
+come with the next lots of the module.
+
 ## The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):

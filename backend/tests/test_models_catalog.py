@@ -18,8 +18,10 @@ import pytest
 from app.engine.exceptions import EngineError
 from app.engine.models import catalog
 from app.engine.models.catalog import check_params
+from app.engine.stats.output import OUTPUT_COLUMNS
 
 CASES = Path(__file__).parent / "fixtures" / "models" / "params_cases.json"
+NO_PREDICT = {"bayes_model"}  # a card, and no Predict
 COLUMNS = {"quantity": "Float64", "price": "Float64", "channel": "String", "day": "Date", "shop": "String",
            "w": "Float64", "pred_fitted": "Float64", "flag": "Boolean", "n": "Int64", "t": "Datetime(time_unit='us', time_zone=None)",
            "blob": "Binary"}
@@ -35,19 +37,24 @@ def test_the_snapshot_is_what_the_catalogue_says():
 
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
-    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments", "foundation_forecast"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"]
+    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments", "foundation_forecast", "bayes"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral", "bayes_model"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
         assert model in catalog.GROUPS[spec["group"]]["models"], model
-        assert catalog.GROUPS[spec["group"]]["language"] == ("python" if spec["group"] in ("boosting", "foundation_forecast") else "r")
+        assert catalog.GROUPS[spec["group"]]["language"] == ("python" if spec["group"] in ("boosting", "foundation_forecast", "bayes") else "r")
     # Predict's columns and options name a model, or `model:variant` (the card's variant)
     variants = {f"{m}:{v['id']}" for m, spec in catalog.MODELS.items() for v in spec["variants"]}
     keyed = set(catalog.PREDICT["columns"])
     assert keyed <= set(catalog.MODELS) | variants
     for model, spec in catalog.MODELS.items():
-        # a model that makes no card (`card: false`) has nothing to predict with
+        # a model that makes no card (`card: false`) has nothing to predict with; the Bayesian model makes a card (the model that
+        # was run) and Predict does not name it (docs/specs/bayes-contract.md, «The catalogue's declaration»)
+        if model in NO_PREDICT:
+            assert spec.get("card", True) is True and not (model in keyed or any(f"{model}:{v['id']}" in keyed for v in spec["variants"])), model
+            assert not any(model in models or any(m.startswith(model + ":") for m in models) for models in catalog.PREDICT["applies_to"].values()), model
+            continue
         assert spec.get("card", True) is False or model in keyed or all(f"{model}:{v['id']}" in keyed for v in spec["variants"]), model
         assert spec.get("card", True) is not False or not (model in keyed or any(f"{model}:{v['id']}" in keyed for v in spec["variants"])), model
     for key, models in catalog.PREDICT["applies_to"].items():
@@ -580,7 +587,8 @@ def test_every_variant_declares_known_sections_and_the_required_rows():
             checks = set(v["sections"].get("assumption", {}).get("levels") or [])
             for chart in v["charts"]:
                 assert chart["under"] is None or chart["under"] in checks, (model, v["id"], chart)
-            assert v["outputs"], (model, v["id"])
+            # the prior predictive of the Bayesian model writes the ten columns alone: no output of its own
+            assert v["outputs"] or (model, v["id"]) in {("bayes_model", "prior_predictive")}, (model, v["id"])
 
 
 def test_penalized_variants_write_no_inference():
@@ -775,3 +783,31 @@ def test_delayed_entry_is_a_column_of_the_parametric_node_as_of_cox():
         assert "n_delayed" in variant["sections"]["model"]["numbers"], variant["id"]
     # Predict has no start: the card holds the parameters, and the time already survived of a unit is alive_at
     assert "start" not in catalog.PREDICT["takes"]
+
+
+def test_the_bayesian_model_node_and_its_two_variants():
+    """docs/specs/bayes-contract.md, «The catalogue's declaration»: a Python group of one node with a card and no Predict, two
+    variants made by `mode`, an `output` that only the sample mode has, every limit with the prefix the other groups' view leaves out."""
+    assert catalog.GROUPS["bayes"] == {"language": "python", "label": "models.groups.bayes", "models": ["bayes_model"]}
+    spec = catalog.MODELS["bayes_model"]
+    assert spec["group"] == "bayes" and spec["card"] is True and list(spec["needs"]) == [] and list(spec["takes"]) == ["mode", "output"]
+    assert [v["id"] for v in spec["variants"]] == ["sample", "prior_predictive"]
+    assert catalog.variant("bayes_model", {}) == "sample" and catalog.variant("bayes_model", {"mode": "prior_predictive"}) == "prior_predictive"
+    assert catalog.check_params("bayes_model", {}) == {"mode": "sample", "output": "summary"}
+    assert catalog.check_params("bayes_model", {"mode": "prior_predictive"}) == {"mode": "prior_predictive"}
+    with pytest.raises(EngineError, match="'output' only applies when mode = sample"):
+        catalog.check_params("bayes_model", {"mode": "prior_predictive", "output": "draws"})
+    # what the node hands on: the output's columns, or the ten of the results (the prior predictive's default included)
+    assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "sample", "output": "replicated"})[0]] == ["chain", "draw", "row", "value"]
+    assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "prior_predictive"})[0]] == [n for n, _, _ in OUTPUT_COLUMNS]
+    assert [n for n, _ in catalog.output_columns("bayes_model", {"mode": "sample", "output": "results"})[0]] == [n for n, _, _ in OUTPUT_COLUMNS]
+    # every limit of the group starts with «bayes_» (the view of the catalogue the other groups get leaves those out)
+    ours = {k for k in catalog.LIMITS if k.startswith("bayes_")}
+    assert len(ours) == 11
+    assert catalog.LIMITS["bayes_max_check_rows"] == 5000 and catalog.LIMITS["bayes_max_summary_quantities"] == 2000
+    # the rows of the contract's sections fit the engine's limit by construction, at its caps (bayescontract.MaxResultRows: 93,490)
+    assert 93_490 < catalog.LIMITS["max_result_rows"]
+    # the sections the runner writes are shaped, and the A/B test's `bayes` section is another thing
+    for section in ("summary", "quantity", "data", "sampler", "ppc", "prior_check"):
+        assert section in catalog.SECTION_SHAPES, section
+    assert catalog.SECTION_SHAPES["ppc"] == {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]}

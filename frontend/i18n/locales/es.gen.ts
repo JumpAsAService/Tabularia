@@ -6517,7 +6517,8 @@ export default {
       "boosting": "Boosting",
       "customer_lifetime": "Ciclo de vida del cliente",
       "experiments": "Experimentos",
-      "foundation_forecast": "Previsiones con modelos preentrenados"
+      "foundation_forecast": "Previsiones con modelos preentrenados",
+      "bayes": "Modelos bayesianos"
     },
     "linear": {
       "name": "Regresión lineal",
@@ -6709,6 +6710,13 @@ export default {
         "threshold": "Un nivel cuyo cruce se cuenta, en la unidad del abanico (un precio, un rendimiento acumulado, un nivel, un total acumulado). Vacío: ninguno."
       }
     },
+    "bayes_model": {
+      "name": "Modelo bayesiano",
+      "hint": "Muestrea la distribución a posteriori de un modelo bayesiano guardado sobre las filas del paso: las muestras de cada incógnita, un resumen de cada una y los controles del muestreador, con un informe.",
+      "hints": {
+        "output": "El resumen de cada cantidad, las muestras (una fila por cada cantidad de cada muestra: puede ser grande), los datos replicados o la tabla de resultados."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6736,6 +6744,7 @@ export default {
       }
     },
     "params": {
+      "mode": "Ejecución",
       "series": "Columna de las series",
       "season": "Periodo estacional",
       "size": "Tamaño del modelo",
@@ -6915,6 +6924,7 @@ export default {
       "drawdown": "Máximo drawdown"
     },
     "hints": {
+      "mode": "Muestreo: la distribución a posteriori, con los controles del muestreador. Predictiva a priori: muestras solo de las distribuciones a priori, antes de ver los datos: sin calentamiento ni diagnósticos.",
       "method": "STL: una estación, robusta a los valores atípicos. Clásica: medias móviles, aditiva o multiplicativa. MSTL: varias estaciones a la vez. EMD: modos intrínsecos, sin período.",
       "period": "Pasos de una estación: 7 para los días de una semana, 12 para los meses de un año. Vacío: el de la frecuencia (24, 7, 52, 12, 4); una serie anual o de índice no tiene, así que indícalo. En EMD solo sirve para la prueba de estacionalidad y el gráfico de subseries.",
       "periods": "Hasta 4 períodos enteros distintos, en pasos, por ejemplo 7, 365 para datos diarios. Se ordenan del más corto al más largo.",
@@ -7062,6 +7072,11 @@ export default {
       "drawdown": "La peor caída desde un máximo a lo largo de cada trayectoria, con su distribución."
     },
     "choice": {
+      "sample": "Muestrear la distribución a posteriori",
+      "prior_predictive": "Predictiva a priori",
+      "summary": "Resumen de cada cantidad",
+      "draws": "Muestras",
+      "replicated": "Datos replicados",
       "5m": "5M",
       "28m": "28M",
       "123m": "123M",

@@ -9,9 +9,9 @@
   "properties": {
     "format": {"const": "tabularia-model"},
     "format_version": {"const": 1},
-    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "garch", "xgboost", "catboost", "clv", "bg_bb"]},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "garch", "xgboost", "catboost", "clv", "bg_bb", "bayes_model"]},
     "variant": {"type": "string", "minLength": 1},
-    "group": {"enum": ["regression", "survival", "timeseries", "boosting", "customer_lifetime"]},
+    "group": {"enum": ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "bayes"]},
     "group_version": {"type": ["integer", "string"]},
     "recipe_hash": {"type": "string"},
     "runner_hash": {"type": "string"},
@@ -272,6 +272,124 @@
           }
         }
       }
+    },
+    "bayes": {
+      "type": "object",
+      "description": "a Bayesian model run's: the saved model and its pinned version, the program's and the compiled binary's hashes, what each quantity stands for, the bound data and their standardization, the units of each plate, the sampler as run, the facts of the sampler and the scalar quantities' summary. Never a draw",
+      "required": ["model", "program", "binary", "mapping", "data", "units", "sampler", "facts", "summary"],
+      "properties": {
+        "model": {
+          "type": "object",
+          "required": ["id", "version", "semantic_hash", "codegen_version"],
+          "properties": {
+            "id": {"type": "integer"},
+            "version": {"type": "integer", "minimum": 1},
+            "semantic_hash": {"type": "string"},
+            "codegen_version": {"type": "integer"}
+          }
+        },
+        "program": {
+          "type": "object",
+          "required": ["sha256", "bytes"],
+          "properties": {
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "bytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "binary": {
+          "type": "object",
+          "required": ["sha256", "cmdstan", "image"],
+          "properties": {
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "cmdstan": {"type": "string"},
+            "image": {"type": "string"}
+          }
+        },
+        "mapping": {
+          "type": "array",
+          "description": "a quantity's Stan identifier and what it stands for: the node, its name, its label",
+          "items": {
+            "type": "object",
+            "required": ["stan", "node_id", "name", "label", "kind"],
+            "properties": {
+              "stan": {"type": "string"},
+              "node_id": {"type": "string"},
+              "name": {"type": ["string", "null"]},
+              "label": {"type": ["string", "null"]},
+              "kind": {"enum": ["parameter", "transformed", "state", "effect", "correlation"]}
+            }
+          }
+        },
+        "data": {
+          "type": "array",
+          "description": "a bound data variable: its column, and the mean and sd it was standardized with",
+          "items": {
+            "type": "object",
+            "required": ["stan", "column", "standardized"],
+            "properties": {
+              "stan": {"type": "string"},
+              "column": {"type": "string"},
+              "standardized": {"type": "boolean"},
+              "mean": {"type": "number"},
+              "sd": {"type": "number"}
+            }
+          }
+        },
+        "units": {
+          "type": "object",
+          "description": "each plate: its units' count and their labels (cut first when the card is too large; the count stays)",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["count", "labels"],
+            "properties": {
+              "count": {"type": "integer", "minimum": 0},
+              "labels": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "sampler": {
+          "type": "object",
+          "required": ["algorithm", "chains", "warmup", "draws", "seed", "adapt_delta", "max_treedepth"],
+          "properties": {
+            "algorithm": {"enum": ["nuts", "fixed_param"]},
+            "chains": {"type": "integer", "minimum": 1},
+            "warmup": {"type": "integer", "minimum": 0},
+            "draws": {"type": "integer", "minimum": 1},
+            "seed": {"type": "integer", "minimum": 0},
+            "adapt_delta": {"type": "number"},
+            "max_treedepth": {"type": "integer", "minimum": 1}
+          }
+        },
+        "facts": {
+          "type": "object",
+          "description": "the sampler's facts over the chains: counts and a measure, never a verdict",
+          "required": ["divergences", "treedepth_hits", "e_bfmi_min"],
+          "properties": {
+            "divergences": {"type": "integer", "minimum": 0},
+            "treedepth_hits": {"type": "integer", "minimum": 0},
+            "e_bfmi_min": {"type": ["number", "null"]}
+          }
+        },
+        "summary": {
+          "type": "array",
+          "description": "the scalar quantities' summary (cut first when the card is too large)",
+          "items": {
+            "type": "object",
+            "required": ["quantity"],
+            "properties": {
+              "quantity": {"type": "string"},
+              "mean": {"type": ["number", "null"]},
+              "sd": {"type": ["number", "null"]},
+              "q5": {"type": ["number", "null"]},
+              "q50": {"type": ["number", "null"]},
+              "q95": {"type": ["number", "null"]},
+              "rhat": {"type": ["number", "null"]},
+              "ess_bulk": {"type": ["number", "null"]},
+              "ess_tail": {"type": ["number", "null"]}
+            }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -290,6 +408,7 @@
     {"if": {"properties": {"group": {"const": "boosting"}}, "required": ["group"]},
      "then": {"required": ["boosting"], "properties": {"software": {"required": ["Python"]}}},
      "else": {"properties": {"software": {"required": ["R"]},
-                             "inputs": {"items": {"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["reference"]}}}}}}
+                             "inputs": {"items": {"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["reference"]}}}}}},
+    {"if": {"properties": {"model": {"const": "bayes_model"}}}, "then": {"required": ["bayes"]}}
   ]
 }
