@@ -40,7 +40,7 @@ SERIES_OF = {
 _SERIES_COUNT = {"boxplot": 5, "interval": 3, "density": 1}
 # The marks of an `xy` chart (docs/specs/statistical-models.md, «Charts»): its series' `as`. A
 # band is a pair, its low edge then its high edge, the area between them filled.
-XY_MARKS = ("point", "line", "dashed", "step", "stem", "band_low", "band_high")
+XY_MARKS = ("point", "line", "dashed", "step", "stem", "bar", "band_low", "band_high")
 MAX_XY_TARGETS_X = 4  # the vertical lines of an `xy` chart (a cross-validation's two λ)
 _NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
 
@@ -271,6 +271,7 @@ class Series(_Model):
     format: Pattern | None = None  # its values', and its axis's; none: the chart's
     label: Expr | None = None  # `xy` only: the text written beside a point (a row's number), none for most
     color: Color | None = None  # `xy` only: the series' fixed colour (a beeswarm's ramp), none: the palette's
+    width: float | None = Field(None, ge=0.3, le=4, allow_inf_nan=False)  # `xy` only: a line's width in px (a thin line among thin ones), none: 1.5
 
 
 class ChartOptions(_Model):
@@ -755,13 +756,15 @@ class _Checks:
         """What only an `xy` chart reads, refused elsewhere: an option a person would expect to
         change something must not be silently ignored."""
         for i, s in enumerate(it.series):
-            if s.as_ in XY_MARKS and s.as_ != "line":
+            if s.as_ in XY_MARKS and s.as_ not in ("line", "bar"):
                 self.problems.append(Problem(f"«as»: {s.as_} is a mark of an xy chart; a {it.kind} chart draws bar or line",
                                              it.id, f"series[{i}].as"))
             if s.label is not None:
                 self.problems.append(Problem("a series' label is an xy chart's", it.id, f"series[{i}].label"))
             if s.color is not None:
                 self.problems.append(Problem("a series' color is an xy chart's", it.id, f"series[{i}].color"))
+            if s.width is not None:
+                self.problems.append(Problem("a series' width is an xy chart's", it.id, f"series[{i}].width"))
         o = it.options
         for name in ("mirror", "diagonal", "unit_square", "x_time", "log_x"):
             if getattr(o, name):

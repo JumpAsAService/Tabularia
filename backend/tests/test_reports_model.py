@@ -781,6 +781,24 @@ def test_an_xy_chart_draws_stems_from_zero_with_their_bounds_both_ways():
     assert o["legend"]["show"] is False
 
 
+def test_an_xy_chart_draws_a_histogram_as_bars_from_zero_with_a_vertical_line_for_the_data_and_thin_lines_under_a_thick_one():
+    bins = [{"level": "hist", "stat": "count", "value": v, "x0": x} for x, v in ((0.0, 2.0), (1.0, 0.0), (2.0, 5.0))]
+    o = _chart("xy", bins, filter='[level] = "hist"', category="[x0]", series=[{"value": "[value]", "as": "bar", "name": "Draws"}],
+               options={"target_x": "1.5", "legend": False})
+    bar, marks, _ = o["series"]
+    # a bar a point from its x to the next, the last as wide as the one before it, filled; the axis stands on zero
+    assert bar["step"] == "end" and bar["data"] == [[0.0, 2.0], [1.0, 0.0], [2.0, 5.0], [3.0, 5.0]] and bar["areaStyle"]["opacity"] > 0
+    assert marks["markLine"]["data"] == [{"xAxis": 1.5}] and "scale" not in o["yAxis"]
+    # a series' width: a thin line goes under the thick one, whatever the order of their rows
+    rows = [{"level": "c", "level_2": s, "stat": "value", "value": 1.0 + i, "x0": float(i)} for s in ("observed", "draw_1") for i in range(3)]
+    lines = _chart("xy", rows, filter='[level] = "c"', category="[x0]", split_by="[level_2]", options={"legend": False},
+                   series=[{"value": 'IF([level_2] = "observed", [value], NULL)', "as": "line", "color": "#1f2933", "width": 2.5},
+                           {"value": 'IF([level_2] <> "observed", [value], NULL)', "as": "line", "color": "#9aa3af", "width": 0.5}])
+    thick = [x for x in lines["series"] if x.get("lineStyle", {}).get("width") == 2.5]
+    thin = [x for x in lines["series"] if x.get("lineStyle", {}).get("width") == 0.5]
+    assert thick and thin and thick[0]["z"] > thin[0]["z"] and thick[0]["lineStyle"]["color"] == "#1f2933"
+
+
 def test_an_xy_chart_with_dates_a_log_axis_a_diagonal_and_no_points():
     dated = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] * 10000",
                    series=[{"value": "[value]", "as": "line"}], options={"x_time": True})
@@ -849,8 +867,10 @@ def test_the_checks_of_an_xy_chart():
     assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "band_high"}],
                 options={"target_x": [1, "AVG([qty])"], "mirror": True, "diagonal": True}, split_by="[kind]") == []
     assert said(series=[{"value": "[amount]"}]) == [("series[0].as", (
-        "a series of an xy chart says how it is drawn («as»): one of point, line, dashed, step, stem, band_low, band_high"))]
-    assert said(series=[{"value": "[amount]", "as": "bar"}])[0][0] == "series[0].as"
+        "a series of an xy chart says how it is drawn («as»): one of point, line, dashed, step, stem, bar, band_low, band_high"))]
+    assert said(series=[{"value": "[amount]", "as": "bar"}, {"value": "[amount]", "as": "line", "width": 0.5}]) == []  # a histogram's bars; a thin line
+    with pytest.raises(rd.DefinitionError, match="width"):  # 0.3 to 4 px
+        said(series=[{"value": "[amount]", "as": "line", "width": 9}])
     assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "point"}]) == [("series[0].as", (
         "a band is two series side by side, its low edge then its high edge: this band_low has no band_high after it"))]
     assert said(series=[{"value": "[amount]", "as": "band_high"}])[0][1].endswith("this band_high has no band_low before it")
@@ -865,6 +885,8 @@ def test_the_checks_of_an_xy_chart():
     # what only an xy chart reads is refused elsewhere, never ignored
     column = {"category": "[region]", "series": [{"value": "SUM([amount])", "as": "stem", "label": "[region]"}]}
     assert [f for f, _ in said("column", **column)] == ["series[0].as", "series[0].label"]
+    assert [f for f, _ in said("column", category="[region]", series=[{"value": "SUM([amount])", "width": 2}])] == ["series[0].width"]
+    assert said("combo", category="[region]", series=[{"value": "SUM([amount])", "as": "bar"}, {"value": "SUM([qty])", "as": "line"}]) == []
     assert [f for f, _ in said("column", category="[region]", series=[{"value": "SUM([amount])", "color": "#2c5aa0"}],
                                options={"y_categories": "[region]"})] == ["series[0].color", "options.y_categories"]
     assert [f for f, _ in said("scatter", series=[{"value": "[amount]"}], options={"diagonal": True, "target_x": 1, "log": True})] == [

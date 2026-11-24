@@ -1,8 +1,8 @@
-"""The report of the node «Bayesian model» (docs/specs/bayes-report.md, lots Q1 and Q2: the pages that need no reading, the groups, the
-diagnostics and the charts),
+"""The report of the node «Bayesian model» (docs/specs/bayes-report.md, lots Q1, Q2 and Q3: the pages that need no reading, the groups, the
+diagnostics and the charts, the predictive checks),
 drawn from the two fixtures (`bayes_model-sample.json`, `bayes_model-prior_predictive.json`, made by the runner's writers on fake draws:
 gateway-go/internal/modelgroups/groups/bayes/reference/make_report_fixtures.py), in the five languages and the three formats.
-The predictive checks and the readings are the next lots' tests."""
+The readings are the next lot's tests."""
 from __future__ import annotations
 
 import json
@@ -50,7 +50,6 @@ def test_the_posterior_table_holds_the_scalars_and_the_correlations_with_their_l
         assert label in texts, label
     assert "b_g,a_g" in texts and "—" in texts  # the correlation's unit, the contraction the run left empty
     # a plate's quantities are the groups' page (and the Excel sheet's): not in this table (the groups' page names them as charts' captions)
-    assert not [t for t in texts if t == "Liceo Galilei"]
     for column in ("Mean", "Sd", "5 %", "Median", "95 %", "R-hat", "ESS bulk", "ESS tail", "MCSE of the mean", "Contraction"):
         assert column in texts, column
 
@@ -229,7 +228,6 @@ def test_a_plate_s_quantities_are_in_the_excel_sheet_and_the_pages_table_is_not(
     assert w["sampler"][:31] in sheets and w["nodes"][:31] in sheets
     # the pages' PDF and the screen have the other table
     texts = said(tmp_path / "svg", chart_service, monkeypatch, SAMPLE)
-    assert not [t for t in texts if t == "Liceo Galilei"]
 
 
 def test_the_layout_places_the_pages_in_their_order(tmp_path):
@@ -242,3 +240,129 @@ def test_the_layout_places_the_pages_in_their_order(tmp_path):
     assert hidden and all(it.get("collapse_hidden") for it in hidden)
     prior = layouts.definition("bayes_model", {"mode": "prior_predictive"}, "en", None, None)["sections"]["body"]["items"]
     assert not {"s_groups", "s_diagnostics", "s_charts"} & {it["id"] for it in prior}
+
+
+# ── lot Q3: the predictive checks ─────────────────────────────────────────────────────────────────────────────────────────────
+def _options(chart_service):  # noqa: F811
+    """The distinct charts the fake service was handed (it is asked again for a chart the page measures twice)."""
+    return list({json.dumps(c["option"], sort_keys=True): c["option"] for c in chart_service[1]}.values())
+
+
+def _checked(case):
+    section = "ppc" if case == SAMPLE else "prior_check"
+    curve = "ppc_density" if case == SAMPLE else "prior_density"
+    _, _, rows = fixture(case)
+    return section, curve, rows
+
+
+def _outside(rows, curve):
+    """The count the page says, from the rows by the arithmetic of the runner: the outer slots' densities times the rows and the bin's width."""
+    pts = [r for r in rows if r["section"] == "curve" and r["level"] == f"{curve}:score" and r["level_2"] == "observed"]
+    width = pts[2]["x0"] - pts[1]["x0"]
+    n = next(r["value"] for r in rows if r["key"] == "model|||n")
+    draws = sorted({r["level_2"] for r in rows if r["section"] == "curve" and r["level"] == f"{curve}:score" and r["level_2"].startswith("draw_")})
+    low = sum(r["value"] for r in rows if r["level"] == f"{curve}:score" and r["level_2"] in draws and r["x0"] == pts[0]["x0"])
+    high = sum(r["value"] for r in rows if r["level"] == f"{curve}:score" and r["level_2"] in draws and r["x0"] == pts[-1]["x0"])
+    return len(draws), round(low * n * width), round(high * n * width)
+
+
+@pytest.mark.parametrize("case", [SAMPLE, PRIOR])
+def test_the_predictive_checks_are_charts_of_the_density_the_statistics_and_the_units_with_the_data_marked_and_one_count_outside(
+        tmp_path, chart_service, monkeypatch, case):  # noqa: F811
+    section, curve, rows = _checked(case)
+    sample = case == SAMPLE
+    texts = said(tmp_path, chart_service, monkeypatch, case)
+    w = common.words("bayes_model", "sample" if sample else "prior_predictive", "en")
+    k = w["predictive"]
+    assert w["sections"]["checks" if sample else "prior_checks"] in texts and k["note"]["sample" if sample else "prior_predictive"] in texts
+    assert k["how"]["density"] in texts and k["how"]["statistic"] in texts and k["how"]["units"] in texts
+    # the outcome is named by its column, a unit by its text; a statistic by its name (the kind of the outcome decides which are drawn)
+    assert "exam_score" in texts and k["units"] in texts and {"Liceo Galilei", "Istituto Marconi"} <= texts
+    titles = {o["title"]["text"] for o in _options(chart_service)}  # (a chart's title is its own, not a text of the page)
+    for stat in ("mean", "sd", "min", "max", "q10", "q50", "q90"):
+        assert k["statistic"][stat] in titles, stat
+    assert k["statistic"]["zeros"] not in titles  # (a continuous outcome has no zeros' count: its place takes no room)
+    assert k["density"] in titles and k["unit_mean"] in titles
+    # the only number the page adds: the replicated values that fell outside the data's range, in the drawn sets
+    drawn, below, above = _outside(rows, curve)
+    assert drawn == 20 and below > 0 and above > 0
+    assert f"In the {drawn} data sets drawn, {below} drawn values lie below the range of the data and {above:,} above it." in texts
+    # a drawing: no p-value, no probability, no share, no verdict anywhere in the words of the checks
+    from tests.test_models_layouts import strings
+    for text in strings(w["predictive"]) + [w["sections"]["checks"], w["sections"]["prior_checks"]]:
+        assert not re.search(r"p-value|probab|share|%|pass|fail|reproduce", text, re.I), text
+
+
+@pytest.mark.parametrize("case", [SAMPLE, PRIOR])
+def test_each_histogram_marks_the_data_where_it_stands_and_the_density_is_thick_and_black_over_thin_and_grey(tmp_path, chart_service, monkeypatch, case):  # noqa: F811
+    section, curve, rows = _checked(case)
+    draw(tmp_path, chart_service, monkeypatch, case, fmt="svg")
+    options = _options(chart_service)
+    w = common.words("bayes_model", "sample" if case == SAMPLE else "prior_predictive", "en")["predictive"]
+    names = {*w["statistic"].values(), w["unit_mean"]}
+    bars = [o for o in options if o["title"]["text"] in names and any(x.get("step") == "end" and "areaStyle" in x for x in o.get("series", []))]
+    # seven statistics and the six schools' means, a histogram each
+    bars = list({(o["title"]["text"], json.dumps(o["series"][0]["data"][:3])): o for o in bars}.values())  # (one chart is handed in several sizes)
+    assert len(bars) == 7 + 6
+    observed = {round(r["value"], 6) for r in rows if r["section"] == section and r["stat"] == "observed"}
+    for o in bars:
+        [marks] = [x["markLine"]["data"] for x in o["series"] if "markLine" in x]
+        [line] = [m["xAxis"] for m in marks]
+        assert round(line, 6) in observed
+        bar = o["series"][0]
+        assert bar["data"] and all(y >= 0 for _, y in bar["data"]) and "scale" not in o["yAxis"]
+        # the bins are those of the rows: the line of the data lies inside the drawn range
+        assert bar["data"][0][0] <= line <= bar["data"][-1][0]
+    density = [o for o in options if any(x.get("lineStyle", {}).get("width") == 2.5 for x in o.get("series", []))][0]
+    thick = [x for x in density["series"] if x.get("lineStyle", {}).get("width") == 2.5 and x["data"]]
+    thin = [x for x in density["series"] if x.get("lineStyle", {}).get("width") == 0.6 and x["data"]]
+    assert len(thick) == 1 and len(thin) == 20 and thick[0]["z"] > thin[0]["z"]
+    assert thick[0]["lineStyle"]["color"] == "#1f2933" and {x["lineStyle"]["color"] for x in thin} == {"#9aa3af"}
+    assert density["legend"]["show"] is False and not any("markLine" in x for x in density["series"])
+
+
+def test_the_slots_of_the_checks_give_an_outcome_its_place_its_statistics_and_its_units_and_a_key_the_charts_find(tmp_path):
+    _, _, rows = fixture(SAMPLE)
+    out = common.SLOTS["bayes_model"](rows)
+    levels = {r["level"] for r in out if r["section"] == "ppc"}
+    assert levels == {"o1:mean", "o1:sd", "o1:min", "o1:max", "o1:q10", "o1:q50", "o1:q90"} | {f"o1:u{j}" for j in range(1, 7)}
+    assert {r["level"] for r in out if r["section"] == "curve" and "density" in r["level"] and "ppc" in r["level"]} == {"ppc_density:o1"}
+    slot = {r["key"]: r for r in out if r["section"] == "slot"}
+    assert slot["slot|o1||label"]["text"] == "exam_score" and slot["slot|o1:u1||label"]["text"] == "Liceo Galilei"
+    # the key follows the id, and a unit's text is not in its key (the chart finds T(y) by the key alone)
+    assert "ppc|o1:mean||observed" in {r["key"] for r in out} and "ppc|o1:u1||observed" in {r["key"] for r in out}
+    assert {r["level_2"] for r in out if r["level"] == "o1:u1" and r["section"] == "ppc"} == {"Liceo Galilei"}
+    # the outer slots of a replicated density say which they are, the observed one is not marked: nothing is computed
+    edges = [r for r in out if r["section"] == "curve" and r["level"] == "ppc_density:o1" and r["text"]]
+    assert {r["text"] for r in edges} == {"below", "above"} and len(edges) == 40 and all(r["level_2"].startswith("draw_") for r in edges)
+    assert min(r["x0"] for r in edges if r["text"] == "above") > max(r["x0"] for r in edges if r["text"] == "below")
+    # a fourth outcome is not drawn (its rows keep their id), and a page without checks has no such slots
+    base = [r for r in rows if r["section"] == "ppc" and r["level"] == "score:mean"]
+    many = [{**r, "level": f"{y}:mean", "key": r["key"].replace("score:", f"{y}:"), "ord": r["ord"] + 1000 * i} for i, y in enumerate("abcd") for r in base]
+    levels = {r["level"] for r in common.SLOTS["bayes_model"]([r for r in rows if r["section"] != "ppc"] + many) if r["section"] == "ppc"}
+    assert levels == {"o1:mean", "o2:mean", "o3:mean", "d:mean"}
+    none = common.SLOTS["bayes_model"]([r for r in rows if r["section"] not in ("ppc", "curve")])
+    assert not [r for r in none if r["section"] == "slot" and r["level"].startswith("o")]
+
+
+def test_a_version_without_checks_has_no_predictive_page_and_the_note_of_left_out_draws_is_the_runner_s(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, _, rows = fixture(SAMPLE)
+    without = [r for r in rows if r["section"] != "ppc" and not (r["level"] or "").startswith("ppc_density")]
+    _, page = draw(tmp_path, chart_service, monkeypatch, SAMPLE, fmt="svg", rows=without)
+    got = set(strings(json.loads(page)))
+    w = common.words("bayes_model", "sample", "en")
+    assert w["sections"]["checks"] not in got and w["predictive"]["note"]["sample"] not in got
+    # the prior predictive's checks file had draws the program threw: the runner's note is in the notes, the counts are the runner's
+    prior = said(tmp_path / "p", chart_service, monkeypatch, PRIOR)
+    assert any(t.startswith("3 of the 1000 draws of the prior predictive checks were left out") for t in prior)
+
+
+def test_the_checks_come_after_the_pairs_and_before_how_the_report_was_computed():
+    for params, before in (({}, "s_pairs"), ({"mode": "prior_predictive"}, "s_data")):
+        body = layouts.definition("bayes_model", params, "en", None, None)["sections"]["body"]["items"]
+        first = {it["id"]: i for i, it in enumerate(body)}
+        assert first[before] < first["s_checks"] < first["s_how"] < first["s_notes"]
+        # a place with no rows takes no room, and nothing of the page is past the engine's 2000 mm
+        places = [it for it in body if re.match(r"(ppc|prior_check)_\d_|check_(label|unit_label|outside)_|(ppc|prior)_density_", it["id"])]
+        assert places and all(it.get("collapse_hidden") for it in places)
+        assert max(it["y"] + it["h"] for it in body) < 2000

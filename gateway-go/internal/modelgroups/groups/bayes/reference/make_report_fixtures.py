@@ -18,7 +18,10 @@ the facts of the sampler are imaginary, and so are the original-scale numbers of
 the runner's lot for them is not built yet): consistent with each other, never a run's. Every row goes through the contract's declaration
 (`bayescontract/testdata/contract.json`) and the catalogue's shapes, as the runner's writer checks them.
 
-The checks' rows (`ppc`, `prior_check`) are lot Q3's: these fixtures are those of a version saved before the predictive checks.
+The checks' rows (`ppc` in the sample's, `prior_check` in the prior predictive's, with the overlaid densities) are those of the second pass over a
+checks file (`bayes_ppc`), made on the fake checks file of the runner's tests (`runner_tests/fake_checks.py`): the outcome is the score of the
+six schools, 588 rows as the fixture says, replicated data of a normal around the score's mean. The prior predictive's checks file has three draws
+the program threw (all missing), so that its note of left-out draws is on the page.
 """
 from __future__ import annotations
 
@@ -30,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[5]
-sys.path[:0] = [str(HERE.parents[2] / "common" / "py"), str(HERE.parent / "runner" / "py")]
+sys.path[:0] = [str(HERE.parents[2] / "common" / "py"), str(HERE.parent / "runner" / "py"), str(HERE / "runner_tests")]
 
 import numpy as np  # noqa: E402
 import pyarrow.parquet as pq  # noqa: E402
@@ -38,6 +41,7 @@ import pyarrow.parquet as pq  # noqa: E402
 import bayes_draws  # noqa: E402
 import bayes_pass2  # noqa: E402
 import bayes_rows  # noqa: E402
+import fake_checks  # noqa: E402
 from bayes_task import Element, Entry, Layout  # noqa: E402
 
 OUT = REPO / "backend" / "tests" / "fixtures" / "models"
@@ -129,6 +133,29 @@ class Stub:
 
     def limit(self, name: str) -> int:
         return bayes_pass2.limit({}, name)
+
+
+def checks_rows(w: bayes_rows.ResultsWriter, variant: str, tmp: Path):
+    """The predictive checks' rows of the variant, from a fake checks file of 4 × 250 draws of the replicated score (the outcome is `score`, the
+    units the six schools); returns the second pass's report."""
+    shift, n = 5.1, 588
+    real_table, real_simulate = fake_checks.table, fake_checks.simulate
+    fake_checks.UNITS = SCHOOLS
+    fake_checks.table = lambda n, kind="continuous", units=True, seed=7: {
+        **real_table(n, kind, units, seed), "y": [round(v + shift, 4) for v in real_table(n, kind, units, seed)["y"]]}
+    fake_checks.simulate = lambda plan, kind, seed, chain, first: real_simulate(plan, kind, seed, chain, first) + shift
+    try:
+        sampling = variant == "sample"
+        root = tmp / f"{variant}-checks"
+        root.mkdir()
+        task, plan, facts, layout = fake_checks.prepared(root, n=n, kind="continuous", units=True, run="checks" if sampling else "prior")
+        plan.outcomes[0].stan = "score"
+        path = root / "checks.parquet"
+        lost = () if sampling else ((2, 17), (3, 200), (4, 9))  # the draws the program threw
+        fake_checks.write(str(path), plan, layout, "continuous", CHAINS, DRAWS, 125, seed=SEED % 1000, nan_draws=lost)
+        return plan.rows(str(path), w, "ppc" if sampling else "prior_check")
+    finally:
+        fake_checks.table, fake_checks.simulate = real_table, real_simulate
 
 
 def declaration(variant: str):
@@ -226,13 +253,16 @@ def make(variant: str, tmp: Path) -> dict:
     entries = bayes_rows.quantity_section(w, Stub(), lay)
     report = bayes_pass2.second_pass(str(draws_path), lay, LIMITS, w, summary_path=str(tmp / f"{variant}-summary.parquet"), diagnostics=sampling,
                                      prior=prior_of(lay, sampling), seed=SEED, quantity_entries=entries)
+    checks = checks_rows(w, variant, tmp)
     data_rows(w)
     if sampling:
         sampler_rows(w, full, lay)
         original_scale(w, full, lay)
-        seconds = {"data": 0.4, "warmup": 15.0, "sampling": 18.0, "conversion": 0.6, "pass_2": round(report.seconds, 3)}
+        seconds = {"data": 0.4, "warmup": 15.0, "sampling": 18.0, "conversion": 0.6, "pass_2": round(report.seconds, 3),
+                   "checks": round(checks.seconds, 3)}
     else:
-        seconds = {"data": 0.4, "sampling": 0.3, "conversion": 0.2, "pass_2": round(report.seconds, 3)}
+        seconds = {"data": 0.4, "sampling": 0.3, "conversion": 0.2, "pass_2": round(report.seconds, 3),
+                   "checks": round(checks.seconds, 3)}
     model_rows(w, variant, lay, report, seconds, len(lay.draws) - lay.n_sampler)
     w.close()
     rows = pq.read_table(tmp / f"{variant}-results.parquet").to_pylist()
@@ -241,7 +271,7 @@ def make(variant: str, tmp: Path) -> dict:
     return {
         "model": "bayes_model", "variant": variant, "params": params,
         "fixture": ("a run of the template hier_slopes on imaginary draws, the runner's writers (reference/make_report_fixtures.py): "
-                    "the hashes, the seconds, the sampler's facts and the original-scale numbers are placeholders; no predictive checks"),
+                    "the hashes, the seconds, the sampler's facts and the original-scale numbers are placeholders; the predictive checks' rows are those of the second pass on a fake checks file"),
         "columns": COLUMNS,
         "rows": [[(None if r[c] is None else round(r[c], 12) + 0.0) if c in ("value", "x0", "x1") else r[c] for c in COLUMNS] for r in ordered],
     }

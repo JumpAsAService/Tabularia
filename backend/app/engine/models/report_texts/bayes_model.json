@@ -11,7 +11,9 @@
       "data": "Data",
       "groups": "Groups",
       "charts": "Charts of the draws",
-      "pairs": "Pairs"
+      "pairs": "Pairs",
+      "checks": "Predictive checks",
+      "prior_checks": "Prior predictive checks"
     },
     "kpi": {
       "rows": "Rows used",
@@ -128,7 +130,9 @@
         "note_density_cut": "Note: the density charts",
         "note_no_checks": "Note: the predictive checks",
         "note_checks_dropped": "Note: draws left out of the checks",
-        "note_prior_undrawn": "Note: quantities with no prior draw"
+        "note_prior_undrawn": "Note: quantities with no prior draw",
+        "note_prior_dropped": "Note: prior draws left out",
+        "note_replicated_dropped": "Note: replicated draws left out"
       }
     },
     "values": {
@@ -203,6 +207,32 @@
           "says": "The step size the warm-up settled on, the mean acceptance statistic of the iterations and the mean number of leapfrog steps an iteration took: what the sampler did, in numbers."
         }
       }
+    },
+    "predictive": {
+      "note": {
+        "sample": "The grey lines are 20 data sets the model draws from the posterior; the black line is the data. Where the black line runs outside the grey ones, the drawn data sets do not show that feature of the data.",
+        "prior_predictive": "The grey lines are 20 data sets drawn from the priors alone, before the data are seen; the black line is the data. The charts show the data sets the priors allow, set beside the data."
+      },
+      "how": {
+        "density": "Density: the values of the outcome, the data's (black, thick) and each drawn data set's (grey, thin) on the same axis; the two outer points of a grey line count the drawn values below and above the range of the data.",
+        "statistic": "Histogram of a statistic: each bar counts the drawn data sets whose statistic falls in its bin; the dashed line marks the same statistic of the data.",
+        "units": "The same drawing for the mean of the outcome in each checked unit (the units with the most rows)."
+      },
+      "statistic": {
+        "mean": "Mean",
+        "sd": "Standard deviation",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q10": "10th percentile",
+        "q50": "Median",
+        "q90": "90th percentile",
+        "zeros": "Number of zeros"
+      },
+      "unit_mean": "Mean of the unit",
+      "units": "Mean of each checked unit",
+      "density": "Density of the values",
+      "draws": "Drawn data sets",
+      "outside": "In the {draws} data sets drawn, {below} drawn values lie below the range of the data and {above} above it."
     }
   },
   "it": {
@@ -217,7 +247,9 @@
       "data": "Dati",
       "groups": "Gruppi",
       "charts": "Grafici delle estrazioni",
-      "pairs": "Coppie"
+      "pairs": "Coppie",
+      "checks": "Controlli predittivi",
+      "prior_checks": "Controlli predittivi a priori"
     },
     "kpi": {
       "rows": "Righe usate",
@@ -334,7 +366,9 @@
         "note_density_cut": "Nota: i grafici di densità",
         "note_no_checks": "Nota: i controlli predittivi",
         "note_checks_dropped": "Nota: estrazioni escluse dai controlli",
-        "note_prior_undrawn": "Nota: quantità senza estrazione a priori"
+        "note_prior_undrawn": "Nota: quantità senza estrazione a priori",
+        "note_prior_dropped": "Nota: estrazioni a priori escluse",
+        "note_replicated_dropped": "Nota: estrazioni replicate escluse"
       }
     },
     "values": {
@@ -409,6 +443,32 @@
           "says": "Il passo su cui si è assestato il riscaldamento, la statistica di accettazione media delle iterazioni e il numero medio di passi leapfrog di un'iterazione: ciò che il campionatore ha fatto, in numeri."
         }
       }
+    },
+    "predictive": {
+      "note": {
+        "sample": "Le linee grigie sono 20 insiemi di dati che il modello estrae dalla distribuzione a posteriori; la linea nera è costituita dai dati. Dove la linea nera esce dalle grigie, gli insiemi estratti non mostrano quella caratteristica dei dati.",
+        "prior_predictive": "Le linee grigie sono 20 insiemi di dati estratti dalle sole distribuzioni a priori, prima di vedere i dati; la linea nera è costituita dai dati. I grafici mostrano gli insiemi di dati che le distribuzioni a priori consentono, accanto ai dati."
+      },
+      "how": {
+        "density": "Densità: i valori dell'esito, quella dei dati (nera, spessa) e quella di ogni insieme estratto (grigia, sottile) sullo stesso asse; i due punti esterni di una linea grigia contano i valori estratti sotto e sopra l'intervallo dei dati.",
+        "statistic": "Istogramma di una statistica: ogni barra conta gli insiemi estratti la cui statistica cade nel suo intervallo; la linea tratteggiata segna la stessa statistica dei dati.",
+        "units": "Lo stesso disegno per la media dell'esito in ciascuna unità controllata (le unità con più righe)."
+      },
+      "statistic": {
+        "mean": "Media",
+        "sd": "Deviazione standard",
+        "min": "Minimo",
+        "max": "Massimo",
+        "q10": "10° percentile",
+        "q50": "Mediana",
+        "q90": "90° percentile",
+        "zeros": "Numero di zeri"
+      },
+      "unit_mean": "Media dell'unità",
+      "units": "Media di ciascuna unità controllata",
+      "density": "Densità dei valori",
+      "draws": "Insiemi di dati estratti",
+      "outside": "Nei {draws} insiemi di dati estratti, {below} valori estratti stanno sotto l'intervallo dei dati e {above} sopra."
     }
   },
   "de": {
@@ -423,7 +483,9 @@
       "data": "Daten",
       "groups": "Gruppen",
       "charts": "Diagramme der Ziehungen",
-      "pairs": "Paare"
+      "pairs": "Paare",
+      "checks": "Prädiktive Prüfungen",
+      "prior_checks": "Prädiktive Prüfungen der Priors"
     },
     "kpi": {
       "rows": "Verwendete Zeilen",
@@ -540,7 +602,9 @@
         "note_density_cut": "Hinweis: die Dichtediagramme",
         "note_no_checks": "Hinweis: die prädiktiven Prüfungen",
         "note_checks_dropped": "Hinweis: aus den Prüfungen ausgelassene Ziehungen",
-        "note_prior_undrawn": "Hinweis: Größen ohne Prior-Ziehung"
+        "note_prior_undrawn": "Hinweis: Größen ohne Prior-Ziehung",
+        "note_prior_dropped": "Hinweis: ausgelassene Prior-Ziehungen",
+        "note_replicated_dropped": "Hinweis: ausgelassene replizierte Ziehungen"
       }
     },
     "values": {
@@ -615,6 +679,32 @@
           "says": "Die Schrittweite, auf die sich das Warm-up eingestellt hat, die mittlere Akzeptanzstatistik der Iterationen und die mittlere Zahl der Leapfrog-Schritte je Iteration: was der Sampler getan hat, in Zahlen."
         }
       }
+    },
+    "predictive": {
+      "note": {
+        "sample": "Die grauen Linien sind 20 Datensätze, die das Modell aus der Posterior-Verteilung zieht; die schwarze Linie sind die Daten. Wo die schwarze Linie außerhalb der grauen verläuft, zeigen die gezogenen Datensätze dieses Merkmal der Daten nicht.",
+        "prior_predictive": "Die grauen Linien sind 20 Datensätze, die allein aus den Priors gezogen wurden, bevor die Daten gesehen werden; die schwarze Linie sind die Daten. Die Diagramme zeigen die Datensätze, die die Priors zulassen, neben den Daten."
+      },
+      "how": {
+        "density": "Dichte: die Werte des Ergebnisses, die der Daten (schwarz, dick) und die jedes gezogenen Datensatzes (grau, dünn) auf derselben Achse; die beiden äußeren Punkte einer grauen Linie zählen die gezogenen Werte unter und über dem Wertebereich der Daten.",
+        "statistic": "Histogramm einer Statistik: jeder Balken zählt die gezogenen Datensätze, deren Statistik in seine Klasse fällt; die gestrichelte Linie markiert dieselbe Statistik der Daten.",
+        "units": "Dieselbe Darstellung für den Mittelwert des Ergebnisses in jeder geprüften Einheit (die Einheiten mit den meisten Zeilen)."
+      },
+      "statistic": {
+        "mean": "Mittelwert",
+        "sd": "Standardabweichung",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q10": "10. Perzentil",
+        "q50": "Median",
+        "q90": "90. Perzentil",
+        "zeros": "Anzahl der Nullen"
+      },
+      "unit_mean": "Mittelwert der Einheit",
+      "units": "Mittelwert jeder geprüften Einheit",
+      "density": "Dichte der Werte",
+      "draws": "Gezogene Datensätze",
+      "outside": "In den {draws} gezogenen Datensätzen liegen {below} gezogene Werte unter dem Wertebereich der Daten und {above} darüber."
     }
   },
   "es": {
@@ -629,7 +719,9 @@
       "data": "Datos",
       "groups": "Grupos",
       "charts": "Gráficos de las extracciones",
-      "pairs": "Pares"
+      "pairs": "Pares",
+      "checks": "Comprobaciones predictivas",
+      "prior_checks": "Comprobaciones predictivas a priori"
     },
     "kpi": {
       "rows": "Filas usadas",
@@ -746,7 +838,9 @@
         "note_density_cut": "Nota: los gráficos de densidad",
         "note_no_checks": "Nota: los controles predictivos",
         "note_checks_dropped": "Nota: muestras excluidas de los controles",
-        "note_prior_undrawn": "Nota: cantidades sin muestra a priori"
+        "note_prior_undrawn": "Nota: cantidades sin muestra a priori",
+        "note_prior_dropped": "Nota: muestras a priori excluidas",
+        "note_replicated_dropped": "Nota: muestras replicadas excluidas"
       }
     },
     "values": {
@@ -821,6 +915,32 @@
           "says": "El paso en el que se estabilizó el calentamiento, la estadística de aceptación media de las iteraciones y el número medio de pasos leapfrog por iteración: lo que hizo el muestreador, en números."
         }
       }
+    },
+    "predictive": {
+      "note": {
+        "sample": "Las líneas grises son 20 conjuntos de datos que el modelo extrae de la distribución a posteriori; la línea negra son los datos. Donde la línea negra queda fuera de las grises, los conjuntos extraídos no muestran esa característica de los datos.",
+        "prior_predictive": "Las líneas grises son 20 conjuntos de datos extraídos solo de las distribuciones a priori, antes de ver los datos; la línea negra son los datos. Los gráficos muestran los conjuntos de datos que permiten las distribuciones a priori, junto a los datos."
+      },
+      "how": {
+        "density": "Densidad: los valores del resultado, la de los datos (negra, gruesa) y la de cada conjunto extraído (gris, fina) sobre el mismo eje; los dos puntos exteriores de una línea gris cuentan los valores extraídos por debajo y por encima del rango de los datos.",
+        "statistic": "Histograma de un estadístico: cada barra cuenta los conjuntos extraídos cuyo estadístico cae en su intervalo; la línea discontinua marca el mismo estadístico de los datos.",
+        "units": "El mismo dibujo para la media del resultado en cada unidad comprobada (las unidades con más filas)."
+      },
+      "statistic": {
+        "mean": "Media",
+        "sd": "Desviación estándar",
+        "min": "Mínimo",
+        "max": "Máximo",
+        "q10": "Percentil 10",
+        "q50": "Mediana",
+        "q90": "Percentil 90",
+        "zeros": "Número de ceros"
+      },
+      "unit_mean": "Media de la unidad",
+      "units": "Media de cada unidad comprobada",
+      "density": "Densidad de los valores",
+      "draws": "Conjuntos de datos extraídos",
+      "outside": "En los {draws} conjuntos de datos extraídos, {below} valores extraídos quedan por debajo del rango de los datos y {above} por encima."
     }
   },
   "fr": {
@@ -835,7 +955,9 @@
       "data": "Données",
       "groups": "Groupes",
       "charts": "Graphiques des tirages",
-      "pairs": "Paires"
+      "pairs": "Paires",
+      "checks": "Vérifications prédictives",
+      "prior_checks": "Vérifications prédictives a priori"
     },
     "kpi": {
       "rows": "Lignes utilisées",
@@ -952,7 +1074,9 @@
         "note_density_cut": "Note : les graphiques de densité",
         "note_no_checks": "Note : les contrôles prédictifs",
         "note_checks_dropped": "Note : tirages écartés des contrôles",
-        "note_prior_undrawn": "Note : quantités sans tirage a priori"
+        "note_prior_undrawn": "Note : quantités sans tirage a priori",
+        "note_prior_dropped": "Note : tirages a priori écartés",
+        "note_replicated_dropped": "Note : tirages répliqués écartés"
       }
     },
     "values": {
@@ -1027,6 +1151,32 @@
           "says": "Le pas sur lequel le réchauffement s'est fixé, la statistique d'acceptation moyenne des itérations et le nombre moyen de pas leapfrog par itération : ce que l'échantillonneur a fait, en chiffres."
         }
       }
+    },
+    "predictive": {
+      "note": {
+        "sample": "Les lignes grises sont 20 jeux de données que le modèle tire de la loi a posteriori ; la ligne noire est celle des données. Là où la ligne noire sort des grises, les jeux tirés ne montrent pas cette caractéristique des données.",
+        "prior_predictive": "Les lignes grises sont 20 jeux de données tirés des seules lois a priori, avant de voir les données ; la ligne noire est celle des données. Les graphiques montrent les jeux de données que les lois a priori permettent, à côté des données."
+      },
+      "how": {
+        "density": "Densité : les valeurs du résultat, celle des données (noire, épaisse) et celle de chaque jeu tiré (grise, fine) sur le même axe ; les deux points extérieurs d'une ligne grise comptent les valeurs tirées en dessous et au-dessus de l'étendue des données.",
+        "statistic": "Histogramme d'une statistique : chaque barre compte les jeux tirés dont la statistique tombe dans son intervalle ; la ligne en pointillés marque la même statistique des données.",
+        "units": "Le même dessin pour la moyenne du résultat dans chaque unité vérifiée (les unités qui ont le plus de lignes)."
+      },
+      "statistic": {
+        "mean": "Moyenne",
+        "sd": "Écart type",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q10": "10e centile",
+        "q50": "Médiane",
+        "q90": "90e centile",
+        "zeros": "Nombre de zéros"
+      },
+      "unit_mean": "Moyenne de l'unité",
+      "units": "Moyenne de chaque unité vérifiée",
+      "density": "Densité des valeurs",
+      "draws": "Jeux de données tirés",
+      "outside": "Dans les {draws} jeux de données tirés, {below} valeurs tirées sont en dessous de l'étendue des données et {above} au-dessus."
     }
   }
 }

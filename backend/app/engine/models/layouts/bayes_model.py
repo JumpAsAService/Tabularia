@@ -1,7 +1,8 @@
 """The report of the node «Bayesian model» (docs/specs/bayes-report.md): drawn from the ten-column rows a run of the group `bayes` wrote
 (docs/specs/bayes-contract.md, «Sections») and from nothing else, in both variants, `sample` and `prior_predictive`.
 
-The first lot (Q1) is the pages that need no chart and no reading; the second (Q2) the groups' page, the diagnostics and the charts.
+The first lot (Q1) is the pages that need no chart and no reading; the second (Q2) the groups' page, the diagnostics and the charts; the
+third (Q3) the predictive checks of both variants.
 
 1. Summary: four cards (the rows used, the draws, the divergences, the largest R-hat), the facts line (the saved model and its version, the
    sampler, the seed, the precision of the draws, the seconds). The divergences are a count and every diagnostic a measure or a fact: no
@@ -23,7 +24,12 @@ The first lot (Q1) is the pages that need no chart and no reading; the second (Q
    (`trace:3`) and the layout defines the fixed number of places, each drawn only when its rows exist.
 
 Every number is read from the rows by its key. A label, a unit, a column is data: it goes through the expressions as a value, never as a
-template. The predictive checks are lot Q3's, the readings and the literature lot Q4's.
+template. The readings and the literature are lot Q4's.
+
+8. The predictive checks (Q3), `ppc` rows of `sample` and `prior_check` rows of `prior_predictive`: charts only. For each checked outcome the
+   observed density in black over the replicated data sets' in grey, and a histogram of each statistic T(y_rep) with T(y) marked by a
+   dashed line, then the histogram of each checked unit's mean. No p-value, no probability, no share and no verdict: a drawing, with the
+   count of the replicated values that fell outside the range of the data (in the drawn sets) as its only number.
 """
 from __future__ import annotations
 
@@ -65,6 +71,9 @@ def _smallest(stat: str) -> str:
     return f'MIN(IF([section] = "quantity" AND [stat] = "{stat}", [value], NULL))'
 
 
+CARD, UNDER = 25.0, 9.0  # a card's height and its line under the value: two lines of 7.5 pt (a sentence of the words may need both)
+
+
 def _cards(w: dict, variant: str) -> tuple[c.Card, ...]:
     k = w["kpi"]
     n, chains, draws = c.model_number("n"), c.model_number("chains"), c.model_number("draws")
@@ -98,15 +107,15 @@ def _facts(w: dict, variant: str) -> str:
 def _summary(p: stats.Page, w: dict, variant: str) -> None:
     p.heading("s_summary", w["sections"]["summary"])
     for card, x in zip(_cards(w, variant), (0, 47, 94, 141)):
-        item: dict[str, Any] = {"id": card.id, "type": "kpi", "dataset": c.DATASET, "x": x, "y": p.y, "w": 45, "h": 20,
+        item: dict[str, Any] = {"id": card.id, "type": "kpi", "dataset": c.DATASET, "x": x, "y": p.y, "w": 45, "h": CARD,
                                 "label": card.label, "value": card.value}
         if card.format:
             item["format"] = card.format
         p.add(item)
         if card.under:
-            p.text(card.id + "_under", "=" + card.under, h=4.5, x=x + 2, w=43, advance=False, size=7.5, color=c.MUTED)
+            p.text(card.id + "_under", "=" + card.under, h=UNDER, x=x + 2, w=43, advance=False, size=7.5, color=c.MUTED)
             p.items[-1]["y"] = p.y + 14.6
-    p.y += 21.5
+    p.y += CARD + 1.5
     p.keep()
     p.text("facts", "=" + _facts(w, variant), h=6.5, size=9, background=c.PANEL, padding=1.5, can_grow=True)
 
@@ -139,9 +148,10 @@ def _posterior(p: stats.Page, w: dict, variant: str) -> None:
         cols = [quantity, unit, _number("mean", 17, t["mean"]), _number("sd", 17, t["sd"]), _number("q5", 17, t["q5"]),
                 _number("q25", 17, t["q25"]), _number("q50", 17, t["q50"]), _number("q75", 17, t["q75"]), _number("q95", 17, t["q95"])]
     else:
-        cols = [quantity, unit, _number("mean", 13, t["mean"]), _number("sd", 12, t["sd"]), _number("q5", 13, t["q5"]),
-                _number("q50", 13, t["q50"]), _number("q95", 13, t["q95"]), _number("rhat", 12, t["rhat"], "0.000"),
-                _number("ess_bulk", 13, t["ess_bulk"], "#,##0"), _number("ess_tail", 13, t["ess_tail"], "#,##0"), _number("mcse_mean", 13, t["mcse_mean"]),
+        quantity["width"], unit["width"] = 32, 16
+        cols = [quantity, unit, _number("mean", 13, t["mean"]), _number("sd", 11, t["sd"]), _number("q5", 12, t["q5"]),
+                _number("q50", 13, t["q50"]), _number("q95", 12, t["q95"]), _number("rhat", 12, t["rhat"], "0.000"),
+                _number("ess_bulk", 13, t["ess_bulk"], "#,##0"), _number("ess_tail", 13, t["ess_tail"], "#,##0"), _number("mcse_mean", 14, t["mcse_mean"]),
                 _contraction(t)]
     # the pages print the scalars and the correlations (a plate's quantities are the groups' page); the Excel file's sheet holds every row
     # of the scope, with the unit of each (owner, 2026-11-24)
@@ -158,7 +168,7 @@ def _posterior(p: stats.Page, w: dict, variant: str) -> None:
 def _contraction(t: dict) -> dict:
     """The contraction, or «—» where the prior has no finite variance (the note of the run says why)."""
     x = c.of_row("summary", "contraction")
-    return {"header": t["contraction"], "value": f'IF(ISNULL({x}), "—", {c.shown(x, "0.###")})', "width": 14, "align": "right"}
+    return {"header": t["contraction"], "value": f'IF(ISNULL({x}), "—", {c.shown(x, "0.###")})', "width": 19, "align": "right"}
 
 
 def _original(p: stats.Page, w: dict) -> None:
@@ -224,7 +234,7 @@ def slots(rows: list[dict]) -> list[dict]:
     """The rows with each chart's id replaced by its place (`trace:3`, `rank:3`, `density:3`: the k-th quantity of the scope, the same for
     the three; `pairs:2`; `units:1`), and a row `slot|<place>||label` (its text: what the place holds) after them, `slot|units:k||total`
     (the units of the plate: the chart may show a sample of them). A chart beyond the places keeps its id and is not drawn."""
-    if not any(r["section"] in ("curve", "hist", "point") for r in rows):
+    if not any(r["section"] in ("curve", "hist", "point", "ppc", "prior_check") for r in rows):
         return rows
     labels = {r["level"]: r["text"] for r in rows if r["section"] == "quantity" and r["stat"] == "label" and r.get("text")}
     totals = {r["level"]: r["value"] for r in rows if r["section"] == "quantity" and r["stat"] == "n_quantities"}
@@ -253,6 +263,10 @@ def slots(rows: list[dict]) -> list[dict]:
                 return f"{_label_of(rest[:i], labels)} × {_label_of(rest[i + 1:], labels)}"
         return rest.replace(":", " × ", 1)
 
+    # the predictive checks: the k-th outcome's rows (`<y>:<stat>`, `ppc_density:<y>`) are `o<k>:<stat>` and `ppc_density:o<k>`, a checked
+    # unit's mean (`<y>:unit_mean`, the unit in `level_2`) is `o<k>:u<j>`; the first and the last point of a replicated density say where
+    # they are (`below`, `above` the observed range), as the runner's two outer slots
+    outcome, unit_of, edges = _checked(rows, order)
     out: list[dict] = []
     for r in rows:
         level = r["level"]
@@ -260,11 +274,24 @@ def slots(rows: list[dict]) -> list[dict]:
         new = (f"{kind}:{place[name]}" if kind in BY_QUANTITY and name in place else
                f"pairs:{pair_place[name]}" if kind == "pairs" and name in pair_place else
                f"units:{unit_place[name]}" if kind == "units" and name in unit_place else None)
+        if r["section"] in CHECKS:
+            y, _, stat = (level or "").partition(":")
+            if y in outcome:
+                new = f"o{outcome[y]}:" + (f"u{unit_of[y][r['level_2']]}" if stat == "unit_mean" and r["level_2"] in unit_of[y] else
+                                           "" if stat == "unit_mean" else stat)
+                if stat == "unit_mean" and r["level_2"] not in unit_of[y]:
+                    new = None
+        elif r["section"] == "curve" and kind in DENSITIES and name in outcome:
+            new = f"{kind}:o{outcome[name]}"
+            if r["level_2"] != "observed" and id(r) in edges:
+                r = {**r, "text": edges[id(r)]}
         if new is None:
             out.append(r)
             continue
         key = r.get("key")
-        if isinstance(key, str) and key.startswith(f"{r['section']}|{level}|"):
+        if isinstance(key, str) and r["section"] in CHECKS and level.endswith(":unit_mean") and key.startswith(f"{r['section']}|{level}|{r['level_2']}|"):
+            key = f"{r['section']}|{new}||" + key[len(f"{r['section']}|{level}|{r['level_2']}|"):]  # a unit's text is not in its key: a chart finds it
+        elif isinstance(key, str) and key.startswith(f"{r['section']}|{level}|"):
             key = f"{r['section']}|{new}|" + key[len(f"{r['section']}|{level}|"):]
         out.append({**r, "level": new, "key": key})
     last = max((r["ord"] for r in rows if isinstance(r.get("ord"), int)), default=-1)
@@ -283,7 +310,44 @@ def slots(rows: list[dict]) -> list[dict]:
         said = labels.get(name, name)
         out.append(slot(f"units:{k}", "label", f"{said} ({plates[name]})" if name in plates else said))
         out.append(slot(f"units:{k}", "total", None, totals.get(name)))
+    columns = {r["level"]: r["text"] for r in rows if r["section"] == "data" and r["stat"] == "column" and r.get("text")}
+    for y, k in outcome.items():
+        out.append(slot(f"o{k}", "label", columns.get(y, y)))
+        for unit, j in unit_of[y].items():
+            out.append(slot(f"o{k}:u{j}", "label", unit))
     return out
+
+
+CHECKS = ("ppc", "prior_check")
+DENSITIES = ("ppc_density", "prior_density")
+OUTCOME_SLOTS, UNIT_MEAN_SLOTS = 3, 8
+
+
+def _checked(rows: list[dict], order: Any) -> tuple[dict[str, int], dict[str, dict[str, int]], dict[int, str]]:
+    """The checked outcomes' places (1…3, in the order of their first row), each one's checked units' places (1…8), and, by the `id` of
+    its row, which of a replicated density's points is the outer slot below the observed range or the one above it."""
+    first: dict[str, float] = {}
+    units: dict[str, dict[str, float]] = {}
+    for r in rows:
+        if r["section"] in CHECKS:
+            y, _, stat = (r["level"] or "").partition(":")
+            first[y] = min(first.get(y, math.inf), order(r))
+            if stat == "unit_mean" and r.get("level_2"):
+                units.setdefault(y, {}).setdefault(r["level_2"], order(r))
+    outcome = {y: k for k, y in enumerate(sorted(first, key=first.__getitem__)[:OUTCOME_SLOTS], 1)}
+    unit_of = {y: {u: j for j, u in enumerate(sorted(units.get(y, {}), key=units.get(y, {}).__getitem__)[:UNIT_MEAN_SLOTS], 1)} for y in outcome}
+    series: dict[tuple[str, str], list[dict]] = {}
+    for r in rows:
+        kind, _, name = (r["level"] or "").partition(":")
+        if r["section"] == "curve" and kind in DENSITIES and name in outcome and (r.get("level_2") or "").startswith("draw_"):
+            series.setdefault((r["level"], r["level_2"]), []).append(r)
+    edges: dict[int, str] = {}
+    for points in series.values():
+        known = [r for r in points if isinstance(r.get("x0"), (int, float))]
+        if len(known) > 2:
+            edges[id(min(known, key=lambda r: r["x0"]))] = "below"
+            edges[id(max(known, key=lambda r: r["x0"]))] = "above"
+    return outcome, unit_of, edges
 
 
 c.SLOTS["bayes_model"] = slots
@@ -462,7 +526,7 @@ def _charts(p: stats.Page, w: dict) -> None:
     p.heading("s_charts", w["sections"]["charts"])
     _intro(p, w, ("trace", "rank", "density"))
     _hide_unless(p, since, c.exists('[section] = "curve" AND STARTSWITH([level], "trace:")'))
-    tall, third = 46.0, (stats.WIDTH - 2 * GAP) / 3
+    tall, third = 38.0, (stats.WIDTH - 2 * GAP) / 3
     for k in range(1, QUANTITY_SLOTS + 1):
         top, place = p.y, f"trace:{k}"
         row = LABEL + tall + 2.0
@@ -477,7 +541,7 @@ def _charts(p: stats.Page, w: dict) -> None:
     _para(p, "how_pairs", ch["how"]["pairs"], 7.5)
     p.y += 1.0
     _hide_unless(p, since, c.exists('[section] = "curve" AND STARTSWITH([level], "pairs:")'))
-    tall, half = 58.0, (stats.WIDTH - GAP) / 2
+    tall, half = 50.0, (stats.WIDTH - GAP) / 2
     for k in range(1, PAIR_SLOTS + 1):
         column, top, place = (k - 1) % 2, p.y, f"pairs:{k}"
         x = column * (half + GAP)
@@ -486,6 +550,92 @@ def _charts(p: stats.Page, w: dict) -> None:
         _chart(p, _pairs_chart(w, k), x, top + LABEL, half, tall)
         if column == 1 or k == PAIR_SLOTS:
             p.y = top + row + 1.0
+
+
+# ── the predictive checks ───────────────────────────────────────────────────
+STATISTICS = ("mean", "sd", "min", "max", "q10", "q50", "q90", "zeros")  # two rows of four; the kinds of outcome use some
+COLOUR_DATA, COLOUR_DRAWS = "#1f2933", "#9aa3af"
+
+
+def _histogram(w: dict, section: str, k: int, place: str, id_: str, title: str) -> c.Chart:
+    """The bins of T(y_rep) of the place (`o<k>:<stat>`, `o<k>:u<j>`), T(y) a dashed vertical line read from its `observed` row. A drawing
+    of the rows: the line is where the data stand, never a share of the bars or a probability."""
+    rows = f'[section] = "{section}" AND [level] = "{place}"'
+    observed = f'LOOKUP("{section}|{place}||observed", [key], [value])'  # (the chart's own rows are the bins: the row of T(y) is found by its key)
+    return c.xy(id_, title, rows + ' AND [stat] = "count"', [c.mark("count", "bar", w["predictive"]["draws"])],
+                {"target_x": observed, "legend": False, "format": "#,##0", "x_format": "0.###"}, visible=c.exists(rows + ' AND [stat] = "count"'))
+
+
+def _overlay(w: dict, curve: str, k: int) -> c.Chart:
+    """The data's density, thick and black, over the replicated data sets' (up to 20), thin and grey."""
+    f = f'[section] = "curve" AND [level] = "{curve}:o{k}"'
+    series = [{"value": 'IF([level_2] = "observed", [value], NULL)', "as": "line", "name": "", "color": COLOUR_DATA, "width": 2.5},
+              {"value": 'IF([level_2] <> "observed", [value], NULL)', "as": "line", "name": "", "color": COLOUR_DRAWS, "width": 0.6}]
+    return c.xy(f"{curve}_{k}", w["predictive"]["density"], f, series, {"legend": False, "format": "0.###"}, split_by="[level_2]")
+
+
+def _outside(w: dict, curve: str, k: int) -> str:
+    """How many replicated values of the drawn sets fell below and above the range of the data: the outer slots' densities times the rows and
+    the bin's width, summed over the drawn sets. A count of the chart, said plain."""
+    rows = f'[section] = "curve" AND [level] = "{curve}:o{k}"'
+    width = (f'(LOOKUP("curve|{curve}:o{k}|observed|value|2", [key], [x0]) - LOOKUP("curve|{curve}:o{k}|observed|value|1", [key], [x0]))')
+    n = c.model_number("n")
+
+    def count(edge: str) -> str:
+        return f'SUMIF({rows} AND [text] = "{edge}", [value]) * {n} * {width}'
+
+    drawn = f'COUNTIF({rows} AND [text] = "below")'
+    return c.join(w["predictive"]["outside"], draws=c.shown(drawn, "#,##0"), below=c.shown(count("below"), "#,##0"), above=c.shown(count("above"), "#,##0"))
+
+
+def _predictive(p: stats.Page, w: dict, variant: str) -> None:
+    section, curve = ("ppc", "ppc_density") if variant == "sample" else ("prior_check", "prior_density")
+    ck = w["predictive"]
+    since = len(p.items)
+    p.heading("s_checks", w["sections"]["checks" if variant == "sample" else "prior_checks"])
+    _para(p, "checks_note", ck["note"][variant], 8.0)
+    for kind in ("density", "statistic", "units"):
+        _para(p, f"how_check_{kind}", ck["how"][kind], 7.5)
+    p.y += 1.0
+    _hide_unless(p, since, c.exists(f'[section] = "{section}"'))
+    quarter, half = (stats.WIDTH - 3 * GAP) / 4, (stats.WIDTH - GAP) / 2
+    for k in range(1, OUTCOME_SLOTS + 1):
+        place = f"o{k}"
+        shown = _has(place)
+        _place_label(p, f"check_label_{k}", place, p.y + 1.0, 6.0, shown)
+        p.items[-1]["style"] = {"size": 10, "weight": "bold", "color": stats.INK}
+        p.items[-1]["keep_with_next"] = True
+        p.y += 7.0
+        # the data's density against the replicated data sets', and what lies outside the data's range
+        top, tall = p.y, 40.0
+        row = tall + 2.0
+        _chart(p, _overlay(w, curve, k), 0, top, half, tall)
+        f = f'[section] = "curve" AND [level] = "{curve}:o{k}" AND [text] = "below"'
+        p.items.append({"id": f"check_outside_{k}", "type": "text", "x": round(half + GAP, 2), "y": round(top + 2.0, 2), "w": half, "h": row - 2.0,
+                        "visible": c.exists(f), "collapse_hidden": True, "value": "=" + _outside(w, curve, k),
+                        "style": {"size": 8, "color": stats.INK}})
+        p.y = top + row + 1.0
+        # the statistics: four a row (a row with none of its four drawn takes no room)
+        tall = 30.0
+        for r in range(0, len(STATISTICS), 4):
+            top, row = p.y, tall + 2.0
+            for i, stat in enumerate(STATISTICS[r:r + 4]):
+                _chart(p, _histogram(w, section, k, f"o{k}:{stat}", f"{section}_{k}_{stat}", ck["statistic"][stat]), i * (quarter + GAP), top, quarter, tall)
+            p.y = top + row
+        # the checked units' means, four a row: the unit's text over each
+        since_units = len(p.items)
+        _para(p, f"check_units_{k}", ck["units"], 8.0, color=stats.INK, weight="semibold")
+        _hide_unless(p, since_units, c.exists(f'[section] = "{section}" AND [level] = "o{k}:u1"'))
+        tall = 22.0
+        for j in range(1, UNIT_MEAN_SLOTS + 1):
+            column, top = (j - 1) % 4, p.y
+            x, unit = column * (quarter + GAP), f"o{k}:u{j}"
+            row = LABEL + tall + 2.0
+            _place_label(p, f"check_unit_label_{k}_{j}", unit, top, row, _has(unit), w=quarter, x=x)
+            _chart(p, _histogram(w, section, k, unit, f"{section}_{k}_u{j}", ck["unit_mean"]), x, top + LABEL, quarter, tall)
+            if column == 3 or j == UNIT_MEAN_SLOTS:
+                p.y = top + row
+        p.y += 2.0
 
 
 # ── the page ────────────────────────────────────────────────────────────────
@@ -507,6 +657,7 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     if variant == "sample":
         _diagnostics(p, w)
         _charts(p, w)
+    _predictive(p, w, variant)
     c.how_computed(p, w)
     c._notes(p, w)
     return c.document(header, p.items, footer, lang)

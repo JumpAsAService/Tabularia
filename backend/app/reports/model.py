@@ -688,7 +688,7 @@ class _Builder:
                 points = read(sub, s)
                 if mark != "point":  # a line goes from left to right, whatever the order of its rows
                     points = sorted(points, key=lambda p: p[0])
-                data.xy.append(charts.XYSeries(name, mark, points, own, legend, s.color))
+                data.xy.append(charts.XYSeries(name, mark, points, own, legend, s.color, s.width))
         o = it.options
         if o.y_categories:  # the names of the y axis: the first drawn row of each whole number's
             names = rd.parse(o.y_categories)

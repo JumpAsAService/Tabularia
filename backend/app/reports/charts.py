@@ -59,7 +59,7 @@ class SeriesData:
 @dataclass
 class XYSeries:
     """A mark of an `xy` chart: its name in the legend (`legend`: it is there), how it is
-    drawn (point, line, step, stem, band), its points — (x, y, label), a band's (x, low,
+    drawn (point, line, step, stem, bar, band), its points — (x, y, label), a band's (x, low,
     high) — and its colour, an index of the palette."""
     name: str
     mark: str
@@ -67,6 +67,7 @@ class XYSeries:
     colour: int = 0
     legend: bool = True
     color: str | None = None  # a fixed colour (#rrggbb) instead of the palette's `colour`
+    width: float | None = None  # a line's width in px (1.5 when none)
 
 
 @dataclass
@@ -674,10 +675,23 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
                                     "formatter": {"$fmt": "label"}}, labelLayout=HIDE_OVERLAP)
         elif s.mark == "stem":
             entry.update(type="bar", barWidth=2, barGap="-100%", data=[[days(x), y] for x, y, _ in pts])
+        elif s.mark == "bar":
+            # a histogram's bars: one a point, from its x (the bin's left edge) to the next x, the last as wide as the one before it;
+            # drawn as a filled step so that the bars need no width the axis does not know (ECharts sizes a bar on a value axis by
+            # the gap of its data, which a histogram with an empty bin gets wrong)
+            gaps = [b[0] - a[0] for a, b in zip(pts, pts[1:])]
+            end = pts[-1][0] + (gaps[-1] if gaps else 1.0) if pts else 0.0
+            closed = [[days(x), y] for x, y, _ in pts] + ([[days(end), pts[-1][1]]] if pts else [])
+            entry.update(type="line", showSymbol=False, smooth=False, step="end", data=closed, z=2,
+                         lineStyle={"width": s.width or 1, "color": c}, areaStyle={"color": c, "opacity": 0.42})
+            xs.append(end)
         else:
+            weight = s.width or 1.5
             entry.update(type="line", showSymbol=False, smooth=False, connectNulls=False,
-                         lineStyle={"width": 1.5, "color": c, **({"type": "dashed"} if s.mark == "dashed" else {})},
+                         lineStyle={"width": weight, "color": c, **({"type": "dashed"} if s.mark == "dashed" else {})},
                          data=[[days(x), y] for x, y, _ in pts], **({"step": "end"} if s.mark == "step" else {}))
+            if s.width:  # a thin line goes under the thick ones
+                entry["z"] = 2 if weight < 1.5 else 4
         lines.append(entry)
     series = lines + bands
     marks: list[dict] = []
@@ -729,8 +743,8 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
         # the grid's own room for the names (containLabel measures the ticks ECharts would have chosen, not these)
         longest = max(min(len(n), MAX_Y_NAME) for n in data.y_names.values())
         base["grid"].update(containLabel=False, left=10 + int(longest * 9 * 0.58))
-    elif any(s.mark == "stem" for s in data.xy):
-        y_axis.pop("scale")  # a stem stands on zero: the axis has it
+    elif any(s.mark in ("stem", "bar") for s in data.xy):
+        y_axis.pop("scale")  # a stem and a bar stand on zero: the axis has it
     elif bands and ys and o.min is None and o.max is None:
         # a band's stack counts zero (the low edge stands on it): the axis is the marks' own, rounded
         y_axis.update(_nice_bounds(min(ys), max(ys)))
