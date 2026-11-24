@@ -9,8 +9,10 @@ package bayescontract
 // the input column the flow node binds (answer 6): stan-codegen does not know it and leaves it empty; flow-node fills it from the
 // binding of Node when it writes the task, for the kinds that read a column (DataReadsColumn).
 type DataEntry struct {
-	Stan        string `json:"stan"`
-	Kind        string `json:"kind"`
+	Stan string `json:"stan"`
+	Kind string `json:"kind"`
+	// Of is what a size counts (DataSize); for an extension's datum that holds positions among a likelihood's rows, the rows
+	// they are among: the rows plate, or RowsLag when the likelihood is lagged (Correction of 2026-11-24 from P3a).
 	Of          string `json:"of,omitempty"`
 	Plate       string `json:"plate,omitempty"`
 	Column      string `json:"column,omitempty"`

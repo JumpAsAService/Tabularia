@@ -38,7 +38,12 @@ import (
 // catalogue's internal functions grow (so a person's name such as mean, sd, min or max is now
 // renamed), and the programs a save writes hold predictive-checks' extension (lot P2). The programs
 // of the golden corpus without an extension are unchanged.
-const CodegenVersion = 2
+//
+// 3 (bayes-contract's correction of 2026-11-24 from P3a): an extension's datum may say what its
+// positions are among (Decl.RowsOf): predictive-checks' post_rows and prior_rows name in the data
+// manifest's `of` the rows plate, or Rows_lag for a lagged likelihood. The programs' bytes are
+// unchanged; the manifests a save stores change, so a save of a version stored before writes them.
+const CodegenVersion = 3
 
 var (
 	// ErrInvalidModel: the model has an error finding (or is nil); no program is written from it.

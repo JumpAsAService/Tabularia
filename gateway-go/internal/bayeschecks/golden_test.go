@@ -29,8 +29,9 @@ const (
 
 // ownCases are this module's graphs (testdata/golden/<case>.graph.json): every truncation form on
 // single values and on a plate, three outcomes of the three kinds, a truncated gamma (no prior
-// predictive), correlated effects of three components (the onion's loop).
-var ownCases = []string{"checks_truncated", "checks_three_outcomes", "checks_gamma", "checks_effects3"}
+// predictive), correlated effects of three components (the onion's loop), a lagged likelihood and
+// one on every row (each outcome's rows named in the data manifest: Correction of 2026-11-24 from P3a).
+var ownCases = []string{"checks_truncated", "checks_three_outcomes", "checks_gamma", "checks_effects3", "checks_mixed_lag"}
 
 // fromCodegen are this module's cases written from the codegen's test graphs.
 var fromCodegen = map[string]string{

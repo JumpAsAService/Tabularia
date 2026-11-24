@@ -397,6 +397,23 @@ class TestGoldenPrograms(Case):
         plan, facts, w = self.prepare(task, golden_input(data), run="checks")
         self.assertEqual((w["N_lag"], w["Ppc_o1_n"]), (29, 29))
 
+    def test_a_lagged_likelihood_and_one_on_every_row_each_read_their_own_rows(self):
+        # the data manifest names each outcome's rows (the contract's correction of 2026-11-24 from P3a): o1 on Rows_lag, o2 on every row
+        manifest = json.loads((GOLDEN / "checks_mixed_lag.manifest.json").read_text(encoding="utf-8"))
+        task, data = golden_task(manifest)
+        plan, facts, w = self.prepare(task, golden_input(data), run="checks")
+        self.assertEqual([o.lagged for o in plan.outcomes], [True, False])
+        self.assertEqual((w["N"], w["N_lag"], w["Ppc_o1_n"], w["Ppc_o2_n"]), (30, 29, 29, 30))
+        self.assertEqual((max(w["Ppc_o1_rows"]), max(w["Ppc_o2_rows"])), (29, 30))
+        # a manifest stored before (codegen version 2, no `of`): every outcome lagged, as P3a read it
+        old = [{k: v for k, v in e.items() if not (k == "of" and e["kind"] in ("post_rows", "prior_rows"))} for e in data]
+        task = make_task(old, manifest["quantities"], series={"by": None, "time": None})
+        self.assertEqual([o.lagged for o in bayes_checks.plan(task).outcomes], [True, True])
+        # positions among anything else are a fault of Tabularia
+        bad = [e | {"of": "grp"} if e["kind"] == "post_rows" else e for e in data]
+        with self.assertRaises(Refusal):
+            bayes_checks.plan(make_task(bad, manifest["quantities"], series={"by": None, "time": None}))
+
 
 if __name__ == "__main__":
     unittest.main()

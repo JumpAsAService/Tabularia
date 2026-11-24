@@ -1,5 +1,5 @@
 {
-  "codegen_version": 2,
+  "codegen_version": 3,
   "semantic_hash": "297e9f581c741786e0e5a392317c4d8524278008afff72793cdbfd5dedd98269",
   "program_sha256": "c731e6eb21a41065b8bad67226e6fb8d98623f4c1243f2bb0b2f547731c540e0",
   "data": [
@@ -37,6 +37,7 @@
     {
       "stan": "Ppc_o1_rows",
       "kind": "post_rows",
+      "of": "rows",
       "node": "n1"
     },
     {
@@ -47,6 +48,7 @@
     {
       "stan": "Prior_o1_rows",
       "kind": "prior_rows",
+      "of": "rows",
       "node": "n1"
     },
     {

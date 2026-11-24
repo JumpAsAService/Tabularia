@@ -185,6 +185,10 @@ type Decl struct {
 	// observed data node of the outcome it checks (optional); for data, a data node of the model
 	// (optional).
 	Of string
+	// RowsOf is, for data that are positions among the rows a likelihood's statement runs on (an
+	// array of integers), that likelihood's id: the data manifest's `of` names those rows, the rows
+	// plate when it runs on every row, Rows_lag when it is lagged (optional).
+	RowsOf string
 }
 
 // Ref is the declaration's identifier as a value. A name outside the extension's form gives a
@@ -427,6 +431,13 @@ func (g *gen) writeExtensionData() error {
 			(d.Of != "" && !g.dataNode(d.Of)) {
 			return extErr("the data %s: a kind of its own in the data manifest, no role, a size not by the mode, a data node or none", strconv.Quote(d.Name))
 		}
+		among := ""
+		if d.RowsOf != "" {
+			var err error
+			if among, err = g.statementRows(d); err != nil {
+				return err
+			}
+		}
 		s, err := g.declText(d)
 		if err != nil {
 			return err
@@ -434,9 +445,25 @@ func (g *gen) writeExtensionData() error {
 		g.w.line(s + ";")
 		g.extNames[d.Name] = d
 		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockData, Kind: bayescontract.KindExtension})
-		g.data = append(g.data, bayescontract.DataEntry{Stan: d.Name, Kind: d.Kind, Node: d.Of})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: d.Name, Kind: d.Kind, Node: d.Of, Of: among})
 	}
 	return nil
+}
+
+// statementRows is what the positions of an extension's datum are among: the rows plate when its
+// likelihood's statement runs on every row, Rows_lag when the likelihood is lagged.
+func (g *gen) statementRows(d Decl) (string, error) {
+	n := g.node(d.RowsOf)
+	if d.Elem != Int || d.Shape != Array || n == nil || n.Kind != "likelihood" {
+		return "", extErr("the data %s: positions (an array of integers) among the rows of a likelihood's statement", strconv.Quote(d.Name))
+	}
+	if obs := g.node(n.Observed); obs == nil || obs.Plate == nil || *obs.Plate != g.rows.ID {
+		return "", extErr("the data %s: the likelihood %s is not on the rows", strconv.Quote(d.Name), strconv.Quote(d.RowsOf))
+	}
+	if g.lagged[d.RowsOf] {
+		return identRowsLag, nil
+	}
+	return g.rows.ID, nil
 }
 
 // writeGenerated writes the generated quantities: the correlations, then the extension's written

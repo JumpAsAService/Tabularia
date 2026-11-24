@@ -200,6 +200,9 @@ func TestBrokenManifestsAreRefused(t *testing.T) {
 			m.Quantities[1].Role, m.Quantities[1].Of, m.Quantities[1].Node = bayescontract.RolePriorMarginal, "nope", ""
 		},
 		"an extension's datum of no data node": func(m *manifestFile) { m.Data[len(m.Data)-1].Node = "mu" },
+		// the correction of 2026-11-24 from P3a: positions are among the rows or Rows_lag, which the data must hold
+		"positions among a plate of groups":   func(m *manifestFile) { m.Data[len(m.Data)-1].Of = "grp" },
+		"positions among Rows_lag without it": func(m *manifestFile) { m.Data[len(m.Data)-1].Of = bayescontract.RowsLag },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

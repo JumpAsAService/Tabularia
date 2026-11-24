@@ -1,0 +1,176 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "z",
+      "kind": "data",
+      "name": "z",
+      "label": "Second outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "a",
+      "label": "Intercept",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi",
+      "kind": "parameter",
+      "name": "phi",
+      "label": "Coefficient of lag 1",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "Spread",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Without the past (every row)",
+      "plate": "rows",
+      "intercept": {
+        "expr": "a"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "m",
+      "kind": "transformed",
+      "name": "m",
+      "label": "With the past (the rows that have it)",
+      "plate": "rows",
+      "value": {
+        "expr": "eta + phi * lag(y, 1)"
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given its past",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "m"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    },
+    {
+      "id": "likz",
+      "kind": "likelihood",
+      "label": "Second outcome, every row",
+      "observed": "z",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

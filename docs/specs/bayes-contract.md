@@ -934,3 +934,23 @@ and the text above differ, this section holds.
    with the interface's catalogue lot and the report's first layout); a node of type `model` naming `bayes_model` is
    refused by the gateway («the Bayesian model is a node of its own»).
 9. **The arithmetic of the caps is 93,490** (the paragraph «The arithmetic» above, corrected in place).
+
+## Correction of 2026-11-24 from P3a
+
+Lot P3a of `bayes-predictive-checks.md` found that the data manifest did not say which likelihood runs on the rows that
+have every lag: with a lagged likelihood and one on every row, the runner could not tell whose positions are among
+`Rows_lag`. Where this section and the text above differ, this section holds.
+
+1. **An extension's datum may name in `of` the rows its positions are among**: the rows plate (`rows`) or `Rows_lag`
+   (the series' `rows_subset`, which the data must then hold); any other `of` on an extension's datum is refused
+   (`CheckManifests`). `DataEntry.Of` keeps its meaning for a size.
+2. **predictive-checks' `post_rows` and `prior_rows`** (`Ppc_o<k>_rows`, `Prior_o<k>_rows`) carry it: `"of": "Rows_lag"`
+   when the outcome's likelihood is lagged (its statement is `y[Rows_lag] ~ …`), `"of": "rows"` otherwise. The generator
+   decides it from its own `lagged` map (`bayescodegen.Decl.RowsOf`: the extension names the likelihood, the codegen writes
+   the rows), so the manifest and the program cannot disagree.
+3. **`CodegenVersion` 3**: the programs' bytes are unchanged, the manifests a save stores change (every golden manifest
+   says `codegen_version: 3`; the `checks_*` ones gain the `of`; a new golden case `checks_mixed_lag` holds a lagged
+   likelihood and one on every row). A version stored by version 2 has no `of`: the runner reads it as before (every
+   outcome lagged when the data holds a `rows_subset`), and a save of it writes the new manifest.
+4. **The runner** (`bayes_checks.py`, `Plan._lagged`) reads each outcome's `post_rows` `of`; `of` other than `rows` or
+   `Rows_lag`, or `Rows_lag` without a `rows_subset`, is `task_value`.

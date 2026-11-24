@@ -27,8 +27,11 @@ func DataReadsColumn(kind string) bool {
 	return kind == DataReal || kind == DataInt || kind == DataGroupIndex || kind == DataCategory
 }
 
+// RowsLag is the series' rows that have every lag (DataRowsSubset): a lagged likelihood's statement runs on them.
+const RowsLag = "Rows_lag"
+
 // seriesArrays are the arrays of a series a size may be `of`.
-var seriesArrays = map[string]string{"Rows_lag": DataRowsSubset, "Rows_first": DataFirst, "Rows_next": DataNext}
+var seriesArrays = map[string]string{RowsLag: DataRowsSubset, "Rows_first": DataFirst, "Rows_next": DataNext}
 
 // CheckManifests checks that the plates, the mapping and the two manifests hold together: names well formed and unique, kinds
 // and roles known with the fields each needs, every plate a dimension or an entry names sized by a data entry and listed in
@@ -80,6 +83,9 @@ func CheckManifests(plates []Plate, mapping []MappingEntry, data []DataEntry, qu
 			if kind, ok := seriesArrays[d.Of]; !ok || names[d.Of] != kind {
 				return fmt.Errorf("bayes.data[%d] %s: the size of %q, which is neither a plate nor an array of the data", i, d.Stan, d.Of)
 			}
+		}
+		if !coreKinds[d.Kind] && d.Of == RowsLag && names[RowsLag] != DataRowsSubset {
+			return fmt.Errorf("bayes.data[%d] %s: positions among %s, which the data does not hold", i, d.Stan, RowsLag)
 		}
 		if seriesArrays[d.Stan] == d.Kind && d.Kind != "" && !sized[d.Stan] {
 			return fmt.Errorf("bayes.data[%d] %s: no size of it", i, d.Stan)
@@ -212,9 +218,10 @@ func checkDataEntry(d DataEntry, plateKind map[string]string) error {
 			return errors.New("a lag of k ≥ 1 steps")
 		}
 	default:
-		// an extension's datum may name a data node (its outcome, a group index): checked against the data in CheckManifests
+		// an extension's datum may name a data node (its outcome, a group index): checked against the data in CheckManifests;
+		// positions among a statement's rows name them in of, the rows plate or Rows_lag (Correction of 2026-11-24 from P3a)
 		if !extensionKind.MatchString(d.Kind) || !extensionName.MatchString(d.Stan) ||
-			!none(d.Of, d.Plate, d.Target, d.Column) {
+			!none(d.Plate, d.Target, d.Column) || (d.Of != "" && d.Of != PlateRows && d.Of != RowsLag) {
 			return fmt.Errorf("the kind %q", d.Kind)
 		}
 	}

@@ -120,6 +120,28 @@ func checkProgram(t testing.TB, name string, m *bayesgraph.Model, p *bayescodege
 			sizes[d.Stan] = 0
 		}
 	}
+	// each outcome's positions name the rows they are among: Rows_lag exactly for a lagged likelihood,
+	// whose statement runs on y[Rows_lag] (Correction of 2026-11-24 from P3a)
+	lagged := map[string]bool{}
+	for _, o := range a.Outcomes {
+		for _, d := range p.Data {
+			if d.Node == o.Observed && bayescontract.DataReadsColumn(d.Kind) {
+				lagged[o.Observed] = strings.Contains(string(p.Text), "\n  "+d.Stan+"[Rows_lag] ~ ")
+			}
+		}
+	}
+	for _, d := range p.Data {
+		if d.Kind != "post_rows" && d.Kind != "prior_rows" {
+			continue
+		}
+		want := "rows"
+		if lagged[d.Node] {
+			want = "Rows_lag"
+		}
+		if d.Of != want {
+			t.Errorf("%s: the positions %s are among %q, the statement's rows are %q", name, d.Stan, d.Of, want)
+		}
+	}
 	if !a.PriorPredictive {
 		for d := range ext {
 			if strings.HasPrefix(d, "Prior_") {

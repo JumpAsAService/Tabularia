@@ -1,5 +1,5 @@
 {
-  "codegen_version": 2,
+  "codegen_version": 3,
   "semantic_hash": "38e6a5675ab4a87fa3d580ad090e19186755b8458627757d58e2345b11f43a1f",
   "program_sha256": "ce68f03ddd9e2af21f32d336a0ac3e38fd25a2a12b84d072b24fc13297c85871",
   "data": [
@@ -62,6 +62,7 @@
     {
       "stan": "Ppc_o1_rows",
       "kind": "post_rows",
+      "of": "rows",
       "node": "k"
     },
     {
@@ -72,6 +73,7 @@
     {
       "stan": "Prior_o1_rows",
       "kind": "prior_rows",
+      "of": "rows",
       "node": "k"
     },
     {
@@ -122,6 +124,7 @@
     {
       "stan": "Ppc_o2_rows",
       "kind": "post_rows",
+      "of": "rows",
       "node": "y"
     },
     {
@@ -132,6 +135,7 @@
     {
       "stan": "Prior_o2_rows",
       "kind": "prior_rows",
+      "of": "rows",
       "node": "y"
     },
     {
@@ -182,6 +186,7 @@
     {
       "stan": "Ppc_o3_rows",
       "kind": "post_rows",
+      "of": "rows",
       "node": "z"
     },
     {
@@ -192,6 +197,7 @@
     {
       "stan": "Prior_o3_rows",
       "kind": "prior_rows",
+      "of": "rows",
       "node": "z"
     },
     {

@@ -17,9 +17,9 @@ never guessed:
    hold: `Ppc_on` 1 ⇒ at least 2 rows replicated and `slots` = bins + 2; `binned` > 0 only with `Ppc_on` 1; `rep` > 0 only with `Ppc_on` 0.
 
 The positions of `Ppc_o<k>_rows` are the statement's rows: 1…N, or 1…N_lag when the outcome's likelihood runs on the rows that have every
-lag. The manifest does not say which likelihood is lagged: this reader takes every outcome as lagged when the data manifest holds a
-`rows_subset` entry (a model's lagged likelihoods and its others on the same plate are not told apart yet: the codegen's `lagged` map is not
-in the manifests).
+lag. The manifest says which (codegen version 3, the contract's correction of 2026-11-24 from P3a): the outcome's `post_rows` entry names in
+`of` the rows its positions are among, `rows` or `Rows_lag`. A manifest stored before (no `of`) is read as before: every outcome is lagged
+when the data manifest holds a `rows_subset` entry.
 
 The bins (the spec's «Decisions»): slot 1 is «below», slots 2…B+1 the bins, slot B+2 «above»; slot = clamp(floor(y · scale + shift), 1, B + 2)
 with scale = 1 / width, shift = 2 − lo / width, **computed here with the same expression** so that the observed counts and Stan's agree to the
@@ -221,7 +221,7 @@ class Plan:
             if not stats:
                 raise task_value(f"the checked outcome {node} has no statistic")
             o = Outcome(k, node, y["stan"], y["column"], _kind_of(stats), stats, bool(y.get("standardize")) and y["kind"] == "real",
-                        self.lagged)
+                        self._lagged(k))
             slot = next((e for e in self.entries if e["kind"] == "unit_slot" and _OUTCOME_OF.match(e["stan"]).group(1) == str(k)), None)
             if slot is not None:
                 index = next((e for e in task.data if e.get("kind") == "group_index" and e.get("node") == slot.get("node")), None)
@@ -230,6 +230,17 @@ class Plan:
                 o.unit_node, o.unit_column, o.unit_plate = slot["node"], index["column"], index.get("target")
             out.append(o)
         return out
+
+    def _lagged(self, k: int) -> bool:
+        """Whether outcome k's statement runs on the rows with every lag: its `post_rows` entry's `of` (`rows` or `Rows_lag`); without one
+        (a manifest of codegen version 2), the old rule: lagged when the data holds a `rows_subset`."""
+        rows = next((e for e in self.entries if e["kind"] == "post_rows" and _OUTCOME_OF.match(e["stan"]).group(1) == str(k)), None)
+        among = rows.get("of") if rows is not None else None
+        if among is None:
+            return self.lagged
+        if among not in (ROWS, "Rows_lag") or (among == "Rows_lag" and not self.lagged):
+            raise task_value(f"the positions of the outcome {k} are among {among!r}")
+        return among == "Rows_lag"
 
     # ── pass A ────────────────────────────────────────────────────────────────
     def observe(self, batch: Any, pos: np.ndarray | None = None) -> None:

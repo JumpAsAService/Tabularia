@@ -21,6 +21,7 @@ import (
 //
 //	checks_on         Ppc_on: 1 when the statistics, bins and sums are computed (prior predictive, checks)
 //	post_count/rows   Ppc_o<k>_n, Ppc_o<k>_rows: positions among the statement's rows replicated from the posterior
+//	                  (the rows' of: `rows`, or `Rows_lag` when the likelihood is lagged; prior_rows too)
 //	prior_count/rows  Prior_o<k>_n, Prior_o<k>_rows: the same from the prior's draws (only with a prior predictive)
 //	replicated_count  Ppc_o<k>_m: the rows replicated in this run (one of the two above)
 //	bin_slots         Ppc_o<k>_slots: the bins and the two outer slots, 0 when the checks are off
@@ -66,6 +67,9 @@ func outcomeDecls(o Outcome, prior bool) (outcomeData, []cg.Decl) {
 	d.rows = array(ppc+"rows", "post_rows", d.n, o.Observed)
 	d.pn = count(pri+"n", "prior_count")
 	d.prows = array(pri+"rows", "prior_rows", d.pn, o.Observed)
+	// the positions are among the rows the likelihood's statement runs on: the manifest's of says which
+	// (rows, or Rows_lag for a lagged likelihood)
+	d.rows.RowsOf, d.prows.RowsOf = o.Node, o.Node
 	d.m = count(ppc+"m", "replicated_count")
 	d.slots = count(ppc+"slots", "bin_slots")
 	d.scale, d.shift = number(ppc+"scale", "bin_scale"), number(ppc+"shift", "bin_shift")
