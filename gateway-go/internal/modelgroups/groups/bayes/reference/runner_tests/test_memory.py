@@ -17,7 +17,7 @@ closes, so a run of hundreds of row groups grows by that footer (508 row groups 
 groups, which the spec's sizes keep under a hundred.
 
     BAYES_MEMORY_TEST=1 uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \\
-      python -I gateway-go/internal/modelgroups/groups/bayes/runner/tests/test_memory.py -v
+      python -I gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests/test_memory.py -v
 
 Each measure is a child process (this file with --child): it imports what the runner imports, uses the system allocator for Arrow
 as a sampling Job does (bayes_follow.use_system_allocator: pyarrow's default, mimalloc, made the same run's peak vary by about 20 MB
@@ -41,7 +41,7 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RUNNER = HERE.parent
+RUNNER = HERE.parents[1] / "runner"
 sys.path[:0] = [str(RUNNER.parent.parent.parent / "common" / "py"), str(RUNNER / "py"), str(HERE)]
 
 TOLERANCE_MB = 5.0

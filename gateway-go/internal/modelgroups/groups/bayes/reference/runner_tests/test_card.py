@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parent / "py")]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py")]
 GO_TESTDATA = HERE.parents[4] / "bayescontract" / "testdata"
 
 import pyarrow as pa  # noqa: E402

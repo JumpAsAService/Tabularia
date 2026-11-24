@@ -394,3 +394,10 @@ class Plan:
         if kind == "replicated_rows":
             return n if run == "replicated" else 0
         raise ValueError(kind)
+
+    # ── the second pass ───────────────────────────────────────────────────────
+    def rows(self, checks_path: str, writer: Any, section: str, seconds_left: float | None = None) -> Any:
+        """The `ppc` (or, in the prior predictive, `prior_check`) rows and the overlaid densities from the checks file (lot P3b: see
+        `bayes_ppc`); returns its report (the draws, those dropped for being NaN, the rows). Only charts: no p-value, no probability."""
+        import bayes_ppc
+        return bayes_ppc.second_pass(self, checks_path, writer, section, seconds_left)

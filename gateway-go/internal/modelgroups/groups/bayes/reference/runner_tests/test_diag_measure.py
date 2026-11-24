@@ -5,7 +5,7 @@ draws = 4,000 draws a quantity, 80 million values, the draws parquet about 1.5 G
 A heavy job for a small machine, run by hand, ALONE, and skipped unless BAYES_DIAG_MEASURE is set:
 
     BAYES_DIAG_MEASURE=1 [BAYES_DIAG_MEASURE_DIR=<a folder with 2 GB free>] python -I -B \\
-        gateway-go/internal/modelgroups/groups/bayes/runner/tests/test_diag_measure.py -v
+        gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests/test_diag_measure.py -v
 
 The measure is a child process (this file with --child), started with MALLOC_MMAP_THRESHOLD_ and MALLOC_TRIM_THRESHOLD_ fixed at 256 KiB
 (the second pass's memory test explains why) and the Job's own allocator choice (`bayes_follow.use_system_allocator`). The child writes
@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parent / "py"), str(HERE)]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py"), str(HERE)]
 
 MB = 1 << 20
 QUANTITIES, CHAINS, DRAWS = 20_000, 4, 1_000

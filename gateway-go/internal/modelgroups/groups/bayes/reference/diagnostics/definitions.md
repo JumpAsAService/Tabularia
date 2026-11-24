@@ -6,7 +6,7 @@ choice is the runner's (`runner/py/bayes_diag.py`). This file transcribes, verba
 that define them (CRAN's tarball `posterior_1.8.0.tar.gz`, sha256
 `b89ba062c762bdc02ae368bb502f9e389cbd0cc34b73f75064441e45f4572dbf`, published 2026-11-18), each with its file and lines,
 and lists the choices they make. `make_witness.R` runs these functions on `cases.json`; `witness.json` holds their numbers;
-`runner/tests/test_diag.py` compares `bayes_diag.py` with them.
+`reference/runner_tests/test_diag.py` compares `bayes_diag.py` with them.
 
 ## The choices, read in the source
 

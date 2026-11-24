@@ -4,7 +4,7 @@ tolerance of the test) and stays within the budgets plus a row group, the charts
 
 A heavy job for a small machine: skipped unless BAYES_MEMORY_TEST is set; run alone, by hand:
 
-    BAYES_MEMORY_TEST=1 python -I -B gateway-go/internal/modelgroups/groups/bayes/runner/tests/test_pass2_memory.py -v
+    BAYES_MEMORY_TEST=1 python -I -B gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests/test_pass2_memory.py -v
 
 The child runs with MALLOC_MMAP_THRESHOLD_ and MALLOC_TRIM_THRESHOLD_ fixed at 256 KiB: the C library's dynamic threshold made the
 SAME run's peak vary by 5 to 8 MB (15 to 23 MB, measured), more than the tolerance; with fixed thresholds the large arrays are mapped and
@@ -27,7 +27,7 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parent / "py"), str(HERE)]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py"), str(HERE)]
 
 MB = 1 << 20
 BUDGET = {"pass_bytes": 8 * MB, "compute_bytes": 4 * MB, "block_values": 262_144}

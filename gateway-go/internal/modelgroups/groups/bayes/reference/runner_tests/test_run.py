@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parent / "py"), str(HERE)]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py"), str(HERE)]
 GO_TESTDATA = HERE.parents[4] / "bayescontract" / "testdata"
 GOLDEN = HERE.parents[4] / "bayeschecks" / "testdata" / "golden"
 REPO = HERE.parents[6]

@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parent / "py")]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py")]
 GO_TESTDATA = HERE.parents[4] / "bayescontract" / "testdata"
 
 import pyarrow as pa  # noqa: E402
@@ -133,8 +133,8 @@ class TestDispatch(MainCase):
         # the Job's tree: /tabularia/code holds runner/ and common/py/ side by side
         code = self.dir / "code"
         (code / "runner").mkdir(parents=True)
-        shutil.copy(HERE.parent / "run.py", code / "runner" / "run.py")
-        shutil.copytree(HERE.parent / "py", code / "runner" / "py", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copy(HERE.parents[1] / "runner" / "run.py", code / "runner" / "run.py")
+        shutil.copytree(HERE.parents[1] / "runner" / "py", code / "runner" / "py", ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copytree(HERE.parents[3] / "common" / "py", code / "common" / "py", ignore=shutil.ignore_patterns("__pycache__"))
         env = {"PATH": os.environ.get("PATH", ""), "TABULARIA_ARTIFACTS": ""}
         done = subprocess.run([sys.executable, "-I", "-B", str(code / "runner" / "run.py")], capture_output=True, text=True, timeout=60, env=env)

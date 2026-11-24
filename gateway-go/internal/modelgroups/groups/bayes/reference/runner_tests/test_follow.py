@@ -5,7 +5,7 @@ once, the CSV bytes read exactly once — and the follower's refusals, which lea
 Small data only (a few quantities, a few hundred draws). From the repository root, with the image's pins:
 
     uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \\
-      python -I -m unittest discover -s gateway-go/internal/modelgroups/groups/bayes/runner/tests -v
+      python -I -m unittest discover -s gateway-go/internal/modelgroups/groups/bayes/reference/runner_tests -v
 
 Two kinds of test: with `fake_cmdstan.py` as a real child process (chains at different speeds, files cut anywhere: the concurrency
 of a real run), and scripted ones, where a fake process and the follower's `sleep` play a fixed sequence of writes (a truncated
@@ -27,7 +27,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-RUNNER = HERE.parent
+RUNNER = HERE.parents[1] / "runner"
 sys.path[:0] = [str(RUNNER.parent.parent.parent / "common" / "py"), str(RUNNER / "py"), str(HERE)]
 
 import numpy as np  # noqa: E402
