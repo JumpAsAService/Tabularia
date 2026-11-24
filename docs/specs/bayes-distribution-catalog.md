@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Spec: the distribution catalogue of the Bayesian editor (`distribution-catalog`)
 
 Status: **approved by the owner on 2026-11-23.** It specifies the module `distribution-catalog`
@@ -503,3 +504,5 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
 ## Open questions
 
 None.
+
+<!-- {% endraw %} -->
