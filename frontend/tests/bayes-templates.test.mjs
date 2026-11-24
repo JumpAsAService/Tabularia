@@ -225,3 +225,115 @@ test('numbers out of range are refused', () => {
   assert.throws(() => bayesOpenTemplate('glm_linear', { center: 1e20 }), RangeError)
   assert.throws(() => bayesOpenTemplate('nope'), /no template/)
 })
+
+// ── the words (lot T2): labels, explanations and sources, in the five languages ──────────────────────
+
+const LANGS = ['en', 'it', 'de', 'es', 'fr']
+const LOCALE = Object.fromEntries(await Promise.all(LANGS.map(async (l) => [l, (await import(`../i18n/locales/${l}.gen.ts`)).default])))
+const leafs = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? leafs(v, `${p}${k}.`) : [[`${p}${k}`, v]]))
+const slots = (s) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]))].sort()
+// the judgement list of the preview's words, as the editor's words test has it
+const VERDICTS = /\b(wide|narrow|vague|informative|reasonable|weak|strong|significant|plausible|good|bad|large|small|better|worse)\b|\b(ampio|ampia|stretto|vago|informativo|ragionevole|debole|forte|significativo|plausibile|peggio|meglio)\b|\b(breit|schmal|vage|informativ|vernünftig|schwach|stark|signifikant|plausibel|schlechter|besser)\b|\b(amplio|amplia|estrecho|vago|informativo|razonable|débil|fuerte|significativo|plausible|peor|mejor)\b|\b(large|étroit|vague|informatif|raisonnable|faible|fort|significatif|plausible)\b|less well|moins bien|meno bene/i
+
+/** The keys of `labels` a template needs: its plates, its nodes (the AR's lags by their prefix), a correlated effect's components and correlation. */
+function labelKeys (tpl) {
+  const pre = tpl.order?.id_prefix
+  const keys = tpl.graph.plates.map(p => `plate_${p.id}`)
+  for (const n of tpl.graph.nodes) {
+    if (pre && new RegExp(`^${pre}\\d+$`).test(n.id)) continue
+    keys.push(n.id, ...(n.components ?? []).map(c => `${n.id}_${c.id}`), ...(n.correlation ? [`${n.id}_rho`] : []))
+  }
+  if (pre) keys.push(pre)
+  return keys
+}
+/** The keys of `why`: every node that is not a lag of the AR (its prefix says them all) and every node's own words. */
+const whyKeys = (tpl) => labelKeys(tpl).filter(k => !k.startsWith('plate_') && !/_(rho|c\w+)$/.test(k) || k === tpl.order?.id_prefix)
+
+test('every template has its words in the five languages: data, a label for every box, a why for every node, the ways to change it', () => {
+  for (const tpl of bayesTemplates()) {
+    for (const lang of LANGS) {
+      const t = LOCALE[lang].bayes.templates[tpl.id]
+      const where = `${lang} ${tpl.id}`
+      for (const k of ['title', 'what', 'data']) assert.ok(typeof t[k] === 'string' && t[k].length > 10, `${where} ${k}`)
+      assert.deepEqual(Object.keys(t.labels).sort(), labelKeys(tpl).sort(), `${where}: labels`)
+      assert.deepEqual(Object.keys(t.why).sort(), whyKeys(tpl).sort(), `${where}: why`)
+      assert.ok(Object.keys(t.change).length >= 2, `${where}: change`)
+      assert.ok(t.change.likelihood, `${where}: the likelihood is always changeable`)
+      for (const [k, v] of leafs(t)) assert.ok(typeof v === 'string' && v.trim() === v && v.length > 0, `${where} ${k}`)
+    }
+    // the same keys everywhere
+    const en = leafs(LOCALE.en.bayes.templates[tpl.id]).map(([k]) => k).sort()
+    for (const lang of LANGS.slice(1)) assert.deepEqual(leafs(LOCALE[lang].bayes.templates[tpl.id]).map(([k]) => k).sort(), en, `${lang} ${tpl.id}`)
+  }
+})
+
+test('the words say facts: the same placeholders in the five languages, no syntax of vue-i18n, no word that judges', () => {
+  for (const tpl of bayesTemplates()) {
+    const en = new Map(leafs(LOCALE.en.bayes.templates[tpl.id]))
+    for (const lang of LANGS) {
+      for (const [key, text] of leafs(LOCALE[lang].bayes.templates[tpl.id])) {
+        const where = `${lang} ${tpl.id}.${key}`
+        assert.deepEqual(slots(text), slots(en.get(key)), where)
+        assert.doesNotMatch(text, /[|@]/, where)
+        assert.ok(!/[{}]/.test(text.replace(/\{k\}/g, '')), `${where}: stray brace`)
+        assert.doesNotMatch(text, VERDICTS, where)
+      }
+    }
+  }
+  // the only placeholder is the lag's number, in the AR's coefficient label
+  const withSlot = bayesTemplates().flatMap(t => leafs(LOCALE.en.bayes.templates[t.id]).filter(([, v]) => slots(v).length).map(([k]) => `${t.id}.${k}`))
+  assert.deepEqual(withSlot, ['ts_ar.labels.phi'])
+})
+
+test('opened in English, a template is its own file\'s graph, and in each language every label is that language\'s', () => {
+  const textsOf = (lang, id) => Object.fromEntries(Object.entries(LOCALE[lang].bayes.templates[id].labels).map(([k, v]) => [`bayes.templates.${id}.labels.${k}`, v]))
+  for (const tpl of bayesTemplates()) {
+    for (const [name, options] of casesOf(tpl).slice(0, tpl.order ? 7 : 1)) {
+      const plain = bayesOpenTemplate(tpl.id, options)
+      assert.deepEqual(bayesOpenTemplate(tpl.id, options, textsOf('en', tpl.id)), plain, `${tpl.id} ${name}: the English words are the file's`)
+      for (const lang of LANGS.slice(1)) {
+        const g = bayesOpenTemplate(tpl.id, options, textsOf(lang, tpl.id))
+        check(g)
+        const texts = textsOf(lang, tpl.id)
+        const said = (key) => texts[`bayes.templates.${tpl.id}.labels.${key}`]
+        for (const n of g.nodes) {
+          const lag = tpl.order && new RegExp(`^${tpl.order.id_prefix}\\d+$`).test(n.id)
+          const want = lag ? said(tpl.order.id_prefix).replace('{k}', n.id.slice(tpl.order.id_prefix.length)) : said(n.id)
+          assert.equal(n.label, want, `${lang} ${tpl.id} ${n.id}`)
+        }
+        for (const p of g.plates) assert.equal(p.label, said(`plate_${p.id}`), `${lang} ${tpl.id} ${p.id}`)
+      }
+    }
+  }
+  // few words are the same as English's (a cognate such as «Predictor»): never most of a template's
+  for (const tpl of bayesTemplates()) {
+    const en = LOCALE.en.bayes.templates[tpl.id].labels
+    for (const lang of LANGS.slice(1)) {
+      const same = Object.entries(LOCALE[lang].bayes.templates[tpl.id].labels).filter(([k, v]) => v === en[k]).length
+      assert.ok(same <= 3, `${lang} ${tpl.id}: ${same} labels left in English`)
+    }
+  }
+})
+
+test('a node with a prior or a first value says its default as the file has it, and its source', () => {
+  const SOURCE = { rstanarm_priors: /rstanarm/, stan_prior_wiki: /Stan/, spec: /Tabularia/ }
+  const lagOf = (tpl, id) => (tpl.order && new RegExp(`^${tpl.order.id_prefix}\\d+$`).test(id) ? tpl.order.id_prefix : id)
+  for (const tpl of bayesTemplates()) {
+    for (const n of tpl.graph.nodes) {
+      const id = lagOf(tpl, n.id)
+      const slot = n.prior ?? n.init
+      const args = slot ? Object.values(slot.args ?? {}).map(a => a.expr) : []
+      for (const lang of LANGS) {
+        const why = LOCALE[lang].bayes.templates[tpl.id].why[id]
+        const where = `${lang} ${tpl.id} ${n.id}`
+        // a distribution with numbers only (the group-level draws and the correlated effects have their own sentence)
+        if (slot && args.every(a => /^[\d.]+$/.test(a))) assert.ok(why.includes(`${slot.dist}(${args.join(', ')})`), `${where}: the default ${slot.dist}(${args.join(', ')}) is not said`)
+        if (n.correlation) assert.ok(why.includes(`LKJ(${n.correlation.eta.expr})`), `${where}: the correlation's default`)
+        const src = tpl.sources?.[n.id] ?? tpl.sources?.[id]
+        if (src) assert.match(why, SOURCE[src], `${where}: source ${src}`)
+      }
+    }
+    // every source named by a node is a node of the template or the AR's first lag
+    for (const k of Object.keys(tpl.sources ?? {})) assert.ok(tpl.graph.nodes.some(n => n.id === k), `${tpl.id}: source of ${k}`)
+  }
+})
