@@ -53,7 +53,9 @@
       "program_sha256": "3f0705ddee2ee3f4115b6b94f9b56cf8aeb941aca68ab76e8546c8d400eb3a1a",
       "binary_sha256": "c9798c8b717225ba988b01e15f41967cbab9a4974dc4ac448866bd06a0619259",
       "codegen_version": 1,
-      "cmdstan": "2.40.0"
+      "cmdstan": "2.40.0",
+      "program_bytes": 962,
+      "image": "registry:5000/tabularia-bayes@sha256:97e9d7a16021e6d07fbe28cce398f5847fc00c574991fbff65d95fd5e032d389"
     },
     "sampler": {
       "chains": 4,
@@ -413,6 +415,16 @@
       }
     ],
     "checks": null,
-    "replicated": null
+    "replicated": null,
+    "finite_variance": [
+      "mua",
+      "mub",
+      "sigma",
+      "taua",
+      "taub",
+      "eff.ca",
+      "eff.cb",
+      "eff.correlation"
+    ]
   }
 }

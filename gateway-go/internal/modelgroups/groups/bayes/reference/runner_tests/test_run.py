@@ -110,6 +110,7 @@ def golden_task(name):
         data.append(e)
     b = raw["bayes"]
     b["data"], b["quantities"], b["mapping"] = data, manifest["quantities"], mapping
+    b.pop("finite_variance", None)  # sample.json's is hier_slopes' decision: a golden task's says nothing (not decided)
     b["plates"] = [{"id": "rows", "kind": "rows", "label": "Rows"}] + [
         {"id": e["target"], "kind": "group", "label": e["target"]} for e in data if e["kind"] == "group_index"]
     b["model"]["codegen_version"] = manifest["codegen_version"]

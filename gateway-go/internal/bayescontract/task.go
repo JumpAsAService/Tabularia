@@ -59,6 +59,62 @@ type Task struct {
 	Checks json.RawMessage `json:"checks"`
 	// Replicated is the thinning of the replicated output: set only when the output is `replicated`.
 	Replicated *Replicated `json:"replicated"`
+	// FiniteVariance is the `of` of every prior_marginal whose prior has a finite variance (bayeschecks.FiniteVariance on the
+	// stored graph, written by flow-node): nil, absent, when the task does not say (every contraction NULL with its note); an
+	// empty list when none has (omitzero writes it).
+	FiniteVariance []string `json:"finite_variance,omitzero"`
+	// ScalePairs are the original-scale pairs of model-graph's Model.Pairs as Stan identifiers (bayeschecks.ScalePairs, written
+	// by flow-node from the stored graph and manifests); absent when there is none.
+	ScalePairs []ScalePair `json:"scale_pairs,omitempty"`
+}
+
+// ScalePair is one pair of the original scale: a term (a coefficient and its standardized data) or a linear predictor's
+// intercept, exactly one of the two («The original scale» of bayes-runner.md).
+type ScalePair struct {
+	Term      *TermPair
+	Intercept *InterceptPair
+}
+
+// TermPair is a term of a linear predictor whose data is a standardized real: the coefficient's quantity (a single value) and
+// the data's Stan name. On the column's scale the coefficient is coef / sd.
+type TermPair struct {
+	Coef string `json:"coef"`
+	Data string `json:"data"`
+}
+
+// InterceptPair is a linear predictor's intercept: its quantity (nil when the predictor has no intercept slot, 0 on the
+// standardized scale; a quantity over a group plate has each element shifted), the coefficients of its standardized terms
+// (LP) and their data, in the same order. On the columns' scale the intercept is intercept − Σ coef × mean / sd.
+type InterceptPair struct {
+	Intercept *string  `json:"intercept"`
+	LP        []string `json:"lp"`
+	Data      []string `json:"data"`
+}
+
+// MarshalJSON writes {"coef", "data"} for a term, {"intercept", "lp", "data"} for an intercept.
+func (p ScalePair) MarshalJSON() ([]byte, error) {
+	switch {
+	case p.Term != nil && p.Intercept == nil:
+		return json.Marshal(p.Term)
+	case p.Intercept != nil && p.Term == nil:
+		return json.Marshal(p.Intercept)
+	}
+	return nil, errors.New("a scale pair: a term or an intercept")
+}
+
+// UnmarshalJSON reads a term ({"coef", "data"}) or an intercept ({"intercept", "lp", "data"}).
+func (p *ScalePair) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return errors.New("a scale pair: an object")
+	}
+	p.Term, p.Intercept = nil, nil
+	if _, ok := keys["lp"]; ok {
+		p.Intercept = &InterceptPair{}
+		return json.Unmarshal(b, p.Intercept)
+	}
+	p.Term = &TermPair{}
+	return json.Unmarshal(b, p.Term)
 }
 
 // MarshalJSON writes every list as a list, never null, so that the runner reads the same keys in every mode.
@@ -90,6 +146,9 @@ type ModelRef struct {
 	BinarySHA256   string `json:"binary_sha256,omitempty"`
 	CodegenVersion int    `json:"codegen_version"`
 	CmdStan        string `json:"cmdstan"`
+	// ProgramBytes and Image are the card's program.bytes and binary.image (flow-node writes them; the runner copies them).
+	ProgramBytes int64  `json:"program_bytes,omitempty"`
+	Image        string `json:"image,omitempty"`
 }
 
 // Sampler is the sampler's settings (answer 9): chains, warmup, draws and seed in view; AdaptDelta, MaxTreedepth and Init under
@@ -236,11 +295,13 @@ func (t *Task) Check(mode, output string) error {
 		return fail("model.codegen_version: %d", m.CodegenVersion)
 	case !cmdstanVer.MatchString(m.CmdStan):
 		return fail("model.cmdstan: %q is not a version", m.CmdStan)
+	case m.ProgramBytes < 0:
+		return fail("model.program_bytes: %d", m.ProgramBytes)
 	}
 	switch mode {
 	case ModeCompile:
 		if m.BinarySHA256 != "" || t.Sampler != nil || len(t.Plates)+len(t.Mapping)+len(t.Data)+len(t.Quantities) > 0 ||
-			!isNull(t.Checks) || t.Replicated != nil {
+			!isNull(t.Checks) || t.Replicated != nil || t.FiniteVariance != nil || t.ScalePairs != nil {
 			return fail("the compile mode reads the model alone")
 		}
 		if output != "" && output != OutputResults {
@@ -275,7 +336,59 @@ func (t *Task) Check(mode, output string) error {
 	if err := CheckManifests(t.Plates, t.Mapping, t.Data, t.Quantities); err != nil {
 		return err
 	}
+	if err := t.checkScale(); err != nil {
+		return err
+	}
 	return t.Sampler.Init.check(t.Quantities)
+}
+
+// checkScale checks finite_variance (quantities' nodes, each once) and scale_pairs (quantities and standardized reals of the
+// manifests: a term's coefficient and an intercept's terms single values).
+func (t *Task) checkScale() error {
+	nodes, single, named := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for _, q := range t.Quantities {
+		if q.Role == RoleQuantity {
+			nodes[q.Node], named[q.Stan] = true, true
+			if len(q.Dims) == 0 {
+				single[q.Stan] = true
+			}
+		}
+	}
+	standardized := map[string]bool{}
+	for _, d := range t.Data {
+		if d.Kind == DataReal && d.Standardize {
+			standardized[d.Stan] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, of := range t.FiniteVariance {
+		if !nodes[of] || seen[of] {
+			return fmt.Errorf("bayes.finite_variance: %q is not a quantity's node, or is listed twice", of)
+		}
+		seen[of] = true
+	}
+	for i, p := range t.ScalePairs {
+		fail := fmt.Errorf("bayes.scale_pairs[%d]: a term {coef, data} or an intercept {intercept, lp, data} of the manifests' quantities and standardized reals", i)
+		switch {
+		case (p.Term == nil) == (p.Intercept == nil):
+			return fail
+		case p.Term != nil:
+			if !single[p.Term.Coef] || !standardized[p.Term.Data] {
+				return fail
+			}
+		default:
+			ip := p.Intercept
+			if ip.Intercept != nil && !named[*ip.Intercept] || len(ip.LP) == 0 || len(ip.LP) != len(ip.Data) {
+				return fail
+			}
+			for j := range ip.LP {
+				if !single[ip.LP[j]] || !standardized[ip.Data[j]] {
+					return fail
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func isNull(b json.RawMessage) bool { return len(b) == 0 || string(bytes.TrimSpace(b)) == "null" }

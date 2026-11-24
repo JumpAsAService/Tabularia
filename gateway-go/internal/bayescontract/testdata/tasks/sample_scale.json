@@ -1,0 +1,244 @@
+{
+  "protocol": 1,
+  "mode": "sample",
+  "group": "bayes",
+  "group_version": 3,
+  "model": "bayes_model",
+  "variant": "sample",
+  "params": {
+    "mode": "sample",
+    "output": "draws"
+  },
+  "output": "draws",
+  "write_output": true,
+  "rows_from": "trial",
+  "mlflow": true,
+  "limits": {
+    "bayes_density_points": 200,
+    "bayes_max_chart_quantities": 12,
+    "bayes_max_check_rows": 5000,
+    "bayes_max_pair_quantities": 4,
+    "bayes_max_quantity_entries": 600,
+    "bayes_max_summary_quantities": 2000,
+    "bayes_max_unit_charts": 8,
+    "bayes_pair_points": 300,
+    "bayes_rank_bins": 20,
+    "bayes_trace_points": 200,
+    "bayes_unit_points": 1000,
+    "block_values": 1048576,
+    "max_chart_points": 2000,
+    "max_check_columns": 200,
+    "max_quantities": 20000,
+    "max_result_rows": 100000,
+    "max_units": 20000,
+    "memory_bytes": 2147483648,
+    "started_unix": 1795000000,
+    "time_budget_seconds": 1800,
+    "tmp_bytes": 2147483648
+  },
+  "input_rows": 600,
+  "ids": {
+    "flow_id": 42,
+    "node_id": "n7",
+    "run_id": 9811,
+    "step_run_id": 9812
+  },
+  "recipe_hash": "e1d8e552330911f9f779f85b6f2c00a15e790dcc3fbb3b28f5da1d660a30c5b8",
+  "runner_hash": "527aa9f431539da8e151d5434d1d5e611d973f601d8e970790882624554146b0",
+  "bayes": {
+    "model": {
+      "id": 17,
+      "version": 4,
+      "semantic_hash": "325cd72946c7e2870cb1242a99c32c7822995794df33e7f99dd2154946e142d3",
+      "program_sha256": "76f3cac87ffbd594ad46c378d5bd94082658c3d353ab06d30d89a0d48eaf10e6",
+      "binary_sha256": "c9798c8b717225ba988b01e15f41967cbab9a4974dc4ac448866bd06a0619259",
+      "codegen_version": 1,
+      "cmdstan": "2.40.0",
+      "program_bytes": 310,
+      "image": "registry:5000/tabularia-bayes@sha256:97e9d7a16021e6d07fbe28cce398f5847fc00c574991fbff65d95fd5e032d389"
+    },
+    "sampler": {
+      "chains": 4,
+      "warmup": 1000,
+      "draws": 1000,
+      "seed": 20261123,
+      "adapt_delta": 0.8,
+      "max_treedepth": 10,
+      "init": null,
+      "refresh": 100
+    },
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Rows"
+      }
+    ],
+    "mapping": [
+      {
+        "stan": "N",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "x",
+        "block": "data",
+        "node_id": "x",
+        "component": null,
+        "name": "x",
+        "label": "Predictor",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "y",
+        "block": "data",
+        "node_id": "y",
+        "component": null,
+        "name": "y",
+        "label": "Outcome",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Mode",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "mode",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "alpha",
+        "block": "parameters",
+        "node_id": "alpha",
+        "component": null,
+        "name": "alpha",
+        "label": "Intercept",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "b_x",
+        "block": "parameters",
+        "node_id": "bx",
+        "component": null,
+        "name": "b_x",
+        "label": "Effect of the predictor",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "sigma",
+        "block": "parameters",
+        "node_id": "sigma",
+        "component": null,
+        "name": "sigma",
+        "label": "Spread around the line",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "eta",
+        "block": "model",
+        "node_id": "eta",
+        "component": null,
+        "name": "eta",
+        "label": "Expected outcome",
+        "kind": "linear_predictor",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      }
+    ],
+    "data": [
+      {
+        "stan": "N",
+        "kind": "size",
+        "of": "rows"
+      },
+      {
+        "stan": "x",
+        "kind": "real",
+        "plate": "rows",
+        "column": "col_x",
+        "node": "x",
+        "standardize": true
+      },
+      {
+        "stan": "y",
+        "kind": "real",
+        "plate": "rows",
+        "column": "col_y",
+        "node": "y"
+      },
+      {
+        "stan": "Mode",
+        "kind": "mode"
+      }
+    ],
+    "quantities": [
+      {
+        "stan": "alpha",
+        "role": "quantity",
+        "node": "alpha",
+        "dims": []
+      },
+      {
+        "stan": "b_x",
+        "role": "quantity",
+        "node": "bx",
+        "dims": []
+      },
+      {
+        "stan": "sigma",
+        "role": "quantity",
+        "node": "sigma",
+        "dims": []
+      }
+    ],
+    "checks": null,
+    "replicated": null,
+    "finite_variance": [
+      "alpha",
+      "bx",
+      "sigma"
+    ],
+    "scale_pairs": [
+      {
+        "coef": "b_x",
+        "data": "x"
+      },
+      {
+        "intercept": "alpha",
+        "lp": [
+          "b_x"
+        ],
+        "data": [
+          "x"
+        ]
+      }
+    ]
+  }
+}

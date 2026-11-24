@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayeschecks"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescodegen"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
@@ -250,6 +251,16 @@ func TestTheHeader(t *testing.T) {
 	}
 }
 
+// goldenFile is a file of stan-codegen's golden cases.
+func goldenFile(t *testing.T, name string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(goldenDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func hash(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
@@ -313,11 +324,29 @@ func exampleTasks(t *testing.T) map[string]modelgroups.Task {
 	c.RowsFrom, c.InputRows = "", 0 // the compile reads no input
 	out[bayescontract.ModeCompile] = c
 
+	// bayes-runner's lot R4: the prior marginals with a finite variance and the original-scale pairs from the stored graph,
+	// the card's program size and image
+	withCard := func(r bayescontract.ModelRef, name string) bayescontract.ModelRef {
+		r.ProgramBytes = int64(len(goldenFile(t, name+".stan")))
+		r.Image = "registry:5000/tabularia-bayes@sha256:" + hash("the image")
+		return r
+	}
 	s := common(bayescontract.ModeSample, bayescontract.ModeSample, bayescontract.OutputSummary)
 	s.MLflow = true
-	s.Bayes = &bayescontract.Task{Model: ref(slopes, true), Sampler: sampler(bayescontract.ModeSample), Plates: slopes.Plates,
-		Mapping: slopes.Mapping, Data: withColumns(slopes.Data), Quantities: slopes.Quantities}
+	s.Bayes = &bayescontract.Task{Model: withCard(ref(slopes, true), "hier_slopes"), Sampler: sampler(bayescontract.ModeSample),
+		Plates: slopes.Plates, Mapping: slopes.Mapping, Data: withColumns(slopes.Data), Quantities: slopes.Quantities,
+		FiniteVariance: bayeschecks.FiniteVariance(modelOf(t, goldenFile(t, "hier_slopes.graph.json")))}
 	out[bayescontract.ModeSample] = s
+
+	// a sample with the original scale: a linear predictor's term and intercept
+	linear := golden(t, "glm_linear")
+	lm := modelOf(t, goldenFile(t, "glm_linear.graph.json"))
+	sc := common(bayescontract.ModeSample, bayescontract.ModeSample, bayescontract.OutputDraws)
+	sc.MLflow = true
+	sc.Bayes = &bayescontract.Task{Model: withCard(ref(linear, true), "glm_linear"), Sampler: sampler(bayescontract.ModeSample),
+		Plates: linear.Plates, Mapping: linear.Mapping, Data: withColumns(linear.Data), Quantities: linear.Quantities,
+		FiniteVariance: bayeschecks.FiniteVariance(lm), ScalePairs: bayeschecks.ScalePairs(lm, linear.Data, linear.Quantities)}
+	out["sample_scale"] = sc
 
 	p := common(bayescontract.ModePriorPredictive, bayescontract.ModePriorPredictive, bayescontract.OutputResults)
 	p.Bayes = &bayescontract.Task{Model: ref(fake, true), Sampler: sampler(bayescontract.ModePriorPredictive), Plates: fake.Plates,
@@ -365,6 +394,7 @@ func compareOrWrite(t *testing.T, path string, got []byte) {
 func TestTheExampleTasks(t *testing.T) {
 	sizes := map[string]bayescontract.Sizes{
 		bayescontract.ModeSample:          {"rows": 600, "grp": 20},
+		"sample_scale":                    {"rows": 600},
 		bayescontract.ModePriorPredictive: {"rows": 600, "grp": 20, "levels:c": 3, "Ppc_bins": 10},
 	}
 	for mode, task := range exampleTasks(t) {
@@ -383,7 +413,7 @@ func TestTheExampleTasks(t *testing.T) {
 		}
 		compareOrWrite(t, filepath.Join("testdata", "tasks", mode+".json"), text)
 		if sz, ok := sizes[mode]; ok {
-			header, err := bayescontract.Header(mode, task.Bayes.Quantities, sz)
+			header, err := bayescontract.Header(task.Mode, task.Bayes.Quantities, sz)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -391,8 +421,32 @@ func TestTheExampleTasks(t *testing.T) {
 				indent(t, map[string]any{"sizes": sz, "header": header}))
 		}
 	}
-	if task := exampleTasks(t)[bayescontract.ModeSelftest]; bytes.Contains(indent(t, task), []byte(`"bayes": `)) {
+	tasks := exampleTasks(t)
+	if task := tasks[bayescontract.ModeSelftest]; bytes.Contains(indent(t, task), []byte(`"bayes": `)) {
 		t.Error("the self-test's task has a bayes object")
+	}
+	// lot R4's fields: absent where nothing is said, the examples' values
+	for _, mode := range []string{bayescontract.ModeCompile, bayescontract.ModePriorPredictive} {
+		for _, key := range []string{`"finite_variance"`, `"scale_pairs"`, `"program_bytes"`, `"image"`} {
+			if bytes.Contains(indent(t, tasks[mode]), []byte(key)) {
+				t.Errorf("%s: %s written", mode, key)
+			}
+		}
+	}
+	b, _ := json.Marshal(tasks["sample_scale"].Bayes)
+	for _, part := range []string{`"finite_variance":["alpha","bx","sigma"]`,
+		`"scale_pairs":[{"coef":"b_x","data":"x"},{"intercept":"alpha","lp":["b_x"],"data":["x"]}]`} {
+		if !bytes.Contains(b, []byte(part)) {
+			t.Errorf("sample_scale: %s not in %s", part, b)
+		}
+	}
+	if fv := tasks[bayescontract.ModeSample].Bayes.FiniteVariance; len(fv) != 8 {
+		t.Errorf("hier_slopes' finite variances: %v", fv)
+	}
+	// an empty list is written (decided: none), nil is not (not decided)
+	none, _ := json.Marshal(bayescontract.Task{FiniteVariance: []string{}})
+	if !bytes.Contains(none, []byte(`"finite_variance":[]`)) {
+		t.Errorf("an empty finite_variance: %s", none)
 	}
 }
 
@@ -435,6 +489,28 @@ func TestTheChecksOfATask(t *testing.T) {
 		{"a sampler in the compile mode", "compile", "", func(b *bayescontract.Task) { b.Sampler = &bayescontract.Sampler{} }},
 		{"a manifest in the compile mode", "compile", "", func(b *bayescontract.Task) { b.Data = tasks["sample"].Bayes.Data }},
 		{"a broken manifest", "sample", "summary", func(b *bayescontract.Task) { b.Quantities[0].Dims = []bayescontract.Dim{{Plate: "nope"}} }},
+		// lot R4
+		{"a finite variance of no quantity", "sample", "summary", func(b *bayescontract.Task) { b.FiniteVariance = []string{"nope"} }},
+		{"a finite variance twice", "sample", "summary", func(b *bayescontract.Task) { b.FiniteVariance = []string{"mua", "mua"} }},
+		{"a finite variance in the compile mode", "compile", "", func(b *bayescontract.Task) { b.FiniteVariance = []string{} }},
+		{"a negative program size", "sample", "summary", func(b *bayescontract.Task) { b.Model.ProgramBytes = -1 }},
+		{"a pair of a vector's coefficient", "sample", "summary", func(b *bayescontract.Task) {
+			b.ScalePairs = []bayescontract.ScalePair{{Term: &bayescontract.TermPair{Coef: "a_g", Data: "x"}}}
+		}},
+		{"a pair of data not standardized", "sample", "summary", func(b *bayescontract.Task) {
+			b.ScalePairs = []bayescontract.ScalePair{{Term: &bayescontract.TermPair{Coef: "mu_a", Data: "y"}}}
+		}},
+		{"a pair both a term and an intercept", "sample", "summary", func(b *bayescontract.Task) {
+			b.ScalePairs = []bayescontract.ScalePair{{Term: &bayescontract.TermPair{Coef: "mu_a", Data: "x"},
+				Intercept: &bayescontract.InterceptPair{LP: []string{"mu_a"}, Data: []string{"x"}}}}
+		}},
+		{"an intercept without terms", "sample", "summary", func(b *bayescontract.Task) {
+			b.ScalePairs = []bayescontract.ScalePair{{Intercept: &bayescontract.InterceptPair{LP: []string{}, Data: []string{}}}}
+		}},
+		{"an intercept of nothing", "sample", "summary", func(b *bayescontract.Task) {
+			nope := "nope"
+			b.ScalePairs = []bayescontract.ScalePair{{Intercept: &bayescontract.InterceptPair{Intercept: &nope, LP: []string{"mu_a"}, Data: []string{"x"}}}}
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -465,6 +541,22 @@ func TestTheChecksOfATask(t *testing.T) {
 	text, _ := json.Marshal(b.Sampler.Init)
 	if string(text) != `{"a_g":[0,1,2],"mu_a":1}` {
 		t.Errorf("init: %s", text)
+	}
+	// a varying intercept, without an intercept slot, read back
+	ag := "a_g"
+	b.ScalePairs = []bayescontract.ScalePair{{Term: &bayescontract.TermPair{Coef: "mu_a", Data: "x"}},
+		{Intercept: &bayescontract.InterceptPair{Intercept: &ag, LP: []string{"mu_a"}, Data: []string{"x"}}},
+		{Intercept: &bayescontract.InterceptPair{LP: []string{"mu_a"}, Data: []string{"x"}}}}
+	if err := b.Check("sample", "replicated"); err != nil {
+		t.Error(err)
+	}
+	text, _ = json.Marshal(b.ScalePairs)
+	if string(text) != `[{"coef":"mu_a","data":"x"},{"intercept":"a_g","lp":["mu_a"],"data":["x"]},{"intercept":null,"lp":["mu_a"],"data":["x"]}]` {
+		t.Errorf("scale pairs: %s", text)
+	}
+	var back []bayescontract.ScalePair
+	if err := json.Unmarshal(text, &back); err != nil || len(back) != 3 || back[0].Term == nil || back[2].Intercept == nil || back[2].Intercept.Intercept != nil {
+		t.Errorf("scale pairs read back: %v %+v", err, back)
 	}
 }
 

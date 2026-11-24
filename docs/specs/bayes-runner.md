@@ -478,6 +478,49 @@ Applied on the owner's approval of 2026-11-24, each marked «Correction of 2026-
 | A checks' run that would pass the timeout | **`too_slow` for the whole step**, before any partial result, as every other stage (answer 10): the same task gives the same report on every machine | Coordinator, 2026-11-24 (the owner's rule on the limits) |
 | What 1.5.0 needs (asked in `bayes-flow-node.md`) | **Everything of this spec**: R0–R6, the checks' and the replicated runs, the prior predictive mode and the original scale | Owner, 2026-11-24 |
 
+## As built — lot R4, the Go side
+
+- **`bayeschecks.FiniteVariance(m) []string`** (`variance.go`): the `of` of every `prior_marginal` whose prior has a finite
+  variance, in the order of `Analysis.Marginals`; `[]` when none has, `nil` for a model that is not valid. The decision is
+  **prudent** (a «yes» is a proof; a «no» may only mean «not proven», and the contraction is then NULL with its note), stricter
+  than «every node its arguments read has one», which does not hold for every argument (an exponential whose rate has a
+  gamma(1, 1) prior has an infinite variance though the rate's is finite; so has a Student-t whose ν has mass at or below 2):
+  - a parameter whose **range is bounded** (a truncation to a bounded range, or a bounded support: the beta, the uniform) is
+    finite whatever its parents;
+  - otherwise the catalogue's rule: `never` is not finite; `above` needs its argument (ν, α) to be **one number** (a constant, or
+    an expression of numbers such as `5 / 2`, read from its static interval) above the bound: **an argument that varies is not
+    finite**;
+  - every other argument must be one number, or the **location or the scale of a location-scale distribution** (normal,
+    Student-t, Cauchy, a component's normal) whose value is finite; any other argument that varies (a rate, a shape, the
+    lognormal's μ or σ) is not finite;
+  - a value (an argument's expression, a transformed node's value, an intercept-only linear predictor's intercept) is finite
+    when it is bounded (its static interval), one number, a node that is finite, or an **affine combination** of these (`+`,
+    `-`, negation, a product by a constant, a quotient by a constant); a function, a power, a product or quotient of two values
+    that vary is not finite unless its interval is bounded (`inv_logit(b)` is, `exp(b)` and `b * b` are not);
+  - a state's marginal is its init's draw (the init's distribution and arguments); a correlation's Ω[2,1] is always finite.
+  Tested on the spec's cases (Cauchy; Student-t ν 3 and 2; inverse-gamma α 2.5 and 2; half-Cauchy on [0, 10] and on [0, ∞);
+  a normal whose scale has an inverse-gamma α 1.5 prior; the prudent cases) and on every valid graph at hand (an ordered
+  subset of the marginals, each a `prior_marginal`'s `of`).
+- **`bayeschecks.ScalePairs(m, data, quantities) []bayescontract.ScalePair`** (`scale.go`), in `Model.Pairs`' order: a term
+  `{"coef": <the coefficient's quantity, a single value>, "data": <the standardized real's Stan name>}`; an intercept
+  `{"intercept": <its quantity's Stan identifier, or null without an intercept slot>, "lp": [<the terms' coefficients>],
+  "data": [<their data>]}`. The intercept may be **a quantity over a group plate taken at the row's unit** (`a_g[g]`:
+  `"intercept": "a_g"`, each of its elements shifted by the same Σ coef × mean / sd); an intercept that is another
+  expression (`mu + a_g[g]`, a constant) has no pair, and neither has a predictor's intercept when one of its standardized
+  terms has none (a term's coefficient is always a parameter: model-graph's `coef_not_parameter`). A category's terms are
+  never pairs (model-graph's `pairs()`).
+- **`bayescontract.Task`**: `FiniteVariance []string` (`finite_variance`, **`omitzero`**: absent when nil, the runner's «not
+  decided»; `[]` written when decided and empty), `ScalePairs []ScalePair` (`scale_pairs`, `omitempty`; `ScalePair` is a
+  `*TermPair` or an `*InterceptPair`, read by the presence of `lp`); `ModelRef.ProgramBytes` (`program_bytes`) and
+  `ModelRef.Image` (`image`), `omitempty`. `Check`: the compile mode refuses `finite_variance` and `scale_pairs`; each
+  `finite_variance` is a quantity's node, once; a pair names the manifests' quantities (a term's coefficient and an
+  intercept's terms single values) and standardized reals, `lp` and `data` of one non-zero length; `program_bytes` ≥ 0. The
+  other groups' `task.json` bytes are unchanged (the field is the group's `bayes` object).
+- **The examples** (`bayescontract/testdata/tasks`): `sample.json` gains `finite_variance` (hier_slopes: its eight
+  marginals), `program_bytes` and `image`; a new `sample_scale.json` (with its header) is glm_linear with output `draws`,
+  `finite_variance` and `scale_pairs` (`b_x`/`x`, and `alpha` shifted by `b_x`). `bayes.series` is not added by this lot
+  (`flow-node`'s, lot F2).
+
 ## Open questions
 
 None.
