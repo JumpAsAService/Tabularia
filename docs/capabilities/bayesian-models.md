@@ -38,15 +38,26 @@ predictor), stored as text.
    numbers. Change a number and the chart changes while you type ([Priors](#priors)).
 4. Give the model a name and press **Save** (Ctrl+S, or ⌘+S on a Mac). It becomes version 1, its Stan program is stored with
    it, and Tabularia compiles it in the background (about 10 to 30 seconds).
+
+   ![The editor with the linear regression template open: the canvas on the left, the inspector of the node «Effect of the predictor» on the right with its prior and the chart of the prior](../media/guide/bayesian-models/editor.png)
+
 5. In a flow, add `order_rows` as a source and a **Change type** of `quantita` and `prezzo_unitario` to *decimal* (a number
    variable takes only a numeric column), then drop **Bayesian model** from the **Models** section of the palette after it, and
    in its panel choose your saved model. Under **Variables**, bind **Outcome** to `quantita` and **Predictor** to
    `prezzo_unitario`. A Run in the panel reads the flow's development sample; a flow run reads every row of the input, up to the
    group's limit, so keep a large table down with a filter first ([Limits](#limits-and-what-it-refuses)).
+
+   ![The flow editor: the source, the Change type and the Bayesian model node, its panel with the saved model and the two variables bound to columns, and the summary table below](../media/guide/bayesian-models/node-panel.png)
+
 6. Press **Run**. If the model is still compiling, the step says so and waits. When it ends, open the **Report** tab: the first
    page gives the rows used and left out, the draws and the sampler's facts, then the summary of each quantity. The
    predictor was standardized, so its coefficient is per standard deviation of the predictor and the table also gives it on the
    column's own scale ([Reading the report](#reading-the-report)).
+   With no development sample set on the source, the panel's Run reads every row: on the 104,819 rows of `order_rows` it took
+   5 minutes 30 seconds on the three-node test cluster, so set a sample or filter first when you only want to look.
+
+   ![The first page of the report: the rows used, the draws, the divergences and the largest R-hat in four cards, the facts line, the posterior summary, the data and the diagnostics](../media/guide/bayesian-models/report-first-page.png)
+
 7. Before or after, press **Run the prior predictive check** in the node's panel: it draws data sets from the priors alone and the
    report shows them as charts beside your data ([Trying the model](#trying-the-model)).
 
@@ -385,6 +396,8 @@ that judges and no word that rates the run.
 6. **Charts of the draws**, for at most 12 quantities: the trace (a line for each chain), the rank histograms of each chain,
    the density of the posterior with the prior's overlaid, and the pairs of draws of at most four quantities with the divergent
    draws in their own colour. Each caption says how to read the chart, not what it shows beyond the picture.
+
+   ![The charts of the draws for two quantities: the trace of each chain, the ranks by chain, and the posterior with the prior dashed](../media/guide/bayesian-models/report-diagnostics.png)
 7. **Predictive checks** ([below](#the-predictive-checks)).
 8. **How this report was computed**, and the notes.
 
