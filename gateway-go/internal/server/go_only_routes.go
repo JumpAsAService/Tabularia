@@ -107,6 +107,9 @@ var goOnlyRoutes = []struct {
 	{after: "/bayes-models/{model_id}/versions/{version}", route: pyRoute{path: "/bayes-models/{model_id}/versions/{version}/restore", methods: []string{"POST"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions/(?P<version>[^/]+)/restore$`}},
 	{after: "/bayes-models/{model_id}/versions/{version}/restore", route: pyRoute{path: "/bayes-models/{model_id}/versions/{version}/compile", methods: []string{"POST"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions/(?P<version>[^/]+)/compile$`}},
 	{after: "/bayes-models/{model_id}/versions/{version}/compile", route: pyRoute{path: "/bayes-models/{model_id}/uses", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/uses$`}},
+	// the runs the Bayesian editor's assistant may read: the nodes' latest runs and one run's facts (api/bayes_runs.go)
+	{after: "/bayes-models/{model_id}/uses", route: pyRoute{path: "/bayes-models/{model_id}/runs", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/runs$`}},
+	{after: "/bayes-models/{model_id}/runs", route: pyRoute{path: "/bayes-models/{model_id}/runs/{run_id}/facts", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/runs/(?P<run_id>[^/]+)/facts$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

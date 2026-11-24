@@ -620,7 +620,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (82)
+## Go only (84)
 
 | Method | Path | Served by |
 |---|---|---|
@@ -644,6 +644,8 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/bayes-models/{model_id}` | **Go** |
 | PATCH | `/bayes-models/{model_id}` | **Go** |
 | POST | `/bayes-models/{model_id}/duplicate` | **Go** |
+| GET | `/bayes-models/{model_id}/runs` | **Go** |
+| GET | `/bayes-models/{model_id}/runs/{run_id}/facts` | **Go** |
 | GET | `/bayes-models/{model_id}/uses` | **Go** |
 | GET | `/bayes-models/{model_id}/versions` | **Go** |
 | GET | `/bayes-models/{model_id}/versions/{version}` | **Go** |

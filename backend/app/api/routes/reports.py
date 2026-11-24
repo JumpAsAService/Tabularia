@@ -11,6 +11,9 @@
 - POST /reports/model: the report of a model step's run (docs/specs/statistical-models.md,
   «Report»): the results its run kept, drawn with the engine's layout for that model; no
   query reaches the data, no Job starts. Followed and taken as a report's render.
+- POST /reports/model/rows: some sections of a model step's results (the sampler's facts and each node's
+  extremes, nothing else), read back from the copy the run kept; the gateway asks it for the Bayesian
+  editor's assistant, under the report's rights.
 - POST /reports/check: the mistakes of a definition, each with its item, its property and
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
@@ -370,3 +373,42 @@ def model_report(request: ModelReport):
     celery_app.send_task("app.tasks.report_jobs.render_model_report_task", kwargs=kwargs, task_id=task_id)
     return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering the report of {request.model} as {request.format}",
                          filename=name)
+
+
+# the sections of a model's results this route gives: the sampler's facts and each node's R-hat and ESS extremes; never a
+# posterior summary, the data's bindings or a chart's rows (docs/specs/bayes-assistants.md, «Reading a run»)
+MODEL_ROWS_SECTIONS = frozenset({"sampler", "quantity"})
+
+
+class ModelRows(BaseModel):
+    """Where a run's results are and what they are, as for the report; the sections wanted."""
+    bucket: str = Field(..., min_length=1)
+    results_key: str = Field(..., min_length=1)  # runs.model_results_key
+    model: str = Field(..., min_length=1, max_length=64)
+    params: dict[str, Any] = Field(default_factory=dict)
+    sections: list[str] = Field(..., min_length=1, max_length=len(MODEL_ROWS_SECTIONS))
+
+
+@router.post("/model/rows")
+def model_rows_route(request: ModelRows):
+    """{rows: [{section, level, level_2, stat, value, text, x0}]} of the sections asked, in their order. Only
+    `sampler` and `quantity` are given; the results the run kept are checked as the report checks them."""
+    from app.engine.exceptions import EngineError
+    from app.engine.models import catalog
+    from app.tasks import report_jobs
+
+    if not set(request.sections) <= MODEL_ROWS_SECTIONS:
+        raise HTTPException(status_code=422, detail="Only the sections «sampler» and «quantity» of a model's results are given")
+    try:
+        catalog.check_params(request.model, request.params)
+    except EngineError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    try:
+        rows = report_jobs.model_rows(request.bucket, request.results_key, request.model, request.params)
+    except report_jobs.ModelResultsGone as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except EngineError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    wanted = set(request.sections)
+    return {"rows": [{k: r[k] for k in ("section", "level", "level_2", "stat", "value", "text", "x0")}
+                     for r in rows if r["section"] in wanted]}
