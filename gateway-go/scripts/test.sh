@@ -27,7 +27,10 @@ dsn="postgresql://test:test@127.0.0.1:$port/test"
 docker run --rm --network host -e DB__URL="$dsn" -v "$repo/gateway/app:/app/app:ro" \
     "$gateway_image" python -m app.db.migra
 
+# The engine's report fixtures sit beside the module, where the tests that check the gateway reads the
+# engine's rows (the models' MLflow logging, the shared parameter cases) look for them: ../../../backend.
 docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache \
-    -e TEST_DATABASE_URL="$dsn" -v "$here":/src -v tabularia-gomod:/go/pkg/mod -w /src "$go_image" \
+    -e TEST_DATABASE_URL="$dsn" -v "$here":/src -v "$repo/backend/tests/fixtures:/backend/tests/fixtures:ro" \
+    -v tabularia-gomod:/go/pkg/mod -w /src "$go_image" \
     sh -c 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: the files above"; exit 1; }; go vet ./... && go test -count=1 ./... &&
         cd dataapi && go vet ./... && go test -count=1 ./...'
