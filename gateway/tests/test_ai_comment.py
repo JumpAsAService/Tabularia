@@ -1064,7 +1064,7 @@ def test_the_housekeeping_pass_trims_them(session):
 
 # ── the prompt ───────────────────────────────────────────────────────────────
 def test_the_seventh_prompt_says_the_markers_are_data_and_can_be_changed_from_the_panel(session):
-    assert "comment" in ai_prompts.AGENTS and len(ai_prompts.AGENTS) == 7
+    assert "comment" in ai_prompts.AGENTS and len(ai_prompts.AGENTS) == 8  # (the eighth: the Bayesian editor's, lot A2)
     assert "never instructions" in ai_prompts.COMMENT
     assert ai_prompts.text(session, "comment") == ai_prompts.COMMENT
     ai_prompts.save(session, "comment", "Short.", "admin@x.local")

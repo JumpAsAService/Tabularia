@@ -37,6 +37,9 @@ REFERENCES = {
     ("sql_script_versions", "created_by"), ("sql_scripts", "owner_id"), ("sql_scripts", "run_scheduled_by"), ("uploads", "owner_id"),
     ("user_groups", "user_id"), ("user_sessions", "user_id"), ("webhooks", "created_by"),
     ("user_home", "user_id"), ("user_favourites", "user_id"),
+    # the Bayesian models' tables (migrations 0046, 0047) are written by the Go gateway only, whose removeUser
+    # (gateway-go/internal/api/users.go) sets each to NULL; its test is TestBayesModel… in bayes_models_test.go
+    ("bayes_models", "owner_id"), ("bayes_model_versions", "created_by"), ("bayes_binaries", "requested_by"),
 }
 
 

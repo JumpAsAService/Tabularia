@@ -761,6 +761,12 @@ func TestBayesModelsEverywhere(t *testing.T) {
 
 	// the people who made and own models can be deleted: what points at them is reset
 	owner := w.editor
+	var compile int64 // a compile this person asked for (its queue row points at them)
+	if err := w.db.QueryRow(w.ctx, `INSERT INTO bayes_binaries (cache_key, program_sha256, cmdstan, image_digest, arch, group_version, state,
+		requested_by, model_id, version, queued_at) VALUES ($1, $1, '2.40.0', 'sha256:removed', 'amd64', 1, 'queued', $2, $3, 1, now())
+		RETURNING id`, strings.Repeat("e", 64), owner.ID, m.ID).Scan(&compile); err != nil {
+		t.Fatal(err)
+	}
 	if err := removeUser(w.ctx, w.d, &userRow{User: *owner}); err != nil {
 		t.Fatalf("deleting a person who owns models: %v", err)
 	}
@@ -771,6 +777,10 @@ func TestBayesModelsEverywhere(t *testing.T) {
 	var by *int64
 	if err := w.db.QueryRow(w.ctx, `SELECT created_by FROM bayes_model_versions WHERE model_id = $1 AND version = 1`, m.ID).Scan(&by); err != nil || by != nil {
 		t.Errorf("author after the delete: %v %v", by, err)
+	}
+	var asked *int64
+	if err := w.db.QueryRow(w.ctx, `SELECT requested_by FROM bayes_binaries WHERE id = $1`, compile).Scan(&asked); err != nil || asked != nil {
+		t.Errorf("the compile's person after the delete: %v %v", asked, err)
 	}
 }
 

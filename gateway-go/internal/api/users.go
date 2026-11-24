@@ -624,7 +624,8 @@ func removeUser(ctx context.Context, d *Deps, u *userRow) error {
 		"sql_scripts.run_scheduled_by", "sql_script_versions.created_by", "reports.owner_id", "report_versions.created_by",
 		"dashboards.owner_id", "dashboard_versions.created_by", "notebooks.owner_id", "notebooks.draft_by",
 		"notebook_versions.created_by", "ai_models.updated_by", "ai_providers.updated_by", "banners.created_by",
-		"disabled_engines.disabled_by", "privacy_notice.updated_by", "bayes_models.owner_id", "bayes_model_versions.created_by"} {
+		"disabled_engines.disabled_by", "privacy_notice.updated_by", "bayes_models.owner_id", "bayes_model_versions.created_by",
+		"bayes_binaries.requested_by"} {
 		table, column, _ := strings.Cut(ref, ".")
 		statements = append(statements, byID(fmt.Sprintf(`UPDATE %s SET %s = NULL WHERE %s = $1`, table, column, column)))
 	}
