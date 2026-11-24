@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -463,41 +464,20 @@ def test_the_method_s_paragraphs_follow_the_rows_and_the_formulas_the_scale():
                    ("method", "method_program")]
 
 
-NOTES = {
-    "summary_capped": dict(listed=2000, total=6120), "quantities_capped": dict(listed=600, total=900),
-    "contraction_null": dict(no_finite_variance=2, no_prior_draws=1, not_decided=0), "original_capped": dict(original=3, capped=2),
-    "density_cut": dict(names=["a b", "tau[Liceo, 1]"], posterior=[0, 12], prior=[3, 0]), "no_checks": {},
-    "checks_dropped": dict(dropped=3, draws=1000, valid=997), "prior_undrawn_one": dict(n=1, names=["rho"]),
-    "prior_undrawn": dict(n=3, names=["a", "b", "c"]), "prior_undrawn_more": dict(n=9, names=list("abcde")),
-    "prior_dropped": dict(dropped=2, total=1000), "replicated_dropped": dict(dropped=1, total=4000),
-}
+NOTES = json.loads((Path(__file__).parent / "fixtures" / "models" / "bayes_model-notes.json").read_text())["notes"]
+# (the lines bayes_task.note_line writes: the runner's own tests check that it still writes these, so the engine's
+# image, which holds only the backend, reads them without the runner's files)
 
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_every_note_of_the_runner_is_a_sentence_of_the_page_s_language_with_its_numbers(locale):
-    import importlib.util
-    import sys
-    from pathlib import Path
-
-    runner = Path(__file__).resolve().parents[2] / "gateway-go/internal/modelgroups/groups/bayes/runner/py/bayes_task.py"
-    if not runner.exists():  # (the engine's image holds only the backend)
-        pytest.skip("the runner's files are not in this tree")
-    sys.path[:0] = [str(runner.parents[4] / "common" / "py")]  # (the runner's own imports)
-    spec = importlib.util.spec_from_file_location("bayes_task_q4", runner)
-    try:
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["bayes_task_q4"] = module
-        spec.loader.exec_module(module)
-    except ImportError:
-        pytest.skip("numpy is the runner's")
-    note_line = module.note_line
     model, params, rows = fixture(SAMPLE)
     base = [r for r in rows if not r["stat"].startswith("note_")]
-    texts = {k: note_line(k, **v) for k, v in NOTES.items()}
+    texts = {n["id"]: n["line"] for n in NOTES}
     made = [{"section": "model", "level": None, "level_2": None, "stat": f"note_{k}", "value": None, "text": t, "x0": None, "x1": None,
              "ord": 99000 + i, "key": f"model|||note_{k}"} for i, (k, t) in enumerate(texts.items())]
     said = {r["stat"]: r["text"] for r in layouts.with_labels(model, params, base + made, locale) if r["stat"].startswith("note_")}
-    assert set(said) == {f"note_{k}" for k in NOTES}
+    assert set(said) == {f"note_{n['id']}" for n in NOTES}
     for stat, text in said.items():
         assert not re.search(r"@|\{|%2", text), (stat, text)
         mine = QUOTATION.sub("", text)

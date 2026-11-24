@@ -254,3 +254,15 @@ class TestLayout(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheNotesTheEngineReads(unittest.TestCase):
+    """The engine's report tests read the runner's notes from a fixture (its image holds only the backend): note_line
+    must still write exactly those lines."""
+
+    def test_note_line_writes_the_fixture_s_lines(self):
+        fixture = HERE.parents[6] / "backend" / "tests" / "fixtures" / "models" / "bayes_model-notes.json"
+        if not fixture.exists():
+            self.skipTest("the backend's fixtures are not in this tree")
+        for note in json.loads(fixture.read_text())["notes"]:
+            self.assertEqual(bayes_task.note_line(note["id"], **note["values"]), note["line"], note["id"])

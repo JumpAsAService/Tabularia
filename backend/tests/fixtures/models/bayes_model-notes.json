@@ -1,0 +1,122 @@
+{
+ "_": "The runner's notes as bayes_task.note_line writes them (lot Q4); the engine's tests read the lines, the runner's tests check note_line still writes them.",
+ "notes": [
+  {
+   "id": "summary_capped",
+   "values": {
+    "listed": 2000,
+    "total": 6120
+   },
+   "line": "@bayes_summary_capped listed=2000 total=6120"
+  },
+  {
+   "id": "quantities_capped",
+   "values": {
+    "listed": 600,
+    "total": 900
+   },
+   "line": "@bayes_quantities_capped listed=600 total=900"
+  },
+  {
+   "id": "contraction_null",
+   "values": {
+    "no_finite_variance": 2,
+    "no_prior_draws": 1,
+    "not_decided": 0
+   },
+   "line": "@bayes_contraction_null no_finite_variance=2 no_prior_draws=1 not_decided=0"
+  },
+  {
+   "id": "original_capped",
+   "values": {
+    "original": 3,
+    "capped": 2
+   },
+   "line": "@bayes_original_capped original=3 capped=2"
+  },
+  {
+   "id": "density_cut",
+   "values": {
+    "names": [
+     "a b",
+     "tau[Liceo, 1]"
+    ],
+    "posterior": [
+     0,
+     12
+    ],
+    "prior": [
+     3,
+     0
+    ]
+   },
+   "line": "@bayes_density_cut names=a%20b,tau[Liceo%2C%201] posterior=0,12 prior=3,0"
+  },
+  {
+   "id": "no_checks",
+   "values": {},
+   "line": "@bayes_no_checks"
+  },
+  {
+   "id": "checks_dropped",
+   "values": {
+    "dropped": 3,
+    "draws": 1000,
+    "valid": 997
+   },
+   "line": "@bayes_checks_dropped dropped=3 draws=1000 valid=997"
+  },
+  {
+   "id": "prior_undrawn_one",
+   "values": {
+    "n": 1,
+    "names": [
+     "rho"
+    ]
+   },
+   "line": "@bayes_prior_undrawn_one n=1 names=rho"
+  },
+  {
+   "id": "prior_undrawn",
+   "values": {
+    "n": 3,
+    "names": [
+     "a",
+     "b",
+     "c"
+    ]
+   },
+   "line": "@bayes_prior_undrawn n=3 names=a,b,c"
+  },
+  {
+   "id": "prior_undrawn_more",
+   "values": {
+    "n": 9,
+    "names": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e"
+    ]
+   },
+   "line": "@bayes_prior_undrawn_more n=9 names=a,b,c,d,e"
+  },
+  {
+   "id": "prior_dropped",
+   "values": {
+    "dropped": 2,
+    "total": 1000
+   },
+   "line": "@bayes_prior_dropped dropped=2 total=1000"
+  },
+  {
+   "id": "replicated_dropped",
+   "values": {
+    "dropped": 1,
+    "total": 4000
+   },
+   "line": "@bayes_replicated_dropped dropped=1 total=4000"
+  }
+ ]
+}
