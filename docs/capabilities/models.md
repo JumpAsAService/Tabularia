@@ -1732,7 +1732,7 @@ rows used and left out, the draws and the facts of the sampler; then come the po
 deviation, three quantiles, R-hat, effective sample sizes, the standard error of the mean and the contraction of the prior), the
 data the model bound (with the mean and the standard deviation of a standardized column) and the notes. The diagnostics have
 their own pages and charts, and so do the predictive checks: the posterior predictive check after a `sample` run, and the prior
-predictive check of the `prior_predictive` variant, both drawn on the original scale of a response the model standardized.
+predictive check of the `prior_predictive` variant, both drawn on the scale of the outcome's column.
 Every diagnostic is a measure or a fact with what it measures: the report gives no verdict. How to draw the model, its priors,
 its expressions, its saved versions and its assistant, and how an administrator sizes the group, are in
 [Bayesian models](bayesian-models.md).

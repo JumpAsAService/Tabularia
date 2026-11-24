@@ -32,8 +32,16 @@ in them, ship with the group in
 `licenses/dependencies.txt`, which is in the folder too.
 
 The group's image holds, besides CmdStan, the Python packages `numpy` and `pyarrow` and the toolchain (`g++` and `make`) from
-Debian. Their versions are those of the group's recipe, `recipe.json` beside the `licence/` folder. The notices of the
-Debian packages are in the image, at `/usr/share/doc/<package>/copyright`.
+Debian. Their versions are those of the group's recipe, `recipe.json` beside the `licence/` folder. The two packages carry
+their notices in the image, in the `licenses/` folder of their metadata, and give these licence identifiers there (quoted from
+their metadata, not interpreted):
+
+| Package | Version | Licence identifier | Its texts, in the image under `/usr/local/lib/python3.14/site-packages/` |
+|---|---|---|---|
+| numpy | 2.5.5 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | `numpy-2.5.5.dist-info/licenses/`: `LICENSE.txt` and, under `numpy/`, the licence files of the parts it bundles |
+| pyarrow | 26.0.1 | Apache-2.0 | `pyarrow-26.0.1.dist-info/licenses/`: `LICENSE.txt` and `NOTICE.txt` |
+
+The notices of the Debian packages are in the image, at `/usr/share/doc/<package>/copyright`.
 
 ## What the editor uses
 

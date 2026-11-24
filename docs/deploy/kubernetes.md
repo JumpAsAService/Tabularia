@@ -169,7 +169,7 @@ runs `apt-get install` against the default Ubuntu archives (`archive.ubuntu.com`
 setting for an APT mirror, unlike CRAN (`SCRIPTS__CRAN_URL`) and PyPI (`SCRIPTS__PYPI_INDEX_URL`). On a
 cluster with no internet the build of that group must therefore be able to reach those archives (let
 the builder's egress through to them, or through a transparent proxy or mirror of your own that
-answers for the same host names); the other groups install no system package, except the Bayesian group's compiler ([below](#statistical-models)). Once built, the image
+answers for the same host names); the other groups install no system package, except the Bayesian group's compiler (see «The Bayesian group» below). Once built, the image
 carries the library and nothing is fetched at run time: a model Job at run time has no internet and reaches the scripts bucket
 through the egress proxy only. The images are large (an R image with compiled packages
 weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node

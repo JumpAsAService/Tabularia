@@ -26,9 +26,9 @@ in [For administrators](#for-administrators).
 ## Your first model
 
 This example draws a linear regression from a template, saves it, runs it in a flow and reads its report. It uses the sample
-data of the Docker Compose stack, loaded in a Kubernetes installation as it is described in the [Statistical
-models](models.md#linear-regression) page: `order_rows`, with the numeric columns `quantita` (the outcome) and
-`prezzo_unitario` (the predictor).
+data of the Docker Compose stack, loaded in a Kubernetes installation as the [Statistical
+models](models.md#the-models) page says: `order_rows`, with the columns `quantita` (the outcome) and `prezzo_unitario` (the
+predictor), stored as text.
 
 1. Open **Scripting → Bayesian models** and press **New model**. Choose the folder it goes in (you need EDIT on it).
 2. In **Where do you start?** choose **Linear regression**. The template asks for the outcome's typical value and its typical
@@ -38,7 +38,8 @@ models](models.md#linear-regression) page: `order_rows`, with the numeric column
    numbers. Change a number and the chart changes while you type ([Priors](#priors)).
 4. Give the model a name and press **Save** (Ctrl+S, or ⌘+S on a Mac). It becomes version 1, its Stan program is stored with
    it, and Tabularia compiles it in the background (about 10 to 30 seconds).
-5. In a flow, add `order_rows` as a source, drop **Bayesian model** from the **Models** section of the palette after it, and
+5. In a flow, add `order_rows` as a source and a **Change type** of `quantita` and `prezzo_unitario` to *decimal* (a number
+   variable takes only a numeric column), then drop **Bayesian model** from the **Models** section of the palette after it, and
    in its panel choose your saved model. Under **Variables**, bind **Outcome** to `quantita` and **Predictor** to
    `prezzo_unitario`. A Run in the panel reads the flow's development sample; a flow run reads every row of the input, up to the
    group's limit, so keep a large table down with a filter first ([Limits](#limits-and-what-it-refuses)).
@@ -73,8 +74,8 @@ information icon, a **Glossary** of the model's words in two sentences each.
 | Boxes | **Group box** | Repeats what it holds once for each group |
 
 The **Rows** box is part of every model and stays: one unit per row of the data the flow node binds. The data, the values
-computed for each row and the likelihood sit in it. Drag a kind onto the canvas, or press **N** to add the first
-kind of the palette; from the palette, Enter adds the kind you are on in the selected box. A link is drawn from the fields: a node uses another by writing its name in a slot (or choosing it in the
+computed for each row and the likelihood sit in it. Drag a kind onto the canvas, or press **N** to move to the palette, on
+its first kind, where Enter adds the kind you are on in the selected box. A link is drawn from the fields: a node uses another by writing its name in a slot (or choosing it in the
 node's menu, **Link to another node…**); the canvas draws the links, it does not store them.
 
 ### Names, labels and notes
@@ -89,7 +90,8 @@ program](#the-stan-program)). A label never enters the code.
 
 The inspector of a node has its fields, a short explanation of what the kind is, and for a parameter its prior with the chart
 beside the numbers. Every field that takes a number takes an expression ([Expressions](#the-free-models-expressions)), checked
-as you type; the gateway checks the whole graph again 600 ms after the last change and at the save. The **Problems** tab lists
+as you type in your browser; the gateway reads the whole graph at the save and, while the **Stan code** tab is open, 600 ms after
+the last change that leaves no error. The **Problems** tab lists
 what the check finds, each with a button that shows the node: an **error** keeps the model from being saved, a **warning**
 blocks nothing and says what the model will do.
 
@@ -100,7 +102,7 @@ Everything is reachable from the keyboard:
 | Into the nodes, then select one | Tab, Enter | Tab, Enter |
 | The nearest node in a direction | Alt + arrow | Alt + arrow |
 | Move the selected node or box | Shift + arrow | Shift + arrow |
-| Add a node | N | N |
+| To the palette, to add a node | N | N |
 | The selected node's commands | M, or Shift + F10 | M |
 | Remove the selected node, box or link | Delete, Backspace | Backspace |
 | Duplicate the selected node | Ctrl + D | ⌘ + D |
@@ -218,7 +220,7 @@ group's name in brackets: `mu_school[school]`.
 Each box has a switch between two ways of writing the same model:
 
 - **Non-centred** (the default): the sampler moves on the standardized scale of the groups, and the program gives back each
-  group's value as it is. It is the usual remedy when the groups have few rows each.
+  group's value as it is. It is the form people usually choose when the groups have few rows each.
 - **Centred**: the sampler moves on the values of the groups themselves, as their prior writes them.
 
 The two forms describe the same model. The report's facts (the divergences' count, the tree depths, the sampler's measures) tell
@@ -288,7 +290,7 @@ and the list says where it stands:
 | Waiting to compile | Another compile is running; the number that may run at once is an administrator's setting |
 | Compiling | Usually 10 to 30 seconds |
 | Compiled | Kept in the cache for the group's current image |
-| Compile error | The program did not compile; this is a fault of Tabularia, not of the model, and the administrator's log says where |
+| Compile failed | The program did not compile; the detail says why (when the compiler refused the program Tabularia wrote, it is a fault of Tabularia, not of the model, and the administrator's log says where) |
 | Too long to compile | It passed the limit of the compile; it is not tried again with that limit |
 
 A compile that does not finish never stops a save, and a run compiles first when it finds none. The **Versions** tab lists the
@@ -338,9 +340,9 @@ version, the bindings, the sampler and the output; the MLflow block is not).
 
 | Output | What the nodes after it receive |
 |---|---|
-| **Summary** (the default) | One row for each quantity: its name, node, label, unit, kind, the scale, mean, standard deviation, five quantiles (5, 25, 50, 75, 95 %), the standard error of the mean and of the standard deviation, R-hat, bulk and tail effective sample size and the contraction of the prior. A coefficient of a linear predictor has a second row on the column's own scale |
-| **Draws** | One row for each quantity of each draw (chain, draw, quantity, node, unit, value). It can be large; it is written in blocks and never held whole in memory |
-| **Replicated data** | Data drawn from the fitted model, thinned to a few draws for each chain (1 to the draws, default 50): chain, draw, row, outcome, value |
+| **Summary** (the default) | One row for each quantity: `quantity`, `node`, `label`, `unit`, `index`, `index_2`, `kind`, `scale`, `mean`, `sd`, five quantiles (`q5`, `q25`, `q50`, `q75`, `q95`), `mcse_mean`, `mcse_sd`, `rhat`, `ess_bulk`, `ess_tail` and `contraction` (the contraction of the prior). A coefficient of a linear predictor has a second row on the column's own scale |
+| **Draws** | One row for each quantity of each draw (`chain`, `draw`, `quantity`, `node`, `unit`, `index`, `index_2`, `value`). It can be large; it is written in blocks and never held whole in memory |
+| **Replicated data** | Data drawn from the fitted model, thinned to a few draws for each chain (1 to the draws, default 50): `chain`, `draw`, `row`, `outcome`, `value` |
 | **Results table** | The ten columns every model node writes, as the report reads them |
 
 The report is always drawn from the ten columns, whichever output you choose; the draws are 8 digits of precision, CmdStan's
@@ -398,8 +400,9 @@ expression has the standardized scale only.
 
 A predictive check draws replicated data sets from the model and **draws them next to your data**. For each checked outcome the
 report has the density of the values (your data in black, 20 drawn data sets in grey), a histogram of each statistic of the drawn
-data sets (mean, standard deviation, minimum, maximum, three percentiles, the number of zeros) with the same statistic of your
-data marked by a dashed line, and the same for the mean of each of the units with the most rows. The outer points of a grey line
+data sets with the same statistic of your data marked by a dashed line (what the statistics are depends on the outcome: for a
+number, the mean, standard deviation, minimum, maximum and the 10th, 50th and 90th percentiles; for a count, the mean, standard
+deviation, maximum, the 50th and 90th percentiles and the number of zeros; for an outcome of yes or no, the mean), and the same for the mean of each of the units with the most rows. The outer points of a grey line
 count the drawn values below and above the range of your data. **No p-value, no probability and no share is given**, and
 the report says so: a predictive check is read by looking at the charts, and the numbers that would stand beside them would
 turn a picture into a verdict. The posterior checks come from replicated data drawn from the posterior; the prior checks from the
@@ -455,7 +458,7 @@ changed since the assistant read it. In a version looked at (read only) nothing 
 **What goes to the model**, with each request:
 
 - your message and the conversation;
-- the graph as the editor holds it, up to 256 KiB: for each box its id, kind, label, form, group column and parent, series
+- the graph as the editor holds it, up to 256 KiB: for each box its id, kind, label, form, group data node and parent, series
   settings and note; for each node its id, kind, name, label, box, note and, by kind, the type of a data variable and whether it
   is standardized, a prior or an initial value with its distribution and arguments, bounds, a likelihood's distribution and
   arguments, a linear predictor's intercept and terms, a computed value's expression. A text is cut to 80 characters (a name to
@@ -507,18 +510,18 @@ units** of a group or a category, **2 GiB** of memory, 4 processors, **2 GiB** o
 The report lists up to 2,000 quantities in its summary table; a node's summary output has them all. A run that would pass a limit
 is **refused before it ends, with the sentence that names the way out, and leaves no partial result**. For example:
 
-- «`school` has more than 20,000 values: is it the right column?»
-- «the model has 31,400 quantities; this installation allows 20,000»
-- «about 41 minutes for 4 chains of 2,000 iterations; the node's timeout is 30 minutes: fewer draws, or a longer timeout up to the
-  group's 60»
-- «the draws would write about 6.1 GB; this Job's disk holds 4 GB: fewer draws or chains»
+- «`school` has more than 20000 values: is it the right column?»
+- «the model has 31400 quantities; this installation allows 20000»
+- «about 41 minutes for 4 chains of 2000 iterations; the node's timeout is 30 minutes: fewer draws, or a longer timeout»
+- «the draws would write about 6.1 GB; this Job's disk holds 2.1 GB: fewer draws or chains»
 - «`hours` has the same value on every row: it cannot be standardized»
-- «`district_income` changes within the school «Liceo Galilei»» (a column on a group box that varies within a unit)
-- «no row has every bound column: 1,204 rows have a missing value»
+- «`district_income` changes within the unit «Liceo Galilei» of School: it must have one value for each» (a column on a group box
+  that varies within a unit)
+- «no row has every bound column: 1204 rows have a missing value»
 - «the sampler found no starting point where the model's density is finite: check the bounds and the priors, or give initial values
   under Advanced»
 
-(The numbers are the sentences' examples.) **Divergent transitions are not a refusal**: the run goes on to the end and their count
+(The numbers are examples, written as the runner writes them, with no thousands separator.) **Divergent transitions are not a refusal**: the run goes on to the end and their count
 is a fact on the first page.
 
 ## What is not in this release
