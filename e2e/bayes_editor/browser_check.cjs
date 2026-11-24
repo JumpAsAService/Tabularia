@@ -6,7 +6,12 @@
 //   UI=http://127.0.0.1:3123 PLAYWRIGHT_CORE=<path of playwright-core> node e2e/bayes_editor/browser_check.cjs <chromium|firefox>
 //   (browser_check.py runs it on both)
 //
+// Part two (browser_check_panels.cjs) runs against a mock gateway in the dark and the light theme: the tab bar, the
+// Stan code tab, the assistant, the node's MLflow section, the prior predictive button and the Report's switch.
+// SHOTS=<folder> saves its screenshots.
+//
 // Prints one line per check, «ok» or «KO», and exits 1 if any is KO.
+const { panelsPart } = require('./browser_check_panels.cjs')
 const pw = require(process.env.PLAYWRIGHT_CORE || 'playwright-core')
 const UI = process.env.UI || 'http://127.0.0.1:3123'
 const which = process.argv[2] || 'chromium'
@@ -16,7 +21,7 @@ const ok = (name, cond, detail = '') => {
   console.log(`${cond ? '  ok  ' : '  KO  '}${name}${cond ? '' : ` — ${String(detail).slice(0, 300)}`}`)
 }
 
-async function run (browser, mac) {
+async function keysPart (browser, mac) {
   const MOD = mac ? 'Meta' : 'Control'
   const tag = `${which} ${mac ? 'Mac' : 'PC'}`
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
@@ -140,7 +145,8 @@ async function run (browser, mac) {
 
 ;(async () => {
   const browser = await pw[which].launch({ headless: true })
-  for (const mac of [false, true]) await run(browser, mac)
+  for (const mac of [false, true]) await keysPart(browser, mac)
+  for (const theme of ['dark', 'light']) await panelsPart({ browser, which, UI, theme, ok })
   await browser.close()
   const bad = results.filter(r => !r).length
   console.log(`${results.length - bad}/${results.length} checks passed on ${which}`)

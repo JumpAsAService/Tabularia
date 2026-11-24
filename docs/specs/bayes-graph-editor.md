@@ -802,6 +802,51 @@ plus one: boxes get their depth, nodes 1000, and `elevate-nodes-on-select` is of
   those, the screenshots at 1280 px and of the Stan tab, the other three languages checked for overflow, and the
   fresh-context review of the whole module.
 
+### Lot G5, part two (the panels, the themes, the languages, the bundle)
+
+- **A defect found by looking** (lot A3, commit `fix(bayes): the assistant tab no longer reads as an answer drawn over the
+  warning`): in the assistant's tab the notice «this run is of version 3; the editor holds version 4» seemed to have the
+  first line of a long answer drawn over it. Nothing was drawn over anything: the conversation scrolls to its end, so the
+  first line of the long answer sat half cut at the stream's top edge, which touched the notice (measured: notice bottom
+  180 px, stream top 180 px, scrollTop 368). The stream now has a padded top edge and the text fades under it
+  (`mask-image`); the browser check measures that the notice ends above the stream and that the mask is there.
+- **Browser check, part two** (`e2e/bayes_editor/browser_check_panels.cjs`, called by `browser_check.cjs`, once in the dark
+  and once in the light theme, against a mock gateway: every call to the API base is answered from the fixtures in
+  `e2e/bayes_editor/fixtures/`, the assistant's stream included; no AI is called): 206 checks on Chromium and 206 on
+  Firefox, parts one and two together, all passing.
+  - **The tab bar**, at 1440 and 1280 px and with each tab chosen in turn: below 540 px (the panel is 420 px wide, 640 only
+    with the Stan tab open at 1400 px or more) the chosen tab alone says its name and the others show their icon; at 540 px
+    or more every tab says its name; no tab wraps (one line, under 34 px), the bar never overflows, every tab keeps its
+    tooltip (the same word as its name), and a screen reader finds the five tabs by name and the glossary's by its label
+    (the hidden names are clipped, not removed). The six tabs passed A3's change of markup.
+  - **«Stan code»**: opens with `scrollTop` 0 and a node selected (the title whole under the tab bar), the selected node
+    selects its row, ↑ ↓ walk the rows and Enter selects the node, Esc from a row and from the code goes to the tab, Tab
+    leaves Monaco for the page, typing in the code adds nothing, the tab's text is at 4.5:1 or more.
+  - **The assistant**: the run picker (no run, two runs, one never run that cannot be chosen, the arrow keys of the radio
+    group), the version notice, «Apply all» offered only after the gateway read the graph with no new finding, applied as
+    one change and taken back by one Ctrl+Z, a proposal the gateway refuses with «Apply» disabled (and inert under a forced
+    click) while «Send the findings back» and «Discard» are not, «Discard» removing the buttons.
+  - **The node's MLflow section** (flow editor): no connection (the hint, no field), only MLflow connections offered, a
+    connection and no experiment (the sentence as an alert, `aria-invalid`), the server's experiments offered, filled (the
+    switch by keyboard), connection cleared and chosen again (nothing remembered), the gateway's refusal shown under Run.
+  - **The prior predictive button and the Report's switch** (F4's last touch, now seen in the browser in both themes): Tab
+    from Run reaches the button, a visible focus ring, Enter sends `{check: prior_predictive}` and Run is disabled
+    meanwhile, the button is enabled again when the check ends; the switch has two buttons in a named group, one pressed,
+    Enter on the other switches the report, the pressed one differs from the other by more than colour, and the text of
+    all of it is at 4.5:1 or more (a button on a gradient is read by eye: a gradient has no single colour to measure).
+- **Themes and languages** (throw-away scripts, not committed): the assistant's tab with a proposal and the Stan code tab,
+  at 1440 and 1280 px, in the five themes on Chromium (dark, light, Dracula, Monokai, Imperium), and in dark and Imperium
+  on Firefox; and, for every tab, a check that nothing overflows sideways and no tab wraps, in the five languages at 1440
+  and 1280 px (dark, Chromium; Firefox in English and German). No finding left. The screenshots show no secret (a made-up
+  token, a made-up address `ada@example.org`, a made-up provider).
+- **Bundle** (`nuxt build`, alone): the entry chunk (2.85 MB, the five languages' texts) holds no editor: «monaco» appears
+  once, as a CSS selector in the key handler, and `lkj_corr` as a distribution's name in the texts; Vue Flow's canvas, the
+  Stan tokenizer, `BayesCanvas` and the prior worker are in chunks the page loads, none in the first load.
+- **Tests and types**: `npm test` 850 of 850, `vue-tsc` with no error.
+- **Seen, not changed**: with the Stan tab open (640 px) or at 1280 px, the canvas fitted at load is cut by the panel's edge
+  for the larger templates (the fit stops at the minimum zoom of 0.75, as decided); the reviewer may want a fit that
+  follows the panel's width.
+
 ### Lot G3 (2026-11-24)
 
 - **The list** (`pages/bayes-models.vue`), as the approved mockup: the headline with its count and one sentence for a
