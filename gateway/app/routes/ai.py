@@ -39,7 +39,7 @@ from app.deps.permissions import ensure_can
 from app.models.permission import Capability
 from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_comment, ai_flow_agent, ai_models, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
+from app.services import ai_agent, ai_chats, ai_comment, ai_bayes_agent, ai_flow_agent, ai_models, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
 from app.services.agent import REGISTRY as AGENT_TOOLS, chat as agent_chat
 from app.services.ai_models import enabled_model_ids, is_chat_model, provider_models
 from app.services.engine_policy import pick_engine
@@ -217,6 +217,17 @@ def _example_context(agent: str, locale: str) -> str:
             language_version="3.12", environment="‹environment›", packages=["‹packages›"], variables=["‹variables›"],
             files=[{"path": "main.py", "content": "‹the files' content›"}], entrypoint="main.py",
             error_withheld=withheld,
+        ))
+    if agent == "bayes":
+        return ai_bayes_agent.context(ai_bayes_agent.BayesDeps(
+            user=None, session_factory=_new_session, engine=None, model_id="", locale=locale,  # type: ignore[arg-type]
+            graph={"plates": [{"id": "‹plate›", "kind": "rows", "label": "‹label›"}],
+                   "nodes": [{"id": "‹node›", "kind": "parameter", "name": "‹name›", "label": "‹label›", "plate": None,
+                              "prior": {"dist": "normal", "args": {"mu": {"expr": "0"}, "sigma": {"expr": "2.5"}}}}]},
+            findings=[{"code": "‹code›", "severity": "‹severity›", "message": "‹the finding›"}],
+            preview={"‹node›": {"‹a quantile›": 0.0}},
+            run={"version": 1, "sampler": {"divergences": 0}, "nodes": [{"node": "‹node›", "rhat_max": 1.0}]},
+            selected="‹node›",
         ))
     if agent == "title":
         return ai_prompts.language_line(locale, "the title")
@@ -849,6 +860,71 @@ async def script_assist(
         model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=None,
         ephemeral=False, chat_id=chat_id, locale=body.locale, kind="script",
         extra_done=lambda: {"proposal": deps.proposal, "error_withheld": deps.error_withheld},
+    )
+    return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+# ── the Bayesian model editor's assistant ────────────────────────────────────
+class BayesRunIn(BaseModel):
+    """The facts of a run the person chose to read: the sampler's and each node's extremes. The route
+    that gives them (lot A4) sends nothing else, and the agent keeps only these keys."""
+    version: Optional[int] = None
+    sampler: dict[str, float] = Field(default_factory=dict, max_length=40)
+    nodes: list[dict[str, Any]] = Field(default_factory=list, max_length=ai_bayes_agent.MAX_RUN_NODES)
+
+
+class BayesAssistRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=8000)
+    model: str = Field(min_length=1, max_length=300)
+    chat_id: Optional[int] = None
+    graph: dict[str, Any]
+    findings: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+    selected: Optional[str] = Field(default=None, max_length=100)
+    preview: dict[str, dict[str, Optional[float]]] = Field(default_factory=dict, max_length=400)
+    run: Optional[BayesRunIn] = None
+    version: Optional[int] = None  # the version the editor holds, to say when a run is of another
+    saved: bool = True
+    locale: str = Field(default="en", max_length=10)
+
+
+@router.post("/bayes-assist")
+async def bayes_assist(
+    body: BayesAssistRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    """One turn of the Bayesian model editor's assistant. Its proposal comes back in `done.proposal`
+    (null when it proposed nothing): `{summary, changes: [{node, field, slot, before, value, why}]}`,
+    which the editor places, checks with `POST /bayes-models/check` and applies if the person wants.
+    What reaches the model: the graph, the findings, the preview's numbers and, of a run, the
+    sampler's facts and each node's extremes of R-hat and ESS; never a row of data, never a posterior
+    number, in any mode."""
+    ai_models.refuse_unless_usable(session, body.model)
+    cfg = get_settings().ai
+    if is_observer_only(session, user):
+        raise HTTPException(status_code=403, detail="Observers do not write models")
+    if not ai_bayes_agent.group_usable(session, user):
+        raise HTTPException(status_code=404, detail="Bayesian models are not available to you")
+    if len(json.dumps(body.graph, separators=(",", ":")).encode()) > ai_bayes_agent.limit("max_graph_bytes"):
+        raise HTTPException(status_code=422, detail="The graph is too large for the assistant")
+    _check_spending(session, user)
+    withheld = metadata_only.on("chat")
+    chat = ai_chats.open_session(session, user, body.chat_id, body.model, None, kind="bayes") if body.chat_id else None
+    chat_id = chat.id if chat is not None else None
+    history = ai_chats.history(session, chat, cfg.max_history_messages, withheld) if chat is not None else []
+    deps = ai_bayes_agent.BayesDeps(
+        user=user, session_factory=_new_session, engine=None, model_id=body.model, locale=body.locale,
+        request=request, chat_id=chat_id, graph=body.graph, findings=body.findings, selected=body.selected,
+        preview=body.preview, run=body.run.model_dump() if body.run else None, editor_version=body.version,
+        saved=body.saved, prompt=ai_prompts.text(session, "bayes"),
+        metadata_turn=withheld, history_withheld=withheld and chat is not None and ai_chats.turns_withheld(session, chat),
+    )
+    stream = _turn_stream(
+        agent=ai_bayes_agent.bayes_agent, message=body.message, history=history, deps=deps,
+        model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=None,
+        ephemeral=False, chat_id=chat_id, locale=body.locale, kind="bayes",
+        extra_done=lambda: {"proposal": deps.proposal},
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
 

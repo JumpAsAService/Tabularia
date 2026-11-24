@@ -11,7 +11,7 @@ func TestTheContextIsFilledIn(t *testing.T) {
 	if !strings.Contains(c, "Today is 2026-11-04.") || !strings.Contains(c, "capped at 77 rows") || !strings.Contains(c, "Italian") {
 		t.Error(c)
 	}
-	if _, ok := Default("nope"); ok || len(Agents()) != 7 {
+	if _, ok := Default("nope"); ok || len(Agents()) != 8 {
 		t.Error("agents")
 	}
 }

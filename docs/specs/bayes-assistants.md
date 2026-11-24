@@ -329,3 +329,39 @@ A1 and A2 can start at once after A0; A5 is the owner's and costs the owner's to
 ## Open questions
 
 None. The six questions of the draft were answered by the owner on 2026-11-24 (see «Decisions»).
+
+## As built
+
+**Lot A0 (measured 2026-11-24).**
+
+1. **A node of an unknown type in the flow assistant's tools** (measured in lot A1, tests in `gateway/tests/test_ai_flow_agent.py`):
+   `get_flow` shows the node (as `bayes_model` with its label, model, version, output and the step it follows); `ends_of_chains` is
+   `[]` when a Bayesian node follows the last step, since the node is no step node; `connect`, `change_step`, `remove_node` and
+   `add_step(after=<the node>)` refuse with the sentence that sends the person to the palette; a save of a flow holding one hands it
+   back byte for byte.
+2. **The route of a run's rows.** The engine reads a step's results with `POST /scripts/results/rows` (called by the gateway's
+   `modelResultRows`, `jobs_models_mlflow.go`, with the sections asked for: MLflow's list is `summary`, `sampler`, `quantity`,
+   `model`, `data`). The report's rights are those of `proxyModelReport` (`POST /tasks/model-report`): VIEW on the flow's folder,
+   the flow opens for the person, the run is one of that node's with its `results_key`. No route gives the editor a run's rows today:
+   lot A4's `bayes_runs.go` asks `modelResultRows` for the sections `sampler` and `quantity` only, under those rights, and lists the
+   nodes with `bayesmodels.Using` (`GET /bayes-models/{id}/uses`, which counts the flows the person cannot open and does not name them).
+   The `sampler` stats are `divergences`, `treedepth_hits`, `treedepth_max`, `e_bfmi`, `stepsize`, `accept_stat_mean`,
+   `n_leapfrog_mean`, `seconds_warmup`, `seconds_sampling`, `draws`; the `quantity` stats `rhat_max`, `ess_bulk_min`, `ess_tail_min`.
+3. **The AI service and the group `bayes`.** The AI service reads the same database: `ai_bayes_agent.group_usable` repeats the Go
+   `ModelGroupUsable` on the table `model_groups` (id `bayes`): the group is enabled and the person is an administrator, or `everyone`,
+   or in a user group listed for the group's environment (`script_environment_groups`). Observers get 403, whoever may not use the
+   group gets 404. The assistant is not tied to a saved model, so no folder right is asked.
+
+**Lot A2.** `ai_bayes_agent.py` (deps, the compact graph with every text cut at 80 characters, JSON-encoded, the marker words
+neutralised and put between `[data <tag>]` markers with a tag of the request; the findings, the preview and the run's facts the
+same way; the tool `propose_changes`), the default `BAYES` in `ai_prompts.py` (the agent `bayes` of the panel), `POST /ai/bayes-assist`
+(`routes/ai.py`, forwarded by `api/ai_service.go`), the generated files written again (`prompts.json`, `openapi.json`,
+`fastapi_routes_gen.go`, `docs/gateway-go-routes.md`), `gateway/tests/test_ai_bayes_agent.py`.
+The request: `message`, `model`, `chat_id`, `graph`, `findings`, `selected`, `preview` (`{node: {name: number}}`), `run`
+(`{version, sampler: {…}, nodes: [{node, rhat_max, ess_bulk_min, ess_tail_min}]}`; any other key is dropped), `version` (the editor's),
+`saved`, `locale`. The answer is the SSE stream of the other assistants; `done.proposal` is `null` or
+`{summary, changes: [{node, field, slot, before, value, why}]}`, with `field` one of `prior_distribution`, `prior_args`,
+`expression`, `bounds`, `plate_form`; `slot` names which expression of the node (`value`, `intercept`, `coef:<i>`, `arg:<name>`,
+`scale`, `mean`) and is empty for the other fields; `prior_args` values are the expression texts; `value` of `bounds` is
+`{lower, upper}` (numbers or null); a node id may be a component of correlated effects. Nothing adds or deletes a node: the
+schema has no such field and ids outside the shown graph are refused.

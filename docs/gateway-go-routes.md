@@ -39,6 +39,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
+| POST | `/ai/bayes-assist` | `bayes_assist` | AI service |
 | POST | `/ai/chat` | `chat` | AI service |
 | GET | `/ai/chats` | `list_chats` | AI service |
 | DELETE | `/ai/chats/{chat_id}` | `delete_chat` | AI service |

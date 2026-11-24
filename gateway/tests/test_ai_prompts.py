@@ -17,7 +17,7 @@ from sqlmodel import select
 from app.db.session import get_session
 from app.models import AiPrompt, AuditLog
 from app.routes import ai as ai_routes
-from app.services import ai_agent, ai_flow_agent, ai_prompts, ai_script_agent, audit
+from app.services import ai_agent, ai_flow_agent, ai_prompts, ai_script_agent, ai_bayes_agent, audit
 from app.services.dbt_ai import translation_context
 from tests.conftest import make_user
 from tests.test_engine_settings import CSRF, _sign_in
@@ -51,6 +51,7 @@ def test_the_language_is_the_last_line_of_every_agent(session):
         "flow": _instructions(ai_flow_agent, _deps(ai_flow_agent.FlowDeps, session, user, flow_name="Vendite", selected="op-2")),
         "script": _instructions(ai_script_agent, _deps(ai_script_agent.ScriptDeps, session, user, environment="py",
                                                        files=[{"path": "main.py", "content": "print(1)"}], entrypoint="main.py")),
+        "bayes": _instructions(ai_bayes_agent, _deps(ai_bayes_agent.BayesDeps, session, user, graph={"plates": [], "nodes": []})),
     }
     for agent, text in texts.items():
         assert text.startswith(ai_prompts.DEFAULTS[agent].strip()), agent

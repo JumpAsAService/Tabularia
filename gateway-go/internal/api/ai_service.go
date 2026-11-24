@@ -20,6 +20,7 @@ var aiServiceRoutes = [][2]string{
 	{http.MethodPost, "/ai/chat"},
 	{http.MethodPost, "/ai/flow-assist"},
 	{http.MethodPost, "/ai/script-assist"},
+	{http.MethodPost, "/ai/bayes-assist"},
 	{http.MethodGet, "/ai/flow-chats/latest"},
 	{http.MethodGet, "/ai/chats"},
 	{http.MethodGet, "/ai/chats/{chat_id}"},

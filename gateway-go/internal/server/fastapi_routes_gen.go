@@ -123,6 +123,7 @@ var fastAPIRoutes = []pyRoute{
 	{ws: false, path: "/ai/chat", methods: []string{"POST"}, regex: "^/ai/chat$"},
 	{ws: false, path: "/ai/flow-assist", methods: []string{"POST"}, regex: "^/ai/flow\\-assist$"},
 	{ws: false, path: "/ai/script-assist", methods: []string{"POST"}, regex: "^/ai/script\\-assist$"},
+	{ws: false, path: "/ai/bayes-assist", methods: []string{"POST"}, regex: "^/ai/bayes\\-assist$"},
 	{ws: false, path: "/ai/flow-chats/latest", methods: []string{"GET"}, regex: "^/ai/flow\\-chats/latest$"},
 	{ws: false, path: "/ai/providers", methods: []string{"GET"}, regex: "^/ai/providers$"},
 	{ws: false, path: "/ai/providers", methods: []string{"POST"}, regex: "^/ai/providers$"},
