@@ -70,9 +70,17 @@ def _load_model_catalog() -> dict:
 
 
 MODEL_CATALOG = _load_model_catalog()
-MODELS: dict[str, dict] = {m["id"]: m for m in MODEL_CATALOG["models"]}
+# The groups the assistant never offers an operation for: the Bayesian model is a node of its own (`bayes_model`) that the
+# person adds from the palette; the assistant reads and describes it, never adds, changes or connects it. Their models are
+# left out of MODELS, so no operation, no line of reference and no check exists for them (the copy stays the catalogue's).
+EXCLUDED_GROUPS = ("bayes",)
+EXCLUDED_MODELS = frozenset(i for g in MODEL_CATALOG["groups"] if g["id"] in EXCLUDED_GROUPS for i in g["models"])
+MODELS: dict[str, dict] = {m["id"]: m for m in MODEL_CATALOG["models"] if m["id"] not in EXCLUDED_MODELS}
 MODEL_NODE, PREDICT_NODE = tuple(MODEL_CATALOG["nodes"])  # the node types: `model`, `model_predict`
 MODEL_OPERATIONS: dict[str, str] = {f"{MODEL_NODE}_{i}": i for i in MODELS}  # operation -> model id
+EXCLUDED_OPERATIONS = frozenset(f"{MODEL_NODE}_{i}" for i in EXCLUDED_MODELS)
+BAYES_NODE = "bayes_model"  # the editor's node type of a Bayesian model
+BAYES_BY_HAND = "the Bayesian model is a node of its own: the person adds «Bayesian model» from the palette and chooses a saved model"
 PREDICT_OPERATION = PREDICT_NODE
 MODEL_TIMEOUT_SECONDS = 900  # what the editor gives a new model node
 OPERATIONS = BASE_OPERATIONS + tuple(STAT_TESTS) + tuple(MODEL_OPERATIONS) + (PREDICT_OPERATION,)
@@ -879,6 +887,8 @@ def models_reference() -> str:
 
     lines = []
     for group in MODEL_CATALOG["groups"]:
+        if group["id"] in EXCLUDED_GROUPS:
+            continue
         for model_id in group["models"]:
             m = MODELS[model_id]
             keys = [entry(k, v, True) for k, v in m["needs"].items()] + [entry(k, v, False) for k, v in m["takes"].items()]
@@ -903,6 +913,8 @@ def models_reference() -> str:
 def clean_params(operation: str, params: Any) -> dict:
     """The parameters of a step in the shape the engine runs and the editor's form
     shows, or a ModelRetry that says what is wrong."""
+    if operation in EXCLUDED_OPERATIONS:
+        raise ModelRetry(f"Unknown operation '{operation}': {BAYES_BY_HAND}. Use one of: {', '.join(OPERATIONS)}.")
     if operation not in OPERATIONS:
         raise ModelRetry(f"Unknown operation '{operation}'. Use one of: {', '.join(OPERATIONS)}.")
     p = dict(params or {}) if isinstance(params, dict) else None
@@ -1258,6 +1270,7 @@ Statistical models: each is a step of its own, a model_<id> operation, that fits
 - Of parametric survival and the customer lifetime models, a check gives a verdict only from a test with a p-value read against `alpha`; the other measures (the holdout's error, the agreement with Kaplan–Meier, the number of customers) have no verdict: report them as numbers and never call them good or bad.
 - A model step logs its fit to MLflow and registers a version only when it has `mlflow: {connectionId, experiment, registerAs?, continueWithout?}`: a connection and an experiment, given by the user; never invent them. Without it the model runs and its results stay with the run.
 - model_predict applies a version a model step registered in MLflow (Tabularia's own, with `registerAs`) to the rows that reach it and adds the predicted columns. It needs that registered version: its connection, experiment, registered model and a version number (or "latest"), given by the user; if no version is registered yet, add the model step first and tell the user to run the flow and then add the prediction. Its options apply to the model the version holds.
+- The node «Bayesian model» (`bayes_model`) estimates a model the person drew in the Bayesian models space, by Stan's No-U-Turn sampler, as a Job on Kubernetes. **You cannot add, change or connect it**: tell the person to add it from the palette and choose a saved model. If you read one, describe it by its label, its model (the id and pinned version the node holds), its output and the step it follows; never say what its estimate is, its diagnostics are measures without verdict.
 Only the models below exist:"""
 
 
@@ -1401,6 +1414,10 @@ def _summary(draft: FlowDraft, node: dict) -> dict[str, Any]:
         if node.get("parentNode"):
             out["inside_loop"] = node["parentNode"]
         return out
+    if kind == BAYES_NODE:
+        # the label and the model's name come from people: the nodes are wrapped as data by get_flow
+        return {"id": node["id"], "type": BAYES_NODE, "label": d.get("label") or None, "model": d.get("bayesModelId"),
+                "version": d.get("bayesModelVersion"), "output": d.get("output"), "after": inputs.get("left")}
     if kind == "output":
         dest = d.get("destType") or "datasource"
         writes = ({"datasource": d.get("name"), "folder_id": d.get("projectId"), "overwrite": bool(d.get("overwrite"))}
@@ -1455,6 +1472,8 @@ async def add_source(ctx: RunContext[FlowDeps], datasource_id: int) -> dict[str,
 def _data_node(draft: FlowDraft, node_id: str, role: str) -> dict:
     """A node another one may read: a source, a step, or a model or Predict step (its output)."""
     node = draft.get(node_id)
+    if node.get("type") == BAYES_NODE:
+        raise ModelRetry(f"{role}: '{node_id}' is a Bayesian model, which the assistant does not connect: {BAYES_BY_HAND}.")
     if node.get("type") not in STEP_NODES:
         raise ModelRetry(f"{role} must be a source, a step or a model step, and '{node_id}' is a {node.get('type')}.")
     return node
@@ -1499,6 +1518,8 @@ async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, An
     """Replace the settings of a step (all its params; `operation` changes its kind too). Returns its columns and first rows, or the error."""
     draft = ctx.deps.draft
     target = draft.get(node)
+    if target.get("type") == BAYES_NODE:
+        raise ModelRetry(f"'{node}' is a Bayesian model: {BAYES_BY_HAND}; the assistant does not change it.")
     if target.get("type") in (MODEL_NODE, PREDICT_NODE):
         if target.get("parentNode"):
             raise ModelRetry("Steps inside a loop container are edited by hand.")
@@ -1534,6 +1555,8 @@ async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, An
 async def connect(ctx: RunContext[FlowDeps], from_node: str, to_node: str, input: Literal["left", "right"] = "left") -> dict[str, Any]:
     """Make `to_node` read `from_node` on its left (main) or right (join/union) input, replacing what it read there."""
     draft = ctx.deps.draft
+    if BAYES_NODE in (draft.get(from_node).get("type"), draft.get(to_node).get("type")):
+        raise ModelRetry(f"A Bayesian model is not connected by the assistant: {BAYES_BY_HAND}.")
     source = _data_node(draft, from_node, "from_node")
     target = draft.get(to_node)
     if target.get("type") not in ("operation", "output"):
@@ -1554,6 +1577,8 @@ async def remove_node(ctx: RunContext[FlowDeps], node: str) -> dict[str, Any]:
     """Remove a node. The nodes that read it read what it read instead, so the chain stays connected."""
     draft = ctx.deps.draft
     target = draft.get(node)
+    if target.get("type") == BAYES_NODE:
+        raise ModelRetry(f"'{node}' is a Bayesian model: {BAYES_BY_HAND}; the assistant does not remove it.")
     if target.get("type") == "foreach" or any(n.get("parentNode") == node for n in draft.nodes) or target.get("parentNode"):
         raise ModelRetry("Loop containers and the steps inside them are edited by hand.")
     upstream = draft.inputs(node).get("left")

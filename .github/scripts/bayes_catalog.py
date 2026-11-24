@@ -15,10 +15,9 @@ by the gateway), written by:
 gateway-go/internal/bayescatalog/catalog_test.go). Each component keeps a copy, because each is
 built from its own folder alone:
 
-  - frontend/assets/bayes-catalog.json: the browser's bindings, the expression language, the graph.
-
-The AI service's copy (gateway/app/services/bayes_catalog.json) is added by the lot that builds
-that service: add it to COPIES then.
+  - frontend/assets/bayes-catalog.json: the browser's bindings, the expression language, the graph;
+  - gateway/app/services/bayes_catalog.json: the AI service's, for the assistant of the Bayesian
+    editor.
 
 --check fails when a copy is missing or differs from the snapshot by a byte, when the snapshot
 is not a catalogue (no distribution, an id twice, a `uses` value or a constraint it does not
@@ -40,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = "gateway-go/internal/bayescatalog/catalog.json"
 COPIES = [
     "frontend/assets/bayes-catalog.json",
+    "gateway/app/services/bayes_catalog.json",
 ]
 PAGE = "docs/capabilities/bayesian-models.md"
 THIS = ".github/scripts/bayes_catalog.py"

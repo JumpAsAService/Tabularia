@@ -3,6 +3,7 @@ checks each step on a preview made with the user's rights, and hands the new
 canvas back for one Undo step. It never saves the flow. The model is a scripted
 FunctionModel; the engine is the FakeEngine of conftest."""
 import json
+from types import SimpleNamespace
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -446,7 +447,8 @@ def _sample(kind: dict, key: str):
 
 def test_every_model_of_the_catalogue_is_an_operation_with_a_line_of_reference_and_its_defaults_pass():
     catalogue = ai_flow_agent.MODEL_CATALOG
-    assert ai_flow_agent.MODELS and len(ai_flow_agent.MODEL_OPERATIONS) == len(catalogue["models"])
+    # the Bayesian model is a node of its own: every other model is an operation
+    assert ai_flow_agent.MODELS and len(ai_flow_agent.MODEL_OPERATIONS) == len(catalogue["models"]) - len(ai_flow_agent.EXCLUDED_MODELS)
     reference = ai_flow_agent.context(None, "en")
     assert f"- {ai_flow_agent.PREDICT_OPERATION} {{connectionId, experiment, registeredModel, version: number|latest" in reference
     for operation, model_id in ai_flow_agent.MODEL_OPERATIONS.items():
@@ -1316,3 +1318,69 @@ def test_the_assistant_bounds_a_map_of_shares_or_directions_as_the_catalogue_doe
         assert e.value.message == f"ab_test: {sentence}.", e.value.message
     kept = clean_params("model_ab_test", {**base, "expected_shares": {"B": 1, "é" * 255: 3}})
     assert list(kept["expected_shares"]) == ["B", "é" * 255]
+
+
+# ── the Bayesian model node: read and described, never added, changed or connected ──
+def _bayes_canvas(world, **data):
+    node = {"id": "bm-1", "type": "bayes_model", "position": {"x": 520, "y": 140},
+            "data": {"bayesModelId": 7, "bayesModelVersion": 3, "label": "Prices", "output": "summary",
+                     "bindings": {"y": "amount"}, "sampler": {"chains": 4, "seed": 11}, **data}}
+    return {"nodes": [
+        {"id": "source", "type": "source", "position": {"x": 60, "y": 140}, "data": {"datasourceId": world["orders"].id, "parquetKey": "datasets/1/o.parquet", "columns": COLUMNS}},
+        {"id": "op-1", "type": "operation", "position": {"x": 290, "y": 140}, "data": {"opType": "limit", "params": {"n": 5}}},
+        node,
+    ], "edges": [{"id": "e1", "source": "source", "target": "op-1", "targetHandle": "left"},
+                 {"id": "e2", "source": "op-1", "target": "bm-1", "targetHandle": "left"}]}
+
+
+def test_the_bayesian_model_is_no_operation_has_no_line_and_is_said_to_be_the_persons():
+    assert "model_bayes_model" not in ai_flow_agent.OPERATIONS and "bayes_model" not in ai_flow_agent.MODELS
+    assert ai_flow_agent.EXCLUDED_OPERATIONS == {"model_bayes_model"}
+    reference = ai_flow_agent.context(None, "en")
+    assert "model_bayes_model" not in ai_flow_agent.models_reference() and "(bayes)" not in reference
+    assert "You cannot add, change or connect it" in reference and "never say what its estimate is" in reference
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_bayes_model", {})
+    assert "Unknown operation 'model_bayes_model'" in str(e.value) and "adds «Bayesian model» from the palette" in str(e.value)
+    # every other model keeps its line
+    for operation in ai_flow_agent.MODEL_OPERATIONS:
+        assert f"- {operation} {{" in reference
+
+
+@pytest.mark.anyio
+async def test_a_flow_read_shows_the_bayesian_node_and_the_tools_refuse_to_touch_it(session, world, fake_engine, monkeypatch):
+    canvas = _bayes_canvas(world)
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("get_flow", {}),
+        ("change_step", {"node": "bm-1", "params": {"chains": 2}}),
+        ("connect", {"from_node": "bm-1", "to_node": "op-1"}),
+        ("connect", {"from_node": "op-1", "to_node": "bm-1"}),
+        ("add_step", {"after": "bm-1", "operation": "limit", "params": {"n": 1}}),
+        ("add_step", {"after": "op-1", "operation": "model_bayes_model", "params": {}}),
+        ("remove_node", {"node": "bm-1"}),
+        "Left alone.",
+    ], canvas=canvas)
+    results = [d for n, d in events if n == "tool_result"]
+    assert [r["ok"] for r in results] == [True, False, False, False, False, False, False]
+    # what get_flow hands the model, between the data markers
+    deps = SimpleNamespace(draft=FlowDraft(canvas), selected=None, data_tag="t0")
+    read = await ai_flow_agent.get_flow(SimpleNamespace(deps=deps))
+    nodes = {n["id"]: n for n in read["nodes"]}
+    assert nodes["bm-1"] == {"id": "bm-1", "type": "bayes_model", "label": "Prices", "model": 7, "version": 3, "output": "summary", "after": "op-1"}
+    # measured: the bayes node is no end of a chain (it is not a step node) and the step it reads is fed, so it is no end either
+    assert read["ends_of_chains"] == [] and read["data_end"] == "[end of data t0]"
+    assert all("Bayesian model" in r["error"] or "palette" in r["error"] for r in results[1:])
+    assert events[-1][1]["definition"] is None and events[-1][1]["touched"] == []
+
+
+@pytest.mark.anyio
+async def test_a_turn_beside_a_bayesian_node_hands_it_back_byte_for_byte(session, world, fake_engine, monkeypatch):
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": [{"country": "IT", "amount": 3.5}], "row_count": 1, "truncated": False})
+    canvas = _bayes_canvas(world)
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_step", {"after": "source", "operation": "limit", "params": {"n": 2}}),
+        "Added a limit.",
+    ], canvas=canvas)
+    handed = json.loads(events[-1][1]["definition"])
+    assert json.dumps(next(n for n in handed["nodes"] if n["id"] == "bm-1"), sort_keys=True) == json.dumps(canvas["nodes"][2], sort_keys=True)
+    assert [e for e in handed["edges"] if e["id"] in ("e1", "e2")] == canvas["edges"]

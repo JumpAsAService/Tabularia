@@ -1,7 +1,8 @@
 # The distributions of the Bayesian editor are declared once, in Go
 # (gateway-go/internal/bayescatalog/declare.go). What the other components read is its snapshot
 # (gateway-go/internal/bayescatalog/catalog.json, embedded by the gateway), of which each keeps
-# a copy: the interface (frontend/assets/bayes-catalog.json). This fails when a copy differs
+# a copy: the interface (frontend/assets/bayes-catalog.json) and the AI service
+# (gateway/app/services/bayes_catalog.json). This fails when a copy differs
 # from the snapshot by a byte, and when a distribution is not named in
 # docs/capabilities/bayesian-models.md (once that page exists). That the snapshot is what the
 # declarations say is checked by the gateway's suite (catalog_test.go).
@@ -19,6 +20,7 @@ on:
     paths:
       - "gateway-go/internal/bayescatalog/catalog.json"
       - "frontend/assets/bayes-catalog.json"
+      - "gateway/app/services/bayes_catalog.json"
       - "gateway-go/internal/bayestemplates/templates.json"
       - "frontend/assets/bayes-templates.json"
       - "docs/capabilities/bayesian-models.md"
@@ -31,6 +33,7 @@ on:
     paths:
       - "gateway-go/internal/bayescatalog/catalog.json"
       - "frontend/assets/bayes-catalog.json"
+      - "gateway/app/services/bayes_catalog.json"
       - "gateway-go/internal/bayestemplates/templates.json"
       - "frontend/assets/bayes-templates.json"
       - "docs/capabilities/bayesian-models.md"
