@@ -220,7 +220,7 @@ chains and draws the node allows, read by blocks of columns like the draws' seco
 
 `<y>` is the outcome's Stan identifier (the key's parts joined by `|`, as the engine's check wants them: the contract,
 correction of 2026-11-24). **The arithmetic**, per outcome: 7 statistics ×
-31 + 8 units × 31 + 21 series × 42 points = **1,347** rows, three outcomes **4,041**, under `bayes_max_check_rows`
+31 + 8 units × 31 + 21 series × 42 points + 1 row `n` = **1,348** rows (*correction of 2026-11-24 from Q4*: the `n` row), three outcomes **4,044**, under `bayes_max_check_rows`
 (5,000); columns per outcome at most 7 + 42 + 9 + 1 = 59, three outcomes 177, under `max_check_columns` (200).
 
 **`bayes.checks`** in `task.json` (the contract's place): `{"format": 1, "on": true, "outcomes": 3, "value_bins": 40,
@@ -261,8 +261,8 @@ The numbers go to «As built»; point 2 decides between the owner's (b) and the 
 ## Words (for `bayes-report`)
 
 Every chart says what it shows and never whether the model «passes» (the map): «The grey lines are 20 data sets the
-model draws from the posterior; the black line is the data. Where the black line runs outside the grey ones, the model
-does not reproduce that feature of the data.» No p-value, no probability, no share is written beside a histogram of
+model draws from the posterior; the black line is the data. Where the black line runs outside the grey ones, the drawn
+data sets do not show that feature of the data.» (*Correction of 2026-11-24 from lot Q3/Q4*: the first wording judged the model.) No p-value, no probability, no share is written beside a histogram of
 T(y_rep); the outer bins say «below / above the observed range» and how many replicated values fell there **in the
 drawn sets**, a count of the chart, never a share of the posterior. The literature: Gabry, Simpson, Vehtari, Betancourt,
 Gelman (2019) for the workflow and the prior predictive; the Stan User's Guide, «Posterior predictive checks»; and, for

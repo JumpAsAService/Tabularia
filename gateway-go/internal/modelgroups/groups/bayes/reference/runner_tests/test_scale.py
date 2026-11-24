@@ -175,6 +175,7 @@ class TestTheOriginalScale(unittest.TestCase):
         self.assertEqual((report.original, report.original_capped), (2, 1))
         self.assertEqual(sorted(self.original_rows(summary)), ["b_x1", "b_x2"])
         self.assertIn("model|||note_original_capped", rows["key"])
+        self.assertEqual(rows["text"][rows["key"].index("model|||note_original_capped")], "@bayes_original_capped original=2 capped=1")
 
     def test_only_the_scope_has_results_rows_and_a_pair_that_is_not_in_the_manifest_is_a_fault(self):
         _, rows, _ = run(self.dir, self.layout, limits={"bayes_max_summary_quantities": 1}, scale=self.scale())

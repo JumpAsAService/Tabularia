@@ -810,4 +810,4 @@ def test_the_bayesian_model_node_and_its_two_variants():
     # the sections the runner writes are shaped, and the A/B test's `bayes` section is another thing
     for section in ("summary", "quantity", "data", "sampler", "ppc", "prior_check"):
         assert section in catalog.SECTION_SHAPES, section
-    assert catalog.SECTION_SHAPES["ppc"] == {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]}
+    assert catalog.SECTION_SHAPES["ppc"] == {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed", "n"]}

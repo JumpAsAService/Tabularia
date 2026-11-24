@@ -1432,7 +1432,8 @@
       "level_2": "optional",
       "indexed": true,
       "unindexed": [
-        "observed"
+        "observed",
+        "n"
       ]
     },
     "prior_check": {
@@ -1440,7 +1441,8 @@
       "level_2": "optional",
       "indexed": true,
       "unindexed": [
-        "observed"
+        "observed",
+        "n"
       ]
     }
   },
@@ -11231,7 +11233,8 @@
               "levels": null,
               "numbers": [
                 "observed",
-                "count"
+                "count",
+                "n"
               ],
               "texts": []
             },
@@ -11410,7 +11413,8 @@
               "levels": null,
               "numbers": [
                 "observed",
-                "count"
+                "count",
+                "n"
               ],
               "texts": []
             },

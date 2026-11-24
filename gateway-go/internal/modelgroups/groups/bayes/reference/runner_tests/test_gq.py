@@ -325,7 +325,7 @@ class TestTheChecksRun(GqCase):
         code, runs, header = self.run_job(raw, gq_extra={"checks": {"nan_rows": [[2, 5]]}})
         self.assertEqual(code, 0)
         cols, rows = self.rows()
-        self.assertIn("1 of the 40 draws", rows["model|||note_checks_dropped"][1])
+        self.assertEqual(rows["model|||note_checks_dropped"][1], "@bayes_checks_dropped dropped=1 draws=40 valid=39")
 
     def test_a_program_whose_header_differs_is_a_fault_not_a_refusal(self):
         raw = checks_task()
@@ -421,7 +421,7 @@ class TestTheReplicatedRun(GqCase):
         self.assertEqual(len(t["value"]), (4 * 5 - 1) * n)
         self.assertNotIn(3, [d for c, d in zip(t["chain"], t["draw"]) if c == 1])
         cols, rows = self.rows()
-        self.assertIn("1 of the 20 replicated draws", rows["model|||note_replicated_dropped"][1])
+        self.assertEqual(rows["model|||note_replicated_dropped"][1], "@bayes_replicated_dropped dropped=1 total=20")
         self.tearDown()
         self.setUp()
         every = [[c, r] for c in range(1, 5) for r in range(1, 6)]

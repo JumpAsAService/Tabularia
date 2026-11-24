@@ -52,7 +52,7 @@ import bayes_diag
 import bayes_scale
 from bayes_card import summary_kind
 from bayes_draws import read_metadata
-from bayes_task import DEFAULT_LIMITS, Entry, Layout, ManifestMismatch, report_order
+from bayes_task import DEFAULT_LIMITS, Entry, Layout, ManifestMismatch, note_line, report_order
 from tab_protocol import Refusal
 
 NO_FINITE_VARIANCE = "no_finite_variance"
@@ -376,8 +376,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     if not diagnostics:
         report.total_draws, report.not_finite_draws = s, int(not_finite.sum())
         if report.not_finite_draws:
-            writer.note("prior_dropped", f"{report.not_finite_draws} of the {s} prior draws have a quantity that is not a finite number (an "
-                                         "ancestral draw that threw, or one with no mass): each is left out of the summary of that quantity.")
+            writer.note("prior_dropped", note_line("prior_dropped", dropped=report.not_finite_draws, total=s))
     _finish(writer, report, layout, limits, seed, scope, numbers, diagnostics, pair_draws, scalar_scope, pair_index, divergent,
             unit_store, extremes)
     report.seconds = time.monotonic() - t_start
@@ -418,7 +417,7 @@ def _finish(writer: Any, report: PassReport, layout: Layout, limits: Mapping[str
     all_scopes = len(scope)
     program = report.quantities
     if all_scopes < program:
-        writer.note("summary_capped", f"The report lists {all_scopes} of {program} quantities; the node's summary output has them all.")
+        writer.note("summary_capped", note_line("summary_capped", listed=all_scopes, total=program))
     flags = divergent[pair_index] if divergent is not None else np.zeros(pair_index.shape[0], dtype=bool)
     for x, a in enumerate(scalar_scope):
         for b in scalar_scope[x + 1:]:
@@ -438,16 +437,14 @@ def _finish(writer: Any, report: PassReport, layout: Layout, limits: Mapping[str
                 writer.number("quantity", stat, v if math.isfinite(v) else None, level=e.stan)
     nulls = {k: v for k, v in report.contraction.items() if k != "computed"}
     if nulls:
-        said = {NO_FINITE_VARIANCE: "the prior has no finite variance", NO_PRIOR_DRAWS: "the run has no draws of the prior",
-                NOT_DECIDED: "the model's version does not say whether the prior has a finite variance"}
-        writer.note("contraction_null", "The contraction is empty for " + "; ".join(
-            f"{n} quantities ({said.get(k, k)})" for k, n in sorted(nulls.items())) + ".")
+        writer.note("contraction_null", note_line("contraction_null", no_finite_variance=nulls.get(NO_FINITE_VARIANCE, 0),
+                                                  no_prior_draws=nulls.get(NO_PRIOR_DRAWS, 0), not_decided=nulls.get(NOT_DECIDED, 0)))
     if report.original_capped:
-        writer.note("original_capped", f"The original scale is given for {report.original} coefficients: {report.original_capped} more are "
-                                       "left without it (the node's limit on the quantities listed).")
+        writer.note("original_capped", note_line("original_capped", original=report.original, capped=report.original_capped))
     if report.density_cut:
-        parts = [f"{name} ({a} posterior and {b} prior draws)" for name, (a, b) in report.density_cut.items()]
-        writer.note("density_cut", "The density charts cut the draws outside their range: " + "; ".join(parts) + ".")
+        cut = list(report.density_cut.items())
+        writer.note("density_cut", note_line("density_cut", names=[n for n, _ in cut], posterior=[a for _, (a, _) in cut],
+                                             prior=[b for _, (_, b) in cut]))
 
 
 # ── the sampler's facts ───────────────────────────────────────────────────────

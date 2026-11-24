@@ -29,7 +29,7 @@ import tab_results
 from tab_card import versions
 from tab_protocol import is_uri, _fs
 from bayes_data import Facts
-from bayes_task import Entry, Layout, Task, report_order
+from bayes_task import Entry, Layout, Task, note_line, report_order
 
 REQUIRED_KEYS = ("model|||model", "model|||variant", "model|||n")
 FLUSH_ROWS = 4096
@@ -234,6 +234,5 @@ def quantity_section(w: ResultsWriter, task: Task, layout: Layout) -> list[Entry
         w.text("quantity", "plate_label", e.plate_label, level=e.stan)
         w.number("quantity", "n_quantities", e.count, level=e.stan)
     if len(entries) > len(shown):
-        w.note("quantities_capped", f"The report lists {len(shown)} of {len(entries)} quantities' entries; the node's summary output has "
-                                    "them all.")
+        w.note("quantities_capped", note_line("quantities_capped", listed=len(shown), total=len(entries)))
     return shown

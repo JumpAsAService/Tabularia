@@ -1,8 +1,7 @@
-"""The report of the node «Bayesian model» (docs/specs/bayes-report.md, lots Q1, Q2 and Q3: the pages that need no reading, the groups, the
-diagnostics and the charts, the predictive checks),
+"""The report of the node «Bayesian model» (docs/specs/bayes-report.md, lots Q1 to Q4: the pages that need no reading, the groups, the
+diagnostics and the charts, the predictive checks, «How this report was computed», the notes of the runner and the literature),
 drawn from the two fixtures (`bayes_model-sample.json`, `bayes_model-prior_predictive.json`, made by the runner's writers on fake draws:
-gateway-go/internal/modelgroups/groups/bayes/reference/make_report_fixtures.py), in the five languages and the three formats.
-The readings are the next lot's tests."""
+gateway-go/internal/modelgroups/groups/bayes/reference/make_report_fixtures.py), in the five languages and the three formats."""
 from __future__ import annotations
 
 import json
@@ -19,6 +18,7 @@ from tests.test_models_layouts import draw, fixture, strings
 from tests.test_reports_render import chart_service  # noqa: F401 — the fake chart service
 
 SAMPLE, PRIOR = "bayes_model-sample", "bayes_model-prior_predictive"
+QUOTATION = re.compile(r"“[^”]*”")  # what the literature says, quoted as its source writes it
 
 
 def said(tmp_path, chart_service, monkeypatch, case, locale="en"):  # noqa: F811
@@ -59,7 +59,7 @@ def test_the_coefficient_of_a_linear_predictor_is_also_given_on_the_column_s_sca
     note = common.words("bayes_model", "sample", "en")["original_note"]  # (the tables' titles are the workbook's sheets, not the page's text)
     assert note in texts
     _, _, rows = fixture(SAMPLE)
-    assert {r["level"] for r in rows if r["stat"] == "orig_mean"} == {"b_hours"}
+    assert {r["level"] for r in rows if r["stat"] == "orig_mean"} == {"b_hours", "alpha_school"}  # the runner's own: the coefficient and the intercepts
     # the standardization is the data's: the mean and the sd of the predictor, said once in the table of the bound variables
     assert {"hours_studied", "exam_score", "school_name", "track"} <= texts and "Scientific" in texts and "6.21" in texts and "2.4" in texts
     # without the rows there is no such table
@@ -87,18 +87,22 @@ def test_no_word_of_judgement_in_any_language_and_the_words_are_the_pages(tmp_pa
     words of the spec: «converged», «reliable», «acceptable»…, in the five languages by lot Q4)."""
     texts = said(tmp_path, chart_service, monkeypatch, case, locale)
     w = common.words("bayes_model", case.split("-")[1], locale)
-    # the spec's own list of verdict words (docs/specs/bayes-report.md, «The words»), in English here: the other languages' by lot Q4
-    own = ["converged", "not converged", "good", "bad", "reliable", "unreliable", "passes", "fails", "acceptable", "problem"] if locale == "en" else []
+    # the spec's own list of verdict words (docs/specs/bayes-report.md, «The words») is in the model's `verdict_words`, over the common list
+    assert {"converged", "reliable", "acceptable", "problem"} <= set(common.words("bayes_model", "sample", "en")["verdict_words"])
+    own: list[str] = []
     # what the runner and the person wrote (a label, a unit, a column, a note) is data: the layout's own words are what is checked
     # (the precision of the draws, «8 significant digits», is the runner's phrase said in the page's language: a count of digits, not a
     # statistical «significant»: the words of `values` are left out of the scan)
-    own_words = {k: v for k, v in common._file("bayes_model")[locale].items() if k != "values"}
+    own_words = {k: v for k, v in common._file("bayes_model")[locale].items() if k not in ("values", "verdict_words", "measure_readings")}
     ours = {t for t in strings(own_words) if not t.startswith("{")}
     checked = [t for t in ours if t in texts or any(t in s for s in texts)]
     assert checked, "none of the layout's words reached the page"
     for text in checked:
+        # a quotation of the literature is its authors' words, in English in every language (docs/specs/bayes-report.md, «The words»): the
+        # sentences around it are the layout's
+        mine = QUOTATION.sub("", text)
         for verdict in [*w["verdict_words"], *own]:
-            assert not re.search(r"(?<!\w)" + re.escape(verdict) + r"(?!\w)", text, re.I), (locale, verdict, text)
+            assert not re.search(r"(?<!\w)" + re.escape(verdict) + r"(?!\w)", mine, re.I), (locale, verdict, text)
 
 
 def test_a_label_a_unit_and_a_column_that_look_like_a_formula_or_markup_stay_text_in_the_pdf_and_in_excel(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -259,7 +263,7 @@ def _outside(rows, curve):
     """The count the page says, from the rows by the arithmetic of the runner: the outer slots' densities times the rows and the bin's width."""
     pts = [r for r in rows if r["section"] == "curve" and r["level"] == f"{curve}:score" and r["level_2"] == "observed"]
     width = pts[2]["x0"] - pts[1]["x0"]
-    n = next(r["value"] for r in rows if r["key"] == "model|||n")
+    n = next(r["value"] for r in rows if r["key"] == f"{'ppc' if curve == 'ppc_density' else 'prior_check'}|score||n")  # the outcome's own rows
     draws = sorted({r["level_2"] for r in rows if r["section"] == "curve" and r["level"] == f"{curve}:score" and r["level_2"].startswith("draw_")})
     low = sum(r["value"] for r in rows if r["level"] == f"{curve}:score" and r["level_2"] in draws and r["x0"] == pts[0]["x0"])
     high = sum(r["value"] for r in rows if r["level"] == f"{curve}:score" and r["level_2"] in draws and r["x0"] == pts[-1]["x0"])
@@ -325,7 +329,8 @@ def test_the_slots_of_the_checks_give_an_outcome_its_place_its_statistics_and_it
     _, _, rows = fixture(SAMPLE)
     out = common.SLOTS["bayes_model"](rows)
     levels = {r["level"] for r in out if r["section"] == "ppc"}
-    assert levels == {"o1:mean", "o1:sd", "o1:min", "o1:max", "o1:q10", "o1:q50", "o1:q90"} | {f"o1:u{j}" for j in range(1, 7)}
+    assert levels == {"o1", "o1:mean", "o1:sd", "o1:min", "o1:max", "o1:q10", "o1:q50", "o1:q90"} | {f"o1:u{j}" for j in range(1, 7)}
+    assert "ppc|o1||n" in {r["key"] for r in out}  # the outcome's own row count follows its place
     assert {r["level"] for r in out if r["section"] == "curve" and "density" in r["level"] and "ppc" in r["level"]} == {"ppc_density:o1"}
     slot = {r["key"]: r for r in out if r["section"] == "slot"}
     assert slot["slot|o1||label"]["text"] == "exam_score" and slot["slot|o1:u1||label"]["text"] == "Liceo Galilei"
@@ -354,7 +359,7 @@ def test_a_version_without_checks_has_no_predictive_page_and_the_note_of_left_ou
     assert w["sections"]["checks"] not in got and w["predictive"]["note"]["sample"] not in got
     # the prior predictive's checks file had draws the program threw: the runner's note is in the notes, the counts are the runner's
     prior = said(tmp_path / "p", chart_service, monkeypatch, PRIOR)
-    assert any(t.startswith("3 of the 1000 draws of the prior predictive checks were left out") for t in prior)
+    assert any(t.startswith("3 of the 1,000 draws of the predictive checks were left out: CmdStan wrote") and t.endswith("use the other 997.") for t in prior)
 
 
 def test_the_checks_come_after_the_pairs_and_before_how_the_report_was_computed():
@@ -366,3 +371,161 @@ def test_the_checks_come_after_the_pairs_and_before_how_the_report_was_computed(
         places = [it for it in body if re.match(r"(ppc|prior_check)_\d_|check_(label|unit_label|outside)_|(ppc|prior)_density_", it["id"])]
         assert places and all(it.get("collapse_hidden") for it in places)
         assert max(it["y"] + it["h"] for it in body) < 2000
+
+
+# ── lot Q4: «How this report was computed», the literature, the notes of the runner ──────────────────────────────────────────────
+def _quotes(text: str) -> list[str]:
+    return QUOTATION.findall(text)
+
+
+def test_every_quotation_of_the_literature_is_the_same_bytes_in_the_five_languages_and_in_english():
+    words = {lang: common._file("bayes_model")[lang]["reading_texts"] for lang in LOCALES}
+    for key, english in words["en"].items():
+        quotes = _quotes(english)
+        for lang in LOCALES:
+            assert _quotes(words[lang][key]) == quotes, (lang, key)
+        # a quotation is English, with its author's source said around it in the page's language
+        assert all(not re.search(r"[àèéìòùäöüß]", q) for q in quotes), key
+    cited = [k for k, v in words["en"].items() if _quotes(v)]
+    assert {"method_nuts", "method_rhat_ess", "method_divergences", "method_treedepth", "method_ebfmi", "method_contraction",
+            "method_checks", "method_prior_checks"} == set(cited)
+
+
+def test_the_literature_s_values_are_only_in_the_methods_quotations_and_never_beside_a_number_of_the_run():
+    value = re.compile(r"(?<![\d.,])(1\.01|400|0\.3)(?![\d])")
+    for lang in LOCALES:
+        words = common._file("bayes_model")[lang]
+        for path, text in _walk(words):
+            if path.startswith("reading_texts.method_"):
+                continue
+            assert not value.search(text), (lang, path, text)
+        # in the method, a cited value is inside a quotation: outside it no sentence compares anything
+        for key, text in words["reading_texts"].items():
+            assert not value.search(QUOTATION.sub("", text)), (lang, key)
+            assert not re.search(r"[<>]", QUOTATION.sub("", text)), (lang, key)
+
+
+def _walk(node, path=""):
+    if isinstance(node, str):
+        yield path, node
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            yield from _walk(v, f"{path}.{k}" if path else k)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            yield from _walk(v, f"{path}.{i}")
+
+
+@pytest.mark.parametrize("case", [SAMPLE, PRIOR])
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_method_is_said_in_the_page_s_language_with_the_runs_numbers_and_the_quotations_in_english(case, locale):
+    model, params, rows = fixture(case)
+    said = [r for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "reading"]
+    method = {r["text"] for r in said if r["level"] == "method"}
+    assert said and method
+    for r in said:
+        assert not re.search(r"@|\{|%2", r["text"]), r["text"]
+        assert r["label"] not in ("", r["stat"])
+    joined = " ".join(method)
+    # the run's own numbers and names, and the program's hashes as the rows hold them
+    assert "20261123" in joined and "1f32881e15ac9cf9aa1a3f6ea635a7ccbc03bb678874e7ee220478cd7d1bb6a0" in joined
+    assert "CmdStan 2.40.0; stanc3 v2.40.0" in joined and "17" in joined
+    english = common._file("bayes_model")["en"]["reading_texts"]
+    if case == SAMPLE:
+        assert {r["level"] for r in said} == {"method", "formulas"}
+        for key in ("method_nuts", "method_rhat_ess", "method_divergences", "method_treedepth", "method_ebfmi", "method_contraction", "method_checks"):
+            for q in _quotes(english[key]):
+                assert q in joined, key
+        assert not [q for q in _quotes(english["method_prior_checks"]) if q in joined]
+    else:
+        assert {r["level"] for r in said} == {"method"}
+        for q in _quotes(english["method_prior_checks"]):
+            assert q in joined
+        assert not [r for r in said if "R-hat" in r["text"] and "[R-hat]" in r["text"]]
+
+
+def test_the_method_s_paragraphs_follow_the_rows_and_the_formulas_the_scale():
+    model, params, rows = fixture(SAMPLE)
+    raw = common.READINGS["bayes_model"](rows, catalog.check_params(model, dict(params)))
+    got = [(b, i) for b, _, i, _ in raw]
+    assert [i for b, i in got if b == "method"] == ["method_nuts", "method_precision", "method_standardized", "method_original", "method_rhat_ess",
+                                                    "method_divergences", "method_treedepth", "method_ebfmi", "method_contraction", "method_checks",
+                                                    "method_program"]
+    assert [i for b, i in got if b == "formulas"] == ["formula_rhat", "formula_ess", "formula_mcse", "formula_ebfmi", "formula_contraction",
+                                                      "formula_original"]
+    # no scale rows, no checks, no contraction: their paragraphs go
+    bare = [r for r in rows if not r["stat"].startswith("orig_") and r["section"] != "ppc" and r["stat"] != "contraction"]
+    raw = [i for _, _, i, _ in common.READINGS["bayes_model"](bare, catalog.check_params(model, dict(params)))]
+    assert not {"method_original", "method_checks", "method_contraction", "formula_original", "formula_contraction"} & set(raw)
+    pm, pp, prows = fixture(PRIOR)
+    raw = [(b, i) for b, _, i, _ in common.READINGS["bayes_model"](prows, catalog.check_params(pm, dict(pp)))]
+    assert raw == [("method", "method_prior"), ("method", "method_precision"), ("method", "method_standardized"), ("method", "method_prior_checks"),
+                   ("method", "method_program")]
+
+
+NOTES = {
+    "summary_capped": dict(listed=2000, total=6120), "quantities_capped": dict(listed=600, total=900),
+    "contraction_null": dict(no_finite_variance=2, no_prior_draws=1, not_decided=0), "original_capped": dict(original=3, capped=2),
+    "density_cut": dict(names=["a b", "tau[Liceo, 1]"], posterior=[0, 12], prior=[3, 0]), "no_checks": {},
+    "checks_dropped": dict(dropped=3, draws=1000, valid=997), "prior_undrawn_one": dict(n=1, names=["rho"]),
+    "prior_undrawn": dict(n=3, names=["a", "b", "c"]), "prior_undrawn_more": dict(n=9, names=list("abcde")),
+    "prior_dropped": dict(dropped=2, total=1000), "replicated_dropped": dict(dropped=1, total=4000),
+}
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_every_note_of_the_runner_is_a_sentence_of_the_page_s_language_with_its_numbers(locale):
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    runner = Path(__file__).resolve().parents[2] / "gateway-go/internal/modelgroups/groups/bayes/runner/py/bayes_task.py"
+    if not runner.exists():  # (the engine's image holds only the backend)
+        pytest.skip("the runner's files are not in this tree")
+    sys.path[:0] = [str(runner.parents[4] / "common" / "py")]  # (the runner's own imports)
+    spec = importlib.util.spec_from_file_location("bayes_task_q4", runner)
+    try:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["bayes_task_q4"] = module
+        spec.loader.exec_module(module)
+    except ImportError:
+        pytest.skip("numpy is the runner's")
+    note_line = module.note_line
+    model, params, rows = fixture(SAMPLE)
+    base = [r for r in rows if not r["stat"].startswith("note_")]
+    texts = {k: note_line(k, **v) for k, v in NOTES.items()}
+    made = [{"section": "model", "level": None, "level_2": None, "stat": f"note_{k}", "value": None, "text": t, "x0": None, "x1": None,
+             "ord": 99000 + i, "key": f"model|||note_{k}"} for i, (k, t) in enumerate(texts.items())]
+    said = {r["stat"]: r["text"] for r in layouts.with_labels(model, params, base + made, locale) if r["stat"].startswith("note_")}
+    assert set(said) == {f"note_{k}" for k in NOTES}
+    for stat, text in said.items():
+        assert not re.search(r"@|\{|%2", text), (stat, text)
+        mine = QUOTATION.sub("", text)
+        for verdict in common.words("bayes_model", "sample", locale)["verdict_words"]:
+            assert not re.search(r"(?<!\w)" + re.escape(verdict) + r"(?!\w)", mine, re.I), (locale, verdict, text)
+    d = said["note_density_cut"]
+    assert "a b, tau[Liceo, 1]" in d and "0 / 12" in d and "3 / 0" in d
+    assert "2,000" in said["note_summary_capped"].replace(".", ",").replace(" ", ",").replace("\xa0", ",") or "2000" in said["note_summary_capped"] or "2" in said["note_summary_capped"]
+    assert "rho" in said["note_prior_undrawn_one"] and "a, b, c" in said["note_prior_undrawn"]
+
+
+def test_a_note_in_the_old_form_is_still_shown_as_the_runner_wrote_it():
+    model, params, rows = fixture(SAMPLE)
+    old = {"section": "model", "level": None, "level_2": None, "stat": "note_prior_dropped", "value": None,
+           "text": "2 of the 480 prior draws have a quantity that is not a finite number.", "x0": None, "x1": None, "ord": 99999,
+           "key": "model|||note_prior_dropped"}
+    said = [r["text"] for r in layouts.with_labels(model, params, [*rows, old], "it") if r["stat"] == "note_prior_dropped"]
+    assert said == [old["text"]]
+
+
+def test_the_scale_tables_hold_the_scalars_on_the_pages_and_every_row_with_its_unit_in_excel(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    xlsx, _ = draw(tmp_path, chart_service, monkeypatch, SAMPLE, fmt="xlsx")
+    with zipfile.ZipFile(xlsx.path) as z:
+        book = z.read("xl/workbook.xml").decode()
+    sheets = re.findall(r'<sheet name="([^"]+)"', book)
+    t = common.words("bayes_model", "sample", "en")["tables"]
+    assert t["original"] in sheets
+    body = layouts.definition("bayes_model", {}, "en", None, None)["sections"]["body"]["items"]
+    by_id = {it["id"]: it for it in body}
+    assert by_id["original"]["only"] == "pages" and by_id["original_sheet"]["only"] == "sheet"
+    assert any(c["header"] == t["unit"] for c in by_id["original_sheet"]["columns"])

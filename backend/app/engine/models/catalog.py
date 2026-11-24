@@ -393,8 +393,8 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     "quantity": {"level": "required", "level_2": "null", "indexed": False},
     "data": {"level": "required", "level_2": "null", "indexed": False},
     "sampler": {"level": "required", "level_2": "null", "indexed": False},
-    "ppc": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]},
-    "prior_check": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed"]},
+    "ppc": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed", "n"]},
+    "prior_check": {"level": "required", "level_2": "optional", "indexed": True, "unindexed": ["observed", "n"]},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -1705,7 +1705,7 @@ _BAYES_DATA = {"levels": None, "numbers": ["mean", "sd", "n_units", "n_levels", 
                "texts": ["column", "type", "reference", "standardized"]}
 _BAYES_SAMPLER = {"levels": None, "numbers": ["divergences", "treedepth_hits", "treedepth_max", "e_bfmi", "stepsize", "accept_stat_mean",
                                               "n_leapfrog_mean", "seconds_warmup", "seconds_sampling", "draws"], "texts": []}
-_BAYES_CHECK = {"levels": None, "numbers": ["observed", "count"], "texts": []}
+_BAYES_CHECK = {"levels": None, "numbers": ["observed", "count", "n"], "texts": []}
 _BAYES_CHART = {"levels": None, "numbers": ["y", "value", "count"], "texts": []}
 _BAYES_READING = {"levels": None, "numbers": [], "texts": ["line_*"]}
 _BAYES_SUMMARY_COLUMNS = ["quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", "mean", "sd", "q5", "q25", "q50",

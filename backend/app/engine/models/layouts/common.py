@@ -137,10 +137,11 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     w = words(model, catalog.variant(model, checked), locale)
     loc = formats.locale(code(locale))
     chosen = READINGS.get(model)
-    if chosen is not None:  # the explanation a layout chooses from the rows the runner wrote (docs/specs/report-explanations.md)
-        rows = [*rows, *reading_rows(chosen(rows, checked), rows)]
-    if model in SLOTS:  # the charts whose ids are data, by their slot
+    lines = chosen(rows, checked) if chosen is not None else None  # the explanation a layout chooses from the rows the runner wrote (docs/specs/report-explanations.md)
+    if model in SLOTS:  # the charts whose ids are data, by their slot (after the choice: a reading sees the ids as the runner wrote them)
         rows = SLOTS[model](rows)
+    if lines is not None:
+        rows = [*rows, *reading_rows(lines, rows)]
     model_numbers = {r["stat"]: r["value"] for r in rows if r["section"] == "model" and isinstance(r.get("value"), (int, float))}
     verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
                 if r["section"] == "assumption" and r["stat"] == "verdict"}
@@ -189,11 +190,11 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
 NUMBER_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 # The values of a note that are names (of a column, a stratum, a distribution, a purchase model, a unit, a variant of
 # an experiment, a time column or a position of a season, a series of a forecast and the size of its model, a volatility model
-# and one of its parameters), never numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables.
+# and one of its parameters, the hashes and the software of a Bayesian model), never numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables.
 # Not «value»: the A/B's cap note sends a number by that name; not «level»: ARIMA's readings send a band's level as a number
 NOTE_NAMES = frozenset({"stratum", "pairs", "cluster", "weights", "names", "distribution", "other", "models", "unit",
                         "variant", "variants", "control", "metric", "covariate", "treatments", "time", "position", "peak", "trough",
-                        "series", "size", "model", "parameter"})
+                        "series", "size", "model", "parameter", "program", "binary", "software"})
 # The forms a template may ask a number in, «{x:pct}» (docs/specs/ab-testing.md, «Explaining the method in the report»):
 # only the sentences that ask for one change, so every other report says its numbers as before
 NUMBER_FORMS = ("pct", "spct", "int", "p", "num", "date")

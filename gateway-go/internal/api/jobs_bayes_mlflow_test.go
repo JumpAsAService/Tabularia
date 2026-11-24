@@ -237,7 +237,7 @@ func TestTheSummaryTableHoldsEachQuantityAndItsUnits(t *testing.T) {
 			t.Errorf("a row without a mean or R-hat: %v", r)
 		}
 	}
-	if len(units) != 6 || withOriginal != 1 {
+	if len(units) != 6 || withOriginal != 7 {
 		t.Errorf("%d units, %d rows on the original scale", len(units), withOriginal)
 	}
 	// a prior predictive summary has no diagnostics and no original scale: empty cells, and the columns it has no use for are gone

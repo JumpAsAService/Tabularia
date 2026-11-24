@@ -126,8 +126,7 @@ class TestThePriorPredictiveJob(PriorCase):
         self.assertIn("a_g", names)
         self.assertEqual(rows["model|||n_quantities"][0], rows["model|||n_in_summary"][0])
         text = rows["model|||note_prior_undrawn"][1]
-        self.assertIn("1 quantity has no ancestral draw", text)
-        self.assertIn("rho_g", text)
+        self.assertEqual(text, "@bayes_prior_undrawn_one n=1 names=rho_g")
         # the others are the prior draws of the group plate: a_g[s1]…
         self.assertIn("summary|a_g|s1|mean", cols["key"])
 
@@ -140,7 +139,7 @@ class TestThePriorPredictiveJob(PriorCase):
         code, _ = self.prior_job(raw, columns, spec=spec)
         self.assertEqual(code, 0)
         cols, rows = self.results()
-        self.assertIn("2 of the 160 prior draws", rows["model|||note_prior_dropped"][1])
+        self.assertEqual(rows["model|||note_prior_dropped"][1], "@bayes_prior_dropped dropped=2 total=160")
         self.assertIsNotNone(rows["summary|alpha||mean"][0])
         self.assertIsNotNone(rows["summary|alpha||sd"][0])
 

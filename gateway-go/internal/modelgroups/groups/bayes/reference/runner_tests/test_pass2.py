@@ -94,7 +94,7 @@ class TestTheNumbers(Base):
         self.assertEqual(len(in_report), 6)
         self.assertIn("model|||note_summary_capped", rows["key"])
         text = rows["text"][rows["key"].index("model|||note_summary_capped")]
-        self.assertIn("6 of 14", text)
+        self.assertEqual(text, "@bayes_summary_capped listed=6 total=14")
 
     def test_the_prior_predictive_mode_writes_the_mean_the_sd_and_the_quantiles_only(self):
         report, rows, summary = self.run_pass(diagnostics=False)
@@ -133,7 +133,7 @@ class TestTheNumbers(Base):
         pool = np.concatenate([want.reshape(CHAINS, DRAWS)[[0, 2, 3]].reshape(-1), kept])
         self.assertAlmostEqual(by_key["summary|mu||mean"], pool.mean(), places=9)
         self.assertEqual(report.not_finite_draws, 2)
-        self.assertIn("2 of the 480 prior draws", rows["text"][rows["key"].index("model|||note_prior_dropped")])
+        self.assertEqual(rows["text"][rows["key"].index("model|||note_prior_dropped")], "@bayes_prior_dropped dropped=2 total=480")
 
 
 class TestTheContraction(Base):
@@ -162,8 +162,7 @@ class TestTheContraction(Base):
         self.assertEqual(by_key["summary|mu||contraction"], 1.0 - want["sd"][0] ** 2 / 25.0)
         self.assertEqual(report.contraction, {"computed": Q - 2, P2.NO_FINITE_VARIANCE: 1, P2.NO_PRIOR_DRAWS: 1})
         text = rows["text"][rows["key"].index("model|||note_contraction_null")]
-        self.assertIn("the prior has no finite variance", text)
-        self.assertIn("no draws of the prior", text)
+        self.assertEqual(text, "@bayes_contraction_null no_finite_variance=1 no_prior_draws=1 not_decided=0")
 
     def test_without_prior_variances_every_contraction_is_null_with_its_note(self):
         report, rows, summary = self.run_pass()
@@ -256,7 +255,9 @@ class TestTheCharts(Base):
         self.assertEqual(report.charts["density"].count("mu"), 1)
         self.assertEqual([r for r in rows if r["level"] == "density:tau" and r["level_2"] == "prior"], [])
         self.assertIn("mu", report.density_cut)
-        self.assertTrue([r for r in rows if r["key"] == "model|||note_density_cut"])
+        note = [r for r in rows if r["key"] == "model|||note_density_cut"]
+        self.assertTrue(note)
+        self.assertRegex(note[0]["text"], r"^@bayes_density_cut names=mu\S* posterior=\d+\S* prior=\d+")
 
     def test_the_pairs_hold_the_divergent_draws_in_their_own_series(self):
         report, rows = self.rows()

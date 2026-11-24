@@ -437,3 +437,25 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
 # parameters), then the correlations, then each plate's quantities node by node in the program's order
 def report_order(entries: list[Entry]) -> list[Entry]:
     return sorted(entries, key=lambda e: (0 if e.scalar else 1 if e.correlation else 2))
+
+
+def note_line(note_id: str, **values: Any) -> str:
+    """A note as the page says it in its language (lot Q4): «@bayes_<id> name=value …», the id of a sentence of the report's words and
+    the run's raw numbers and names (a space, a comma and a percent inside a name are %20, %2C and %25; a list is joined with «,»; a
+    number is the shortest text that reads back as the same double). The runner writes no sentence: a note of the old form, an English
+    sentence, is still shown as it is."""
+    parts = []
+    for name, value in values.items():
+        items = [x for x in (value if isinstance(value, (list, tuple)) else [value]) if x is not None]
+        if not items:
+            continue
+        said = []
+        for x in items:
+            if isinstance(x, bool) or not isinstance(x, (int, float)):
+                said.append(str(x).replace("%", "%25").replace(" ", "%20").replace(",", "%2C"))
+            elif float(x).is_integer() and abs(x) < 1e15:
+                said.append(str(int(x)))
+            else:
+                said.append(repr(float(x)))
+        parts.append(f"{name}={','.join(said)}")
+    return " ".join(["@bayes_" + note_id, *parts])

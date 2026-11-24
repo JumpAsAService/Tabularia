@@ -244,6 +244,13 @@ class TestLayout(unittest.TestCase):
         order = [e.stan for e in bayes_task.report_order(layout.entries)]
         self.assertEqual(order, ["mu_a", "mu_b", "sigma", "tau_a", "tau_b", "rho_g", "a_g", "b_g"])
 
+    def test_a_note_is_an_id_and_the_runs_raw_numbers_and_names(self):
+        self.assertEqual(bayes_task.note_line("no_checks"), "@bayes_no_checks")
+        self.assertEqual(bayes_task.note_line("summary_capped", listed=6, total=14.0), "@bayes_summary_capped listed=6 total=14")
+        said = bayes_task.note_line("density_cut", names=["a b", "50%,x", "c"], posterior=[0, 12], prior=[3, None], gone=None)
+        self.assertEqual(said, "@bayes_density_cut names=a%20b,50%25%2Cx,c posterior=0,12 prior=3")
+        self.assertEqual(bayes_task.note_line("x", share=0.25), "@bayes_x share=0.25")
+
 
 if __name__ == "__main__":
     unittest.main()

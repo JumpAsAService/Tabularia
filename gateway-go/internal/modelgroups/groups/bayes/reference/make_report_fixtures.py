@@ -14,8 +14,8 @@ slopes, four scalars (the mean and the spread of the intercepts, the effect of t
 predictor whose predictor was standardized. The draws are made here (a normal around a location for each quantity, a little apart from chain
 to chain, two divergent draws in the third chain), `bayes_pass2.second_pass` measures them and writes the summary, the quantity measures and the
 charts, and the sampler, quantity, model and data sections are written with the section writers' own sentences. The hashes, the seconds and
-the facts of the sampler are imaginary, and so are the original-scale numbers of the coefficient (the coefficient over the predictor's sd:
-the runner's lot for them is not built yet): consistent with each other, never a run's. Every row goes through the contract's declaration
+the facts of the sampler are imaginary: consistent with each other, never a run's. The original-scale numbers are the runner's own (`bayes_scale`:
+the coefficient over the predictor's sd, the schools' intercepts moved by the predictor's mean), on the fake draws. Every row goes through the contract's declaration
 (`bayescontract/testdata/contract.json`) and the catalogue's shapes, as the runner's writer checks them.
 
 The checks' rows (`ppc` in the sample's, `prior_check` in the prior predictive's, with the overlaid densities) are those of the second pass over a
@@ -41,6 +41,7 @@ import pyarrow.parquet as pq  # noqa: E402
 import bayes_draws  # noqa: E402
 import bayes_pass2  # noqa: E402
 import bayes_rows  # noqa: E402
+import bayes_scale  # noqa: E402
 import fake_checks  # noqa: E402
 from bayes_task import Element, Entry, Layout  # noqa: E402
 
@@ -52,6 +53,7 @@ CHAINS, DRAWS, WARMUP, SEED = 4, 250, 500, 20261123
 SCALARS = [("mu_a", "Mean of the intercepts", 6.1, 0.34, False, "parameter"), ("tau_a", "Spread of the intercepts", 0.92, 0.22, True, "parameter"),
            ("b_hours", "Effect of the hours studied", 0.42, 0.06, False, "parameter"), ("sigma", "Residual spread", 1.8, 0.08, True, "parameter")]
 UNIT_MEANS = [6.9, 5.4, 6.3, 5.8, 6.6, 5.1]
+HOURS = (6.21, 2.4)  # the standardized predictor's mean and sd
 # the charts' points, fewer than the catalogue's defaults (200, 200, 300) so that a fixture stays a few hundred kilobytes
 LIMITS = {"bayes_trace_points": 40, "bayes_density_points": 50, "bayes_pair_points": 40}
 
@@ -206,7 +208,7 @@ def model_rows(w: bayes_rows.ResultsWriter, variant: str, lay: Layout, report, s
 def data_rows(w: bayes_rows.ResultsWriter) -> None:
     """The bound variables: the outcome, a standardized predictor with its missing values, the schools, a category."""
     for stan, column, kind, std, extra in (("score", "exam_score", "real", None, {"n_missing": 0}),
-                                           ("hours", "hours_studied", "real", (6.21, 2.4), {"n_missing": 12}),
+                                           ("hours", "hours_studied", "real", HOURS, {"n_missing": 12}),
                                            ("school", "school_name", "group_index", None, {"n_units": len(SCHOOLS), "n_missing": 0}),
                                            ("track", "track", "category", None, {"n_levels": 3, "n_missing": 0, "reference": "Scientific"})):
         w.text("data", "column", column, level=stan)
@@ -232,14 +234,11 @@ def sampler_rows(w: bayes_rows.ResultsWriter, full: np.ndarray, lay: Layout) -> 
     bayes_pass2.sampler_section(w, facts, {c: (11.0 + c, 14.0 + c) for c in range(1, CHAINS + 1)})
 
 
-def original_scale(w: bayes_rows.ResultsWriter, full: np.ndarray, lay: Layout) -> None:
-    """The coefficient of a standardized predictor on the column's scale: the draws over the predictor's sd (2.4). Imaginary: the runner has no
-    such lot yet (the diagnostics spec's X4 has the pairs of the summary output, not these rows)."""
-    k = next(i for i, e in enumerate(lay.draws) if e.quantity == "b_hours")
-    x = full[k].reshape(-1) / 2.4
-    for stat, value in (("orig_mean", x.mean()), ("orig_sd", x.std(ddof=1)), ("orig_q5", np.quantile(x, 0.05)), ("orig_q50", np.quantile(x, 0.5)),
-                        ("orig_q95", np.quantile(x, 0.95))):
-        w.number("summary", stat, float(value), level="b_hours")
+def scale_plan(lay: Layout) -> bayes_scale.ScalePlan:
+    """The coefficient of the standardized predictor and the schools' intercepts on the column's scale, by the runner's own lot for them
+    (`bayes_scale`, the task's `scale_pairs`): the hours' mean and sd are the data section's."""
+    pairs = [{"coef": "b_hours", "data": "hours"}, {"intercept": "alpha_school", "lp": ["b_hours"], "data": ["hours"]}]
+    return bayes_scale.plan(pairs, lay, {"hours": {"mean": HOURS[0], "sd": HOURS[1]}}, bayes_pass2.limit({}, "bayes_max_quantity_entries"))
 
 
 def make(variant: str, tmp: Path) -> dict:
@@ -252,12 +251,12 @@ def make(variant: str, tmp: Path) -> dict:
                                                                 flush_rows=2000)
     entries = bayes_rows.quantity_section(w, Stub(), lay)
     report = bayes_pass2.second_pass(str(draws_path), lay, LIMITS, w, summary_path=str(tmp / f"{variant}-summary.parquet"), diagnostics=sampling,
-                                     prior=prior_of(lay, sampling), seed=SEED, quantity_entries=entries)
+                                     prior=prior_of(lay, sampling), seed=SEED, quantity_entries=entries,
+                                     scale=scale_plan(lay) if sampling else None)
     checks = checks_rows(w, variant, tmp)
     data_rows(w)
     if sampling:
         sampler_rows(w, full, lay)
-        original_scale(w, full, lay)
         seconds = {"data": 0.4, "warmup": 15.0, "sampling": 18.0, "conversion": 0.6, "pass_2": round(report.seconds, 3),
                    "checks": round(checks.seconds, 3)}
     else:
@@ -271,7 +270,7 @@ def make(variant: str, tmp: Path) -> dict:
     return {
         "model": "bayes_model", "variant": variant, "params": params,
         "fixture": ("a run of the template hier_slopes on imaginary draws, the runner's writers (reference/make_report_fixtures.py): "
-                    "the hashes, the seconds, the sampler's facts and the original-scale numbers are placeholders; the predictive checks' rows are those of the second pass on a fake checks file"),
+                    "the hashes, the seconds and the sampler's facts are placeholders; the predictive checks' rows are those of the second pass on a fake checks file"),
         "columns": COLUMNS,
         "rows": [[(None if r[c] is None else round(r[c], 12) + 0.0) if c in ("value", "x0", "x1") else r[c] for c in COLUMNS] for r in ordered],
     }

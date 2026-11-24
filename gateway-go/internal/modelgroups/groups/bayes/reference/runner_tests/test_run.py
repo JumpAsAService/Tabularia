@@ -213,7 +213,7 @@ class TestTheSampleMode(RunCase):
                                               "results/results.parquet"])
         cols = engine_check(self.out / "results" / "results.parquet")
         rows = dict(zip(cols["key"], zip(cols["value"], cols["text"])))
-        self.assertIn("predictive checks", rows["model|||note_no_checks"][1])
+        self.assertEqual(rows["model|||note_no_checks"][1], "@bayes_no_checks")
         for key in ("model|||n", "model|||seconds_warmup", "model|||seconds_sampling", "model|||seconds_conversion", "model|||seconds_pass_2",
                     "model|||n_in_summary", "sampler|all||divergences", "sampler|1||e_bfmi", "sampler|4||draws", "quantity|mu_a||rhat_max",
                     "data|x||mean", "curve|trace:mu_a|1|value|0", "hist|rank:mu_a|1|count|0", "curve|density:mu_a|posterior|value|0"):
@@ -266,7 +266,7 @@ class TestTheSampleMode(RunCase):
         self.assertIsNotNone(rows["summary|alpha||contraction"][0])
         self.assertIsNotNone(rows["summary|b_x||contraction"][0])
         self.assertIsNone(rows["summary|sigma||contraction"][0])
-        self.assertIn("no finite variance", rows["model|||note_contraction_null"][1])
+        self.assertRegex(rows["model|||note_contraction_null"][1], r"^@bayes_contraction_null no_finite_variance=[1-9]")
         self.assertIn("curve|density:alpha|prior|value|0", rows)           # the prior's density from prior.parquet
         summary = pq.read_table(self.out / "output" / "output.parquet").to_pydict()
         self.assertIsNotNone(summary["contraction"][summary["quantity"].index("alpha")])
@@ -276,7 +276,7 @@ class TestTheSampleMode(RunCase):
         cols = engine_check(self.out / "results" / "results.parquet")
         rows = dict(zip(cols["key"], zip(cols["value"], cols["text"])))
         self.assertIsNone(rows["summary|alpha||contraction"][0])
-        self.assertIn("does not say whether the prior has a finite variance", rows["model|||note_contraction_null"][1])
+        self.assertRegex(rows["model|||note_contraction_null"][1], r" not_decided=[1-9]")
 
     def test_the_output_results_writes_no_output_and_cmdstan_runs_with_path_alone(self):
         started = []

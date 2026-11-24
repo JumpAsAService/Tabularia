@@ -126,8 +126,8 @@ var Shapes = map[string]Shape{
 	"quantity":    {Level: "required", Level2: "null"},
 	"data":        {Level: "required", Level2: "null"},
 	"sampler":     {Level: "required", Level2: "null"},
-	"ppc":         {Level: "required", Level2: "optional", Indexed: true, Unindexed: []string{"observed"}},
-	"prior_check": {Level: "required", Level2: "optional", Indexed: true, Unindexed: []string{"observed"}},
+	"ppc":         {Level: "required", Level2: "optional", Indexed: true, Unindexed: []string{"observed", "n"}},
+	"prior_check": {Level: "required", Level2: "optional", Indexed: true, Unindexed: []string{"observed", "n"}},
 }
 
 // Section is what a variant writes in a section: its levels (nil: any, from the model and the data), its numbers, its texts.
@@ -151,7 +151,7 @@ var (
 		Texts: []string{"column", "type", "reference", "standardized"}}
 	samplerSection = Section{Numbers: []string{"divergences", "treedepth_hits", "treedepth_max", "e_bfmi", "stepsize",
 		"accept_stat_mean", "n_leapfrog_mean", "seconds_warmup", "seconds_sampling", "draws"}}
-	checkSection = Section{Numbers: []string{"observed", "count"}, Texts: []string{}}
+	checkSection = Section{Numbers: []string{"observed", "count", "n"}, Texts: []string{}}
 	chartSection = Section{Numbers: []string{"y", "value", "count"}, Texts: []string{}}
 	pointSection = Section{Numbers: []string{"y"}, Texts: []string{"unit"}}
 	// the layout's rows (report-explanations.md): blocks and lines are bayes-report's

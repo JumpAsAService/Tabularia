@@ -38,6 +38,7 @@ from typing import Any
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
+from app.engine.models.layouts import shared_readings as sr
 from app.engine.models.layouts import register
 from app.engine.stats import layouts as stats
 from app.reports import glyphs
@@ -173,15 +174,23 @@ def _contraction(t: dict) -> dict:
 
 def _original(p: stats.Page, w: dict) -> None:
     """The coefficients of a linear predictor on the column's scale: the coefficient over the predictor's sd, a second table under the
-    first, only when the run wrote them."""
+    first (the spec's «second line»), only when the run wrote them. As the table above, the pages print the scalars and the
+    correlations and the Excel sheet every row of the scope with its unit (a plate's intercepts, moved by the predictors' means)."""
     t = w["tables"]
     one = '[section] = "summary" AND [stat] = "orig_mean"'
+    scope = f"{one} AND {NOT_A_PLATE}"
     p.y += 1.0
-    p.text("original_note", w["original_note"], h=5, size=8, color=c.MUTED, can_grow=True, visible=c.exists(one))
+    p.text("original_note", w["original_note"], h=5, size=8, color=c.MUTED, can_grow=True, visible=c.exists(scope))
     p.y += 1.0
-    quantity = {**_quantity(), "header": t["quantity"], "width": 60}
-    cols = [quantity] + [_number(s, 25, t[s]) for s in ("orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95")]
-    p.add(stats.table("original", t["original"], one, cols, p.y, visible=c.exists(one)), 10)
+    cols = [{**_quantity(), "header": t["quantity"], "width": 60}] + [_number(s, 25, t[s]) for s in ("orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95")]
+    pages = stats.table("original", t["original"], scope, cols, p.y, visible=c.exists(scope))
+    pages["only"] = "pages"
+    sheet = stats.table("original_sheet", t["original"], one,
+                        [{**_quantity(), "header": t["quantity"], "width": 40}, {"header": t["unit"], "value": "[level_2]", "width": 20}] + cols[1:],
+                        p.y, visible=c.exists(one))
+    sheet["only"] = "sheet"
+    p.add(pages, 10)
+    p.items.append(sheet)
 
 
 # ── page 3: the data ────────────────────────────────────────────────────────
@@ -277,8 +286,9 @@ def slots(rows: list[dict]) -> list[dict]:
         if r["section"] in CHECKS:
             y, _, stat = (level or "").partition(":")
             if y in outcome:
-                new = f"o{outcome[y]}:" + (f"u{unit_of[y][r['level_2']]}" if stat == "unit_mean" and r["level_2"] in unit_of[y] else
-                                           "" if stat == "unit_mean" else stat)
+                # `<y>` alone is the outcome's own row (`n`, its rows); `<y>:<stat>` a statistic's; `<y>:unit_mean` a unit's
+                new = f"o{outcome[y]}" + (":" + (f"u{unit_of[y][r['level_2']]}" if stat == "unit_mean" and r["level_2"] in unit_of[y] else
+                                                 "" if stat == "unit_mean" else stat) if ":" in (level or "") else "")
                 if stat == "unit_mean" and r["level_2"] not in unit_of[y]:
                     new = None
         elif r["section"] == "curve" and kind in DENSITIES and name in outcome:
@@ -579,7 +589,9 @@ def _outside(w: dict, curve: str, k: int) -> str:
     the bin's width, summed over the drawn sets. A count of the chart, said plain."""
     rows = f'[section] = "curve" AND [level] = "{curve}:o{k}"'
     width = (f'(LOOKUP("curve|{curve}:o{k}|observed|value|2", [key], [x0]) - LOOKUP("curve|{curve}:o{k}|observed|value|1", [key], [x0]))')
-    n = c.model_number("n")
+    section = "ppc" if curve == "ppc_density" else "prior_check"
+    # the outcome's own number of rows (lot Q4: a lag leaves it fewer than the model's), else the model's, for a run saved before it
+    n = f'COALESCE({c.num(f"{section}|o{k}||n")}, {c.model_number("n")})'
 
     def count(edge: str) -> str:
         return f'SUMIF({rows} AND [text] = "{edge}", [value]) * {n} * {width}'
@@ -636,6 +648,63 @@ def _predictive(p: stats.Page, w: dict, variant: str) -> None:
             if column == 3 or j == UNIT_MEAN_SLOTS:
                 p.y = top + row
         p.y += 2.0
+
+
+# ── «How this report was computed» (lot Q4) ─────────────────────────────────
+def readings(rows: list[dict], checked: Any) -> list[c.ReadingLine]:
+    """The paragraphs of the method and the formulas of the report, chosen from the rows the run wrote (selecting and counting rows, no
+    computation): each is a template of the words (`reading_texts`, `formula_texts`) with the run's raw numbers. The literature is quoted
+    there in English, as its source writes it, in every language; a number of the run is never compared with a quoted value."""
+    k = sr.keyed(rows)
+    number = lambda stat: sr.number(k, c.model_key(stat))  # noqa: E731
+    text = lambda stat: sr.text(k, c.model_key(stat))  # noqa: E731
+    variant = _variant(dict(checked))
+    section, curve = ("ppc", "ppc_density") if variant == "sample" else ("prior_check", "prior_density")
+    out: list[c.ReadingLine] = []
+    # the replicated data sets a check chart draws: the series `draw_<j>` of its first density
+    drawn: dict[str, set[str]] = {}
+    for r in rows:
+        if r["section"] == "curve" and (r.get("level") or "").startswith(curve + ":") and (r.get("level_2") or "").startswith("draw_"):
+            drawn.setdefault(r["level"], set()).add(r["level_2"])
+    checks = any(r["section"] == section for r in rows)
+    standardized = sum(1 for r in rows if r["section"] == "data" and r["stat"] == "standardized" and r.get("text") == "yes")
+    original = any(r["section"] == "summary" and r["stat"] == "orig_mean" for r in rows)
+    contraction = any(r["section"] == "summary" and r["stat"] == "contraction" for r in rows)
+    chains, draws, seed = number("chains"), number("draws"), number("seed")
+    if variant == "prior_predictive":
+        out.append(("method", None, "method_prior", {"chains": chains, "draws": draws, "seed": seed}))
+    else:
+        out.append(("method", None, "method_nuts", {"chains": chains, "warmup": number("warmup"), "draws": draws, "seed": seed,
+                                                    "depth": number("max_treedepth"), "delta": number("adapt_delta")}))
+    out.append(("method", None, "method_precision", {}))
+    if standardized:
+        out.append(("method", None, "method_standardized", {"count": standardized}))
+    if original:
+        out.append(("method", None, "method_original", {}))
+    if variant == "sample":
+        out.append(("method", None, "method_rhat_ess", {}))
+        out.append(("method", None, "method_divergences", {"n": sr.number(k, "sampler|all||divergences"), "total": sr.number(k, "sampler|all||draws")}))
+        out.append(("method", None, "method_treedepth", {"hits": sr.number(k, "sampler|all||treedepth_hits"), "depth": number("max_treedepth")}))
+        out.append(("method", None, "method_ebfmi", {}))
+        if contraction:
+            out.append(("method", None, "method_contraction", {}))
+    if checks:
+        out.append(("method", None, "method_checks" if variant == "sample" else "method_prior_checks",
+                    {"drawn": max((len(v) for v in drawn.values()), default=None)}))
+    said = {"model": text("bayes_model"), "version": text("bayes_version"), "program": text("program_sha256"), "binary": text("binary_sha256"),
+            "software": text("software")}
+    if all(v is not None for v in said.values()):
+        out.append(("method", None, "method_program", said))
+    if variant == "sample":
+        out += [("formulas", None, f"formula_{x}", {}) for x in ("rhat", "ess", "mcse", "ebfmi")]
+        if contraction:
+            out.append(("formulas", None, "formula_contraction", {}))
+    if original:
+        out.append(("formulas", None, "formula_original", {}))
+    return out
+
+
+c.READINGS["bayes_model"] = readings
 
 
 # ── the page ────────────────────────────────────────────────────────────────

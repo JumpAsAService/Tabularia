@@ -112,7 +112,8 @@ template, never a formula in Excel).
    at the range's edges labelled «below / above the observed range»); the histograms of T(y_rep) of each statistic (`xy`
    bars of `count` between `x0` and `x1`, `target_x` = the `observed` row's value, its label «the data»); the checked units'
    means, likewise. The caption: «The grey lines are 20 data sets the model draws from the posterior; the black line is the
-   data. Where the black line runs outside the grey ones, the model does not reproduce that feature of the data.» (the checks
+   data. Where the black line runs outside the grey ones, the drawn data sets do not show that feature of the data.» (*Correction of 2026-11-24 from lot Q3*: the checks
+   spec's «the model does not reproduce that feature» judged the model; the sentence says what the picture shows) (the checks
    spec). The outcome is named by its column (the `data` section's `column` of its Stan identifier).
 8. **How this report was computed** (`common.how_computed`): «The method» below.
 9. **Notes**: every `note_*` of the `model` section through `structured_note`.
@@ -134,14 +135,14 @@ Paragraphs (`method`), each chosen by the rows and filled with the run's numbers
 
 | Id | Says | Its source |
 |---|---|---|
-| `nuts` | The draws come from Stan's dynamic Hamiltonian Monte Carlo (the No-U-Turn sampler), `chains` chains of `warmup` warm-up and `draws` kept iterations, the step size and a diagonal metric adapted in the warm-up, the seed | Hoffman and Gelman (2014), *JMLR* 15; Betancourt (2017), arXiv:1701.02434 (assumed: Q4 reads both) |
+| `nuts` | The draws come from Stan's dynamic Hamiltonian Monte Carlo (the No-U-Turn sampler), `chains` chains of `warmup` warm-up and `draws` kept iterations, the step size and a diagonal metric adapted in the warm-up, the seed | Hoffman and Gelman (2014), arXiv:1111.4246v1, p. 1 (*Correction of 2026-11-24 from Q4*: quoted from the arXiv version, the only one with pages Q4 could read) |
 | `precision` | Every draw carries 8 significant digits (CmdStan 2.40.0's default): a draw x is off by at most 5·10⁻⁸·\|x\|; a quantity whose mean is large beside its sd may repeat values | The contract, «Risks» |
 | `standardized` | Which predictors were centred and divided by their sd (the numbers), and that a linear predictor's coefficients are also given on the column's scale | Answer 6 |
 | `rhat_ess` | R-hat compares the chains with each other and within their halves, on ranks, in the bulk and in the tails; the bulk and tail ESS say how many independent draws the chains are worth; computed as the R package `posterior` 1.8.0 computes them (the diagnostics spec) | Vehtari, Gelman, Simpson, Carpenter, Bürkner (2021), *Bayesian Analysis* 16(2) |
-| `divergences` | What a divergent transition is, the count of this run, and the literature's statement cited as such | Betancourt (2016), arXiv:1604.00695; the Stan Reference Manual (assumed) |
-| `treedepth`, `ebfmi` | What reaching the largest tree means (efficiency), what E-BFMI measures, each with its cited value | the same |
-| `contraction` | 1 − Var_post/Var_prior, what it measures, why it is absent when the prior has no finite variance | Betancourt (2018), arXiv:1803.08393 |
-| `checks` | What the overlaid densities and the histograms show, and why no p-value is given | Gabry et al. (2019); the Stan User's Guide; Meng (1994), Gelman, Meng and Stern (1996), Bayarri and Berger (2000) |
+| `divergences` | What a divergent transition is, the count of this run, and the literature's statement cited as such | The Stan Reference Manual 2.40, «MCMC Sampling», «Divergent transitions», quoted by Q4 (*correction of 2026-11-24 from Q4*: Betancourt (2016) is not quoted) |
+| `treedepth`, `ebfmi` | What reaching the largest tree means (efficiency), what E-BFMI measures, each with its cited value | The Stan Reference Manual 2.40, «NUTS and its configuration»; Betancourt (2017), arXiv:1701.02434v2, p. 44 (*correction of 2026-11-24 from Q4*: the 0.3 is in the 2017 review, not in the 2016 paper) |
+| `contraction` | 1 − Var_post/Var_prior, what it measures, why it is absent when the prior has no finite variance | Betancourt (2018), arXiv:1803.08393v1, p. 17 (*correction of 2026-11-24 from Q4*: that paper is «Calibrating Model-Based Inferences and Decisions», and the contraction is its «posterior shrinkage»; «Towards a principled Bayesian workflow» is not an arXiv paper) |
+| `checks` | What the overlaid densities and the histograms show, and why no p-value is given | Gabry et al. (2019), p. 8 (posterior) and p. 5 (prior), quoted by lot Q4. *Correction of 2026-11-24 from Q4*: the Stan User's Guide and Meng (1994), Gelman, Meng and Stern (1996), Bayarri and Berger (2000) were not read at their source, so they are not cited |
 | `program` | The program's sha256, the binary's, CmdStan's and stanc's versions (the `software` text), the saved model's id and version | The rows |
 
 The formulas' box (`formulas`): split R-hat (√(var⁺/W)), the ESS (S/τ̂), the MCSE of the mean, E-BFMI (with the N − 1
@@ -152,7 +153,7 @@ diagnostics spec writes it.
 
 - `report_texts/bayes_model.json`, the same keys in en, it, de, es, fr; merged over `common.json`; the variant's words
   (`sample`, `prior_predictive`) apart where they differ.
-- **No verdict word** in any text the layout writes (`common.json`'s `verdict_words`, and for this model also «converged»,
+- **No verdict word** in any text the layout writes (outside the literature's quotations, which are their authors' words: lot Q4's scan removes what lies between “ and ” before it looks, and the quotations' own test checks them byte for byte) (`common.json`'s `verdict_words`, and for this model also «converged»,
   «not converged», «good», «bad», «reliable», «unreliable», «passes», «fails», «acceptable», «problem» in the five
   languages, added to the model's own list): a test scans every text.
 - **The literature's values** appear only inside the `method` paragraphs and the diagnostics' paragraphs, as quotations of
@@ -283,7 +284,7 @@ def statistic_chart(w: dict, section: str, k: int, stat: str) -> c.Chart:
 - **Hostile data**: a label, a unit and a column named `=HYPERLINK("http://x","y") #set ] 1% <b>` (the existing test's
   string) kept as text in the PDF and in Excel (no formula, no markup).
 - **The caps**: rows made to the contract's maxima (2,000 summary quantities, 12 charts at 8 chains, 8 unit charts of 1,000
-  points, six pairs, the checks' 4,041 rows: 93,490 in all) drawn without error; its time and memory recorded by lot Q5.
+  points, six pairs, the checks' 4,044 rows: 93,490 in all) drawn without error; its time and memory recorded by lot Q5.
 - **K0b**: the golden bytes of the seven other groups unchanged without rewriting them; `CompactFor("bayes")` equals
   `Compact()`; the view of every other group equals the catalogue before the entry, byte for byte (the golden file of
   today's catalogue kept by the test); `card.schema.json`'s view likewise; `model_catalog.py --check` green; the frontend's
@@ -346,3 +347,36 @@ Applied on the owner's approval of 2026-11-24, each marked «Correction of 2026-
 ## Open questions
 
 None.
+
+## As built — lot Q4 (2026-11-24)
+
+- **The method** (`READINGS["bayes_model"]` in `layouts/bayes_model.py`): the lines chosen from the rows (selecting and counting, no computation) —
+  `method_nuts` or `method_prior`, `method_precision`, `method_standardized` (when a predictor was standardized), `method_original` (when rows have
+  `orig_*`), then for `sample` `method_rhat_ess`, `method_divergences`, `method_treedepth`, `method_ebfmi`, `method_contraction` (when the summary has
+  the contraction), then `method_checks` / `method_prior_checks` (when the run has the checks' rows; the number of drawn sets is counted from the
+  density's series), `method_program`; the formulas `formula_rhat`, `formula_ess`, `formula_mcse`, `formula_ebfmi`, `formula_contraction`,
+  `formula_original`. Words: `reading_texts`, `formula_texts`, `reading_labels`, `measure_readings`, `verdict_words` (the common list and the spec's
+  own, in the five languages).
+- **The literature, read at its source on 2026-11-24 and quoted in English in the five files** (a test compares the quotations byte for byte; «[R-hat]»
+  stands for the R with a hat the paper writes, a character the report's font has but that prints badly): Vehtari et al. (2021), arXiv:1903.08008v5,
+  p. 4 (R-hat below 1.01; at least four chains) and p. 5 (rank-normalized ESS greater than 400); Hoffman and Gelman, arXiv:1111.4246v1, p. 1 (NUTS);
+  Betancourt (2017), arXiv:1701.02434v2, p. 44 (E-BFMI below 0.3); Betancourt (2018), arXiv:1803.08393v1, p. 17 (posterior shrinkage); Gabry et al.
+  (2019), arXiv:1709.01449v5, p. 8 (posterior predictive checking) and p. 5 (prior predictive); the Stan Reference Manual 2.40, «MCMC Sampling»
+  («Divergent transitions», «NUTS and its configuration»), which has sections, not pages. Pages are those of the arXiv versions. *Corrections*: the
+  diagnostics spec's «100 per chain (400 for four chains)» is not in the paper — it says 400 for the rank-normalized ESS (p. 5), and 50 per split
+  chain for R-hat (p. 8), which this report does not quote; the divergence sentence quoted is the manual's, whose «should prompt suspicion» (Betancourt
+  2017, p. 45) is a recommendation, not quoted.
+- **The notes of the runner are structured** — `@bayes_<id> name=value …` (`bayes_task.note_line`), said by `note_texts.bayes_<id>` (a name is encoded,
+  a list joined by commas, as the other groups do): `summary_capped`, `quantities_capped`, `contraction_null` (the three counts, zero included),
+  `original_capped`, `density_cut` (three lists in the same order), `no_checks`, `checks_dropped`, `prior_undrawn_one` / `prior_undrawn` /
+  `prior_undrawn_more`, `prior_dropped`, `replicated_dropped`. A note of the old form (an English sentence) is still shown as written.
+- **The scale of the column** is a second table under the posterior's (the first lot's choice, kept: the spec's «second line» is that table's
+  row of the same coefficient): the pages print the scalars and the correlations, the Excel sheet «On the column's scale» every row of the scope with
+  its unit (the plate's intercepts, moved by the predictors' means). The fixtures hold the runner's own numbers (`bayes_scale`).
+- **The count outside the data's range** uses the outcome's own number of rows: the runner writes `ppc|<y>||n` / `prior_check|<y>||n` (a number,
+  unindexed; the declaration, the catalogue and the contract say so), the layout falls back to the model's `n` for a version saved before it.
+- **The verdict scan** of the five languages: `verdict_words` of the words holds the common list and the spec's (converged, reliable, acceptable,
+  problem…, translated), `test_report_explanations.py` and `test_models_bayes_report.py` scan the sentences with the quotations removed.
+- Formulas are written without the sub- and superscripts the report's font lacks (`Σ_t`, `E_n`, `var+`).
+- **For the review (opus)**: the quotations contain words of the common list («proven problematic», «recommend»); they are the sources', the
+  sentences around them are ours. The values 1.01, 400 and 0.3 appear nowhere but in the method's quotations.

@@ -109,6 +109,9 @@ class TestRows(Case):
             np.testing.assert_allclose([r["value"] for r in series[f"draw_{j}"]], rec["counts"][d] * scale, err_msg=f"draw_{j}")
         self.assertEqual(report.charts, ["ppc_density:y"])
         self.assertEqual(report.rows, len([k for k in rows if k.startswith(("ppc|", "curve|"))]))
+        # the outcome's own number of rows, for the report's count of the drawn values outside the data's range (lot Q4)
+        self.assertEqual(rows["ppc|y||n"]["value"], float(o.n))
+        self.assertEqual(rows["ppc|y||n"]["level_2"], None)
 
     def test_draws_that_threw_are_counted_left_out_and_said(self):
         nan = ((1, 3), (2, 10), (2, 11))
@@ -127,8 +130,7 @@ class TestRows(Case):
             np.testing.assert_allclose([r["value"] for k, r in rows.items() if k.startswith(f"curve|ppc_density:y|draw_{j}|")],
                                        valid_counts[d] * scale)
         note = rows["model|||note_checks_dropped"]["text"]
-        self.assertIn("3 of the 80 draws", note)
-        self.assertIn("77", note)
+        self.assertEqual(note, "@bayes_checks_dropped dropped=3 draws=80 valid=77")
 
     def test_no_note_without_dropped_draws_and_all_dropped_leaves_the_observed_rows(self):
         _, _, rows, _, _ = self.run_rows()
@@ -209,7 +211,7 @@ class TestRows(Case):
         w.close()
         cols = engine_check(self.dir / "results.parquet")
         stats = {(s, st) for s, st in zip(cols["section"], cols["stat"]) if s in ("ppc", "curve")}
-        self.assertEqual(stats, {("ppc", "observed"), ("ppc", "count"), ("curve", "value")})
+        self.assertEqual(stats, {("ppc", "observed"), ("ppc", "count"), ("ppc", "n"), ("curve", "value")})
         words = " ".join(str(v).lower() for column in ("level", "level_2", "stat", "text") for v in cols[column] if v)
         for word in FORBIDDEN:
             self.assertNotIn(word, words.replace("replicated values as missing", ""), word)
@@ -218,7 +220,7 @@ class TestRows(Case):
     def test_the_caps_arithmetic_of_the_spec(self):
         plan, report, rows, _, _ = self.run_rows()
         per_outcome = len([k for k in rows if k.startswith(("ppc|", "curve|"))])
-        self.assertEqual(per_outcome, 7 * 31 + 8 * 31 + 21 * 42)                    # 1,347, three outcomes 4,041 under bayes_max_check_rows
+        self.assertEqual(per_outcome, 1 + 7 * 31 + 8 * 31 + 21 * 42)                # 1,348 (the outcome's `n` row, lot Q4), three outcomes 4,044 under bayes_max_check_rows
 
 
 class TestRefusals(Case):

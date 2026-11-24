@@ -130,6 +130,8 @@ def test_no_sentence_of_a_measure_holds_a_word_of_judgement_in_any_explained_mod
         assert set(w["measure_readings"]) <= set(w["reading_texts"]), (model, sorted(set(w["measure_readings"]) - set(w["reading_texts"])))
         for key in w["measure_readings"]:
             for sentence in _sentences(w["reading_texts"][key]):
+                if model == "bayes_model":  # the literature quoted as its source writes it, in English (docs/specs/bayes-report.md, «The words»)
+                    sentence = re.sub(r"“[^”]*”", "", sentence)
                 assert not [v for v in w["verdict_words"] if _has(v, sentence)], (model, locale, key, sentence)
 
 

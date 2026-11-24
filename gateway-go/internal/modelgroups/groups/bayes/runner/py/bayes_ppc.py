@@ -22,6 +22,8 @@ the file's blocks). Nothing is held but
 the series' counts and those few draws' bin counts.
 
 THE ROWS (per checked outcome `<y>`, the outcome's Stan identifier):
+  `<section>|<y>||n`                               the outcome's rows (lot Q4: the report's count of the values drawn outside the data's
+                                                   range needs it, an outcome with a lag having fewer rows than the model's `n`)
   `<section>|<y>:<stat>||observed`                 T(y)
   `<section>|<y>:<stat>||count|<i>`                x0, x1 the bin's edges, value its count of replicated draws (at most 30 rows)
   `<section>|<y>:unit_mean|<unit>|observed` and `…|count|<i>`   the same for each checked unit's mean
@@ -42,7 +44,7 @@ import pyarrow.parquet as pq
 
 import bayes_charts
 from bayes_draws import read_metadata
-from bayes_task import ManifestMismatch
+from bayes_task import ManifestMismatch, note_line
 from tab_protocol import Refusal
 
 SECTIONS = {"ppc": ("ppc_density", "predictive"), "prior_check": ("prior_density", "prior predictive")}
@@ -141,7 +143,7 @@ def second_pass(plan: Any, checks_path: str, writer: Any, section: str, seconds_
     """Reads the checks file twice and writes the rows of `section` (`ppc` or `prior_check`) and its density charts; see the module."""
     if section not in SECTIONS:
         raise ValueError(f"section {section!r}")
-    chart, what = SECTIONS[section]
+    chart = SECTIONS[section][0]
     t_start = time.monotonic()
     report = PpcReport()
     if not plan.outcomes:
@@ -234,6 +236,8 @@ def second_pass(plan: Any, checks_path: str, writer: Any, section: str, seconds_
 
     # the rows
     for n, o in enumerate(plan.outcomes):
+        writer.number(section, "n", float(o.n), level=o.stan)
+        report.rows += 1
         for s in (s for s in series if s.outcome == n):
             level = f"{o.stan}:{s.stat}"
             writer.number(section, "observed", s.observed, level=level, level_2=s.unit)
@@ -243,9 +247,7 @@ def second_pass(plan: Any, checks_path: str, writer: Any, section: str, seconds_
                 report.rows += stat_bins
         _density(writer, o, kept[n], chart, report)
     if report.dropped:
-        writer.note("checks_dropped", f"{report.dropped} of the {report.draws} draws of the {what} checks were left out: CmdStan wrote "
-                                      f"their replicated values as missing (a generator refused its arguments); the charts use the other "
-                                      f"{report.valid}.")
+        writer.note("checks_dropped", note_line("checks_dropped", dropped=report.dropped, draws=report.draws, valid=report.valid))
     report.seconds = time.monotonic() - t_start
     return report
 

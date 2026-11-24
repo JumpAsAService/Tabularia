@@ -112,12 +112,12 @@ with author, year and page; the sentence around it is translated, the quotation 
 | Measure | What it measures | The literature's reference value, as the source writes it |
 |---|---|---|
 | R-hat | Whether the chains agree with each other and within their halves, in the bulk and in the tails | Vehtari et al. (2021) recommend using the draws only when R-hat is below 1.01, with at least four chains |
-| ESS bulk, tail | How many independent draws the chains are worth for the centre and for the 5 % and 95 % quantiles | Vehtari et al. (2021) recommend a bulk and a tail ESS of at least 100 per chain (400 for four chains) |
+| ESS bulk, tail | How many independent draws the chains are worth for the centre and for the 5 % and 95 % quantiles | Vehtari et al. (2021, p. 5) «recommend requiring that the rank-normalized ESS is greater than 400» (*Correction of 2026-11-24 from Q4*: «100 per chain» is not in the paper) |
 | MCSE | The Monte Carlo error of the mean and of the sd | No reference value: to compare with the precision the reader needs |
-| Divergences | Transitions where the integrator diverged: a region the sampler could not explore | Betancourt (2016) and the Stan Reference Manual: any divergence means the draws may be biased |
+| Divergences | Transitions where the integrator diverged: a region the sampler could not explore | The Stan Reference Manual 2.40: positions after a divergence are never selected, «potentially … biasing estimates» (quoted by Q4) |
 | Tree depth | Transitions that stopped at the largest tree | The Stan Reference Manual: an efficiency concern, not a validity one |
-| E-BFMI | How well the momentum resampling explores the energy | Betancourt (2016): values below 0.3 suggest the sampler explores the energy poorly |
-| Contraction | How much the data narrowed the prior | Betancourt (2018), «Towards a principled Bayesian workflow» (arXiv:1803.08393) |
+| E-BFMI | How well the momentum resampling explores the energy | Betancourt (2017, p. 44): «values of this energy Bayesian fraction of missing information below 0.3 have proven problematic» (*Correction of 2026-11-24 from Q4*: the 2017 review, not the 2016 paper) |
+| Contraction | How much the data narrowed the prior | Betancourt (2018), arXiv:1803.08393v1, p. 17, «posterior shrinkage» (*Correction of 2026-11-24 from Q4*: that paper's title is «Calibrating Model-Based Inferences and Decisions») |
 
 ## The second pass
 

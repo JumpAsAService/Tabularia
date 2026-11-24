@@ -163,6 +163,8 @@ class TestSections(RowsCase):
         self.assertEqual(len(shown), 3)
         keys = pq.read_table(self.dir / "results.parquet").column("key").to_pylist()
         self.assertIn("model|||note_quantities_capped", keys)
+        said = pq.read_table(self.dir / "results.parquet").to_pydict()
+        self.assertRegex(said["text"][said["key"].index("model|||note_quantities_capped")], r"^@bayes_quantities_capped listed=3 total=\d+$")
         self.assertNotIn("quantity|tau_a||label", keys)
 
 

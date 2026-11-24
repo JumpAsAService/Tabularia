@@ -57,7 +57,7 @@ import bayes_main
 import bayes_pass2
 import bayes_rows
 import tab_card
-from bayes_task import Layout, ManifestMismatch, Task, report_order, task_value
+from bayes_task import Layout, ManifestMismatch, Task, note_line, report_order, task_value
 from tab_card import versions
 from tab_protocol import ENV_ARTIFACTS, ENV_OUTPUT, ENV_RESULTS, PROTOCOL, Refusal, artifact, threads, to_json
 
@@ -78,7 +78,7 @@ CSV_HEAD_BYTES_A_COLUMN = 48
 SUMMARY_BYTES_A_QUANTITY = 256
 RESULT_BYTES_A_ROW = 128
 
-NO_CHECKS_NOTE = "This version was saved before the predictive checks: saving it again adds them."
+NO_CHECKS_NOTE = "@bayes_no_checks"   # the page says it (lot Q4): «This version was saved before the predictive checks: saving it again adds them.»
 
 
 # ── the start ─────────────────────────────────────────────────────────────────
@@ -483,8 +483,7 @@ class SampleJob:
             raise Refusal("not_finite", f"none of the {writer.dropped} replicated draws holds finite numbers: the model has no finite value "
                                         "there", {"quantity": "replicated", "draws": writer.dropped})
         if writer.dropped:
-            w.note("replicated_dropped", f"{writer.dropped} of the {writer.dropped + writer.kept} replicated draws were left out of the "
-                                         "replicated data because the program failed to draw a value in them.")
+            w.note("replicated_dropped", note_line("replicated_dropped", dropped=writer.dropped, total=writer.dropped + writer.kept))
         self.seconds["replicated"] = time.monotonic() - t0
 
     def run_prior(self) -> int:
@@ -543,9 +542,8 @@ class SampleJob:
             checks_path.unlink(missing_ok=True)
             self.seconds["checks"] = time.monotonic() - t_checks
             if layout.undrawn:
-                names = ", ".join(n for n, _ in layout.undrawn[:5]) + (", …" if len(layout.undrawn) > 5 else "")
-                what = "quantity has" if layout.n_undrawn == 1 else "quantities have"
-                w.note("prior_undrawn", f"{layout.n_undrawn} {what} no ancestral draw ({names}): left out of the summary.")
+                kind = "prior_undrawn_one" if layout.n_undrawn == 1 else "prior_undrawn_more" if layout.n_undrawn > 5 else "prior_undrawn"
+                w.note("prior_undrawn", note_line(kind, n=layout.n_undrawn, names=[n for n, _ in layout.undrawn[:5]]))
             bayes_rows.model_section(w, task, self.facts, layout, self.threads, self.seconds)
             bayes_rows.data_section(w, task, self.facts)
             rows = w.close()
