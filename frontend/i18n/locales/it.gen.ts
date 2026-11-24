@@ -9055,6 +9055,8 @@ export default {
       "none": "Salvato prima dei controlli predittivi: salvandolo di nuovo si aggiungono.",
       "posterior": "I controlli a posteriori sono disponibili. Il controllo predittivo a priori non è offerto: questo modello ha una priori troncata che Stan non sa estrarre per antenati.",
       "both": "Sono disponibili i controlli a posteriori e il controllo predittivo a priori.",
+      "noReread": "I controlli a posteriori e i dati replicati sono spenti per questo modello. Ha correlazioni tra effetti di gruppo e i numeri scritti dal campionatore sono arrotondati un poco: Stan rifiuta di rileggerli. Il riepilogo, le estrazioni e la tabella dei risultati non cambiano.",
+      "noRereadPrior": "Il controllo predittivo a priori resta disponibile.",
     },
     "prior": {
       "title": "Controllo predittivo a priori",
@@ -9101,6 +9103,8 @@ export default {
       "resultsHint": "I nodi successivi ricevono la tabella dei risultati, come la mostra il report.",
       "replicatedDraws": "Estrazioni tenute per catena",
       "replicatedMax": "Da 1 a {max}.",
+      "replicatedOff": "Non disponibili: le correlazioni tra effetti di gruppo di questo modello non possono essere rilette da Stan dalle estrazioni arrotondate.",
+      "replicatedReset": "I dati replicati sono stati spenti: questo modello non può darli. L'output torna al riepilogo.",
     },
     "mlflowNote": "A MLflow vanno i parametri, il riepilogo delle quantità, i fatti del campionatore, il report e i file del modello; le estrazioni mai.",
     "mlflowRegisterHint": "Facoltativo. Ogni esecuzione aggiunge una versione con questo nome, con il programma del modello e il suo riepilogo. Un passo Predict non la applica.",

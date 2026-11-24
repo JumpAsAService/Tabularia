@@ -633,6 +633,12 @@ and the summary equals the checks-off run's to 8 digits (the largest relative di
 of 1 (ten times inside Stan's tolerance), and the CSV grows by about two bytes a value (10.3 to 12.3: the disk projection measures the first
 block's lines, so it follows; this figure is the arithmetic of the digits, not measured). Until it is made, a version with correlated effects must run with the checks off.
 
+**Correction of 2026-11-24 (owner): the proposal is not made.** The CSV keeps its 8 digits. A program with correlated effects runs with the
+posterior checks and the replicated data off; its quantity manifest says it (`gq_reread: false`, `gq_reread_type`, `CodegenVersion` 4), the panel
+keeps the replicated output off, the gateway refuses it before any Job and sends the checks off, and the runner refuses a task that still asks for
+a `generate_quantities` run with the refusal `gq_reread`, before the sampling (`bayes_gq.plan_runs`, tested on the `hier_slopes` golden). See the
+contract's «Correction of 2026-11-24 (owner)».
+
 ### The ten templates (criterion 6)
 
 The comparison is lot T3's: the runner's summary output (mean, sd, `mcse_mean`, `mcse_sd`) against the hand-written program's posterior

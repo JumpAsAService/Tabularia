@@ -1,5 +1,5 @@
 {
-  "codegen_version": 3,
+  "codegen_version": 4,
   "semantic_hash": "42e65c40f5cc47e01d219d56cb1f2e4b6b07e0a642ba4b70923266dd7440b23d",
   "program_sha256": "df97d7b0fe69413ae7f8e58f857cad39c29721f363cf2ae656bc7475f2207894",
   "data": [
@@ -91,7 +91,9 @@
         {
           "component": "eff"
         }
-      ]
+      ],
+      "gq_reread": false,
+      "gq_reread_type": "cholesky_factor_corr"
     },
     {
       "stan": "a_g",

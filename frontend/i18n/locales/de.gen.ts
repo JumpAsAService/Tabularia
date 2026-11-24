@@ -9055,6 +9055,8 @@ export default {
       "none": "Vor den prädiktiven Prüfungen gespeichert: erneutes Speichern fügt sie hinzu.",
       "posterior": "Die Posterior-Prüfungen sind verfügbar. Die prädiktive Prüfung der Priori wird nicht angeboten: dieses Modell hat eine abgeschnittene Priori, die Stan nicht vorwärts ziehen kann.",
       "both": "Die Posterior-Prüfungen und die prädiktive Prüfung der Priori sind verfügbar.",
+      "noReread": "Die A-posteriori-Prüfungen und die replizierten Daten sind für dieses Modell ausgeschaltet. Es hat Korrelationen zwischen Gruppeneffekten, und die vom Sampler geschriebenen Zahlen sind leicht gerundet: Stan weigert sich, sie wieder einzulesen. Die Zusammenfassung, die Ziehungen und die Ergebnistabelle bleiben unverändert.",
+      "noRereadPrior": "Die A-priori-Vorhersageprüfung bleibt verfügbar.",
     },
     "prior": {
       "title": "Prädiktive Prüfung der Priori",
@@ -9101,6 +9103,8 @@ export default {
       "resultsHint": "Die folgenden Knoten erhalten die Ergebnistabelle, wie der Bericht sie zeigt.",
       "replicatedDraws": "Behaltene Ziehungen je Kette",
       "replicatedMax": "Von 1 bis {max}.",
+      "replicatedOff": "Nicht verfügbar: Stan kann die Korrelationen zwischen Gruppeneffekten dieses Modells aus den gerundeten Ziehungen nicht wieder einlesen.",
+      "replicatedReset": "Die replizierten Daten wurden ausgeschaltet: dieses Modell kann sie nicht liefern. Die Ausgabe ist wieder die Zusammenfassung.",
     },
     "mlflowNote": "An MLflow gehen die Parameter, die Zusammenfassung der Größen, die Fakten des Samplers, der Bericht und die Dateien des Modells; die Ziehungen nie.",
     "mlflowRegisterHint": "Optional. Jeder Lauf fügt unter diesem Namen eine Version hinzu, mit dem Programm des Modells und seiner Zusammenfassung. Ein Predict-Schritt wendet sie nicht an.",

@@ -191,6 +191,19 @@ export function bayesNodeChecks(manifest: unknown): BayesNodeChecks {
   return kinds.has('prior_count') ? 'both' : 'posterior'
 }
 
+/** From the stored quantity manifest (never from today's generator): the Stan type whose draws generate_quantities cannot reread, or
+ *  null. CmdStan writes its CSV to 8 significant digits and checks a constrained type when it reads it back (the correlations between
+ *  group effects: `cholesky_factor_corr`), so the posterior checks and the replicated data are off for such a version (the
+ *  manifest's `gq_reread: false`, the owner's decision of 2026-11-24). The prior predictive check does not read draws and stays. */
+export function bayesNodeNoReread(manifest: unknown): string | null {
+  const list = Array.isArray(manifest) ? manifest : Array.isArray((manifest as any)?.quantities) ? (manifest as any).quantities : []
+  for (const q of list as any[]) if (q?.gq_reread === false) return String(q.gq_reread_type || 'constrained')
+  return null
+}
+
+/** The output the node keeps for a version that cannot be reread: the replicated data are not offered, so they go back to the summary. */
+export const bayesNodeOutputFor = (output: string, noReread: string | null): string => (noReread && output === 'replicated' ? 'summary' : output)
+
 // ── the initial values ───────────────────────────────────────────────────────
 
 /** The parameters the person may give a starting value: the single-number quantities the graph declares with a prior (`names`:

@@ -37,7 +37,7 @@ function makeMock () {
   const definition = { nodes: [
     { id: 'source', type: 'source', position: { x: 60, y: 140 }, data: { filename: 'schools.csv', bucket: 'data-prep', parquetKey: 'sample/schools.parquet', rows: 1240, columns: COLUMNS } },
     { id: 'ctl-1', type: 'bayes_model', position: { x: 340, y: 140 }, data: nodeData },
-    { id: 'ctl-2', type: 'bayes_model', position: { x: 340, y: 340 }, data: { ...nodeData, bayesModelVersion: 3, label: 'Older pin' } }],
+    { id: 'ctl-2', type: 'bayes_model', position: { x: 340, y: 340 }, data: { ...nodeData, bayesModelVersion: 3, label: 'Older pin', output: 'replicated' } }],
   edges: [{ id: 'e1', source: 'source', target: 'ctl-1', targetHandle: 'left' }, { id: 'e2', source: 'source', target: 'ctl-2', targetHandle: 'left' }] }
   const FLOW = { id: 1, name: 'Scores', description: '', project_id: 1, owner_id: 3, owner_name: 'Ada', engine: 'polars', production_engine: null, run_schedule: null, next_run_at: null, created_at: null, updated_at: '2026-11-24T10:00:00Z', last_run_status: null, last_run_at: null, definition: JSON.stringify(definition) }
   const GROUPS = { disabled_reason: null, groups: [{ id: 'bayes', enabled: true, usable: true, ready: true, max_timeout_seconds: 3600, max_rows: 1000000 }] }
@@ -424,6 +424,17 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
   await page.click('.vue-flow__node[data-id="ctl-1"] .node-title'); await settle(2500)
   const otherText = await page.locator('.bayes-panel').innerText()
   ok(`${tag}: a node chosen while «Use version» is read keeps its own version (no v9 from the other)`, /v4/.test(otherText) && !/v9/.test(otherText), otherText.slice(0, 200))
+
+  // 4d. a version whose draws Stan cannot reread (correlated effects, 8 digits in the CSV; the owner's decision of 2026-11-24): the
+  // replicated data cannot be chosen and say why, a node that held them goes back to the summary and says so, the prior check stays
+  sc = await openNode()
+  const radioOf = (v) => page.locator(`.bayes-panel input[type=radio][value="${v}"]`)
+  ok(`${tag}: the replicated data cannot be chosen for a version that cannot be reread`, await radioOf('replicated').isDisabled() && !(await radioOf('summary').isDisabled()))
+  ok(`${tag}: the panel says why the checks and the replicated data are off, and that the prior check stays`, /correlations between group effects/.test(await page.locator('[data-testid="bayes-noreread"]').innerText()) && /prior predictive check stays/.test(await page.locator('[data-testid="bayes-noreread"]').innerText()))
+  ok(`${tag}: the prior predictive button is still offered`, (await page.locator('.block.prior button.check').count()) === 1)
+  await page.click('.vue-flow__node[data-id="ctl-2"] .node-title'); await settle(1800)
+  ok(`${tag}: a node that held the replicated data goes back to the summary and the panel says so`, await radioOf('summary').isChecked() && !(await radioOf('replicated').isChecked()) && (await page.locator('[data-testid="bayes-replicated-reset"]').count()) === 1)
+  await shot('noreread')
 
   ok(`${tag}: no page error in the panels`, errors.length === 0, errors.join(' | '))
   await ctx.close()

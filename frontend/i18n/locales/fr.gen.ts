@@ -9055,6 +9055,8 @@ export default {
       "none": "Enregistré avant les contrôles prédictifs : l'enregistrer de nouveau les ajoute.",
       "posterior": "Les contrôles a posteriori sont disponibles. Le contrôle prédictif a priori n'est pas proposé : ce modèle a une loi a priori tronquée que Stan ne sait pas tirer par ascendance.",
       "both": "Les contrôles a posteriori et le contrôle prédictif a priori sont disponibles.",
+      "noReread": "Les contrôles a posteriori et les données répliquées sont désactivés pour ce modèle. Il a des corrélations entre effets de groupe, et les nombres écrits par l'échantillonneur sont un peu arrondis : Stan refuse de les relire. Le résumé, les tirages et le tableau des résultats ne changent pas.",
+      "noRereadPrior": "Le contrôle prédictif a priori reste disponible.",
     },
     "prior": {
       "title": "Contrôle prédictif a priori",
@@ -9101,6 +9103,8 @@ export default {
       "resultsHint": "Les nœuds suivants reçoivent la table des résultats, telle que le rapport la montre.",
       "replicatedDraws": "Tirages conservés par chaîne",
       "replicatedMax": "De 1 à {max}.",
+      "replicatedOff": "Indisponibles : Stan ne peut pas relire les corrélations entre effets de groupe de ce modèle à partir des tirages arrondis.",
+      "replicatedReset": "Les données répliquées ont été désactivées : ce modèle ne peut pas les fournir. La sortie redevient le résumé.",
     },
     "mlflowNote": "Vers MLflow partent les paramètres, le résumé des grandeurs, les faits de l'échantillonneur, le rapport et les fichiers du modèle ; les tirages jamais.",
     "mlflowRegisterHint": "Facultatif. Chaque exécution ajoute une version sous ce nom, avec le programme du modèle et son résumé. Une étape Predict ne l'applique pas.",

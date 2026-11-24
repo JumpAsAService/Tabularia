@@ -9055,6 +9055,8 @@ export default {
       "none": "Saved before the predictive checks: saving it again adds them.",
       "posterior": "The posterior checks run. The prior predictive check is not offered: this model has a truncated prior Stan cannot draw ancestrally.",
       "both": "The posterior checks and the prior predictive check are available.",
+      "noReread": "The posterior checks and the replicated data are off for this model. It has correlations between group effects, and the numbers the sampler writes are rounded a little: Stan refuses to read them back. The summary, the draws and the results table are not affected.",
+      "noRereadPrior": "The prior predictive check stays available.",
     },
     "prior": {
       "title": "Prior predictive check",
@@ -9101,6 +9103,8 @@ export default {
       "resultsHint": "The nodes after it receive the table of the results, as the report shows it.",
       "replicatedDraws": "Draws kept for each chain",
       "replicatedMax": "From 1 to {max}.",
+      "replicatedOff": "Not available: this model's correlations between group effects cannot be read back by Stan from the rounded draws.",
+      "replicatedReset": "The replicated data were turned off: this model cannot give them. The output is the summary again.",
     },
     "mlflowNote": "The parameters, the summary of the quantities, the sampler's facts, the report and the model's files go to MLflow; the draws never do.",
     "mlflowRegisterHint": "Optional. Each run adds a version under this name, with the model's program and its summary. A Predict step does not apply it.",

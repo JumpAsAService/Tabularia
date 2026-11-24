@@ -117,6 +117,35 @@ test('what a version can check, from its stored data manifest', () => {
   assert.equal(N.bayesNodeChecks(null), 'none')
 })
 
+test('a version whose draws Stan cannot reread keeps its replicated data off, from its stored quantity manifest', () => {
+  // the quantity manifest of the template with correlated effects, as the generator writes it (codegen 4): the factor says gq_reread false
+  const golden = (name) => JSON.parse(readFileSync(new URL(`../../gateway-go/internal/bayescodegen/testdata/golden/${name}.manifest.json`, import.meta.url), 'utf8'))
+  assert.equal(N.bayesNodeNoReread(golden('hier_slopes').quantities), 'cholesky_factor_corr')
+  assert.equal(N.bayesNodeNoReread({ quantities: golden('hier_slopes_centred').quantities }), 'cholesky_factor_corr')
+  assert.equal(N.bayesNodeNoReread(golden('hier_intercepts').quantities), null, 'no correlated effects: the checks and the replicated data run')
+  assert.equal(N.bayesNodeNoReread(golden('glm_linear').quantities), null)
+  assert.equal(N.bayesNodeNoReread([{ stan: 'L_x', role: 'internal', dims: [] }]), null, 'a manifest stored before says nothing')
+  assert.equal(N.bayesNodeNoReread(null), null)
+  assert.equal(N.bayesNodeOutputFor('replicated', 'cholesky_factor_corr'), 'summary')
+  for (const o of ['summary', 'draws', 'results']) assert.equal(N.bayesNodeOutputFor(o, 'cholesky_factor_corr'), o)
+  assert.equal(N.bayesNodeOutputFor('replicated', null), 'replicated')
+})
+
+test('the five languages say why the checks and the replicated data are off', async () => {
+  for (const lang of ['en', 'it', 'fr', 'de', 'es']) {
+    const text = readFileSync(new URL(`../i18n/locales/${lang}.gen.ts`, import.meta.url), 'utf8')
+    for (const key of ['noReread', 'noRereadPrior', 'replicatedOff', 'replicatedReset']) assert.match(text, new RegExp(`"${key}": "[^"]{20,}"`), `${lang} ${key}`)
+  }
+})
+
+test('the panel keeps the replicated data off, and the output back to the summary, for a version that cannot be reread', () => {
+  const panel = read('components/bayes/BayesNodePanel.vue')
+  assert.match(panel, /:disabled="o === 'replicated' && !!noReread"/, 'the radio cannot be chosen')
+  assert.match(panel, /bayesNodeOutputFor\(o as string, no as string \| null\)/, 'the output goes back by itself')
+  assert.match(panel, /bayesNode\.output\.replicatedReset/, 'and the panel says so')
+  assert.match(panel, /bayesNode\.checks\.noReread/, 'and says why the checks are off')
+})
+
 test('the initial values: a radius, or a value for each single-number parameter; none left is null', () => {
   const quantities = [
     { stan: 'mu_a', role: 'quantity', node: 'mua', dims: [] },

@@ -520,6 +520,10 @@ is **refused before it ends, with the sentence that names the way out, and leave
 - «no row has every bound column: 1204 rows have a missing value»
 - «the sampler found no starting point where the model's density is finite: check the bounds and the priors, or give initial values
   under Advanced»
+- «the replicated data are not available for this model: it has correlated effects, and Stan reads the draws back with a check on their
+  correlations that the 8 digits the sampler writes cannot meet; run it with the summary, the draws or the results table» (a model with
+  correlated effects, such as the one with random slopes, runs with the posterior checks and the replicated data off: the node says so, and
+  the prior predictive check stays available)
 
 (The numbers are examples, written as the runner writes them, with no thousands separator.) **Divergent transitions are not a refusal**: the run goes on to the end and their count
 is a fact on the first page.

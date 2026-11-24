@@ -14,7 +14,7 @@ import type { BayesBinding } from '~/composables/bayesGraph'
 import { modelOff } from '~/composables/modelCatalog'
 import {
   BAYES_NODE_GROUP_DEFAULTS, BAYES_NODE_OUTPUTS, BAYES_NODE_RETRIES_MAX, BAYES_NODE_SAMPLER, BAYES_NODE_TIMEOUT,
-  bayesNodeChecks, bayesNodeColumnsFor, bayesNodeDelta, bayesNodeInitKeep, bayesNodeInitMode, bayesNodeInitTargets, bayesNodeInitWith,
+  bayesNodeChecks, bayesNodeNoReread, bayesNodeOutputFor, bayesNodeColumnsFor, bayesNodeDelta, bayesNodeInitKeep, bayesNodeInitMode, bayesNodeInitTargets, bayesNodeInitWith,
   bayesNodeMove, bayesNodeNameOf, bayesNodeNewer, bayesNodeNotice, bayesNodeRead, bayesNodeReplicated, bayesNodeSamplerOf, bayesNodeSeed,
   bayesNodeBindable, bayesNodeUnbound, bayesNodeVariables, bayesNodeWhole,
   type BayesNodeInitMode,
@@ -123,6 +123,16 @@ const read = computed(() => (detail.value ? bayesNodeRead(detail.value.graph) : 
 const variables = computed<BayesBinding[]>(() => bayesNodeBindable(read.value?.bindings ?? []))
 const unbound = computed(() => bayesNodeUnbound(variables.value, bindings.value))
 const checks = computed(() => (detail.value ? bayesNodeChecks(detail.value.data_manifest) : null))
+// a version whose draws Stan cannot read back (correlations between group effects, 8 digits in the CSV): the posterior checks and the
+// replicated data are off and cannot be turned on; the output goes back to the summary by itself, and the panel says so
+const noReread = computed(() => (detail.value ? bayesNodeNoReread(detail.value.quantity_manifest) : null))
+const replicatedReset = ref(false)
+watch(() => props.node.id, () => { replicatedReset.value = false })
+watch([noReread, output, () => props.readOnly], ([no, o, ro]) => {
+  if (ro || !no || bayesNodeOutputFor(o as string, no as string | null) === o) return
+  replicatedReset.value = true
+  emit('update', { output: bayesNodeOutputFor(o as string, no as string | null) })
+}, { immediate: true })
 const initTargets = computed(() => (detail.value && read.value ? bayesNodeInitTargets(detail.value.quantity_manifest, read.value.params.keys()) : []))
 const savedLine = computed(() => {
   const e = pinnedEntry.value
@@ -350,7 +360,10 @@ async function runPrior() {
             <p v-else-if="!bindings[v.node] && !columnsLoading && !bayesNodeColumnsFor(v, columns).length" class="hint">{{ $t('bayesNode.variables.noneFit') }}</p>
           </li>
         </ul>
-        <p v-if="checks" class="hint">{{ $t(`bayesNode.checks.${checks}`) }}</p>
+        <p v-if="noReread" class="hint" data-testid="bayes-noreread">
+          {{ $t('bayesNode.checks.noReread') }}<template v-if="checks === 'both'"> {{ $t('bayesNode.checks.noRereadPrior') }}</template>
+        </p>
+        <p v-else-if="checks" class="hint">{{ $t(`bayesNode.checks.${checks}`) }}</p>
       </template>
     </div>
 
@@ -429,9 +442,10 @@ async function runPrior() {
     <fieldset class="block field" :disabled="readOnly">
       <legend class="lbl bhead">{{ $t('bayesNode.output.title') }}</legend>
       <label v-for="o in BAYES_NODE_OUTPUTS" :key="o" class="chk opt">
-        <input type="radio" :name="`bn-output-${node.id}`" :value="o" :checked="output === o" @change="emit('update', { output: o })" />
-        <span><span class="oname">{{ $t(`bayesNode.output.${o}`) }}</span><span class="odesc">{{ $t(`bayesNode.output.${o}Hint`) }}</span></span>
+        <input type="radio" :name="`bn-output-${node.id}`" :value="o" :checked="output === o" :disabled="o === 'replicated' && !!noReread" @change="emit('update', { output: o })" />
+        <span><span class="oname">{{ $t(`bayesNode.output.${o}`) }}</span><span class="odesc">{{ o === 'replicated' && noReread ? $t('bayesNode.output.replicatedOff') : $t(`bayesNode.output.${o}Hint`) }}</span></span>
       </label>
+      <p v-if="replicatedReset && noReread" class="hint" role="status" data-testid="bayes-replicated-reset">{{ $t('bayesNode.output.replicatedReset') }}</p>
       <div v-if="output === 'replicated'" class="nfield indent">
         <label :for="`bn-rep-${node.id}`">{{ $t('bayesNode.output.replicatedDraws') }}</label>
         <input :id="`bn-rep-${node.id}`" type="number" inputmode="numeric" min="1" :max="Math.max(1, sampler.draws)" :value="replicated" v-draft="replicated"

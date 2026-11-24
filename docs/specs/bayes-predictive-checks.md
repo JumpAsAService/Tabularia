@@ -734,3 +734,12 @@ holds.
 3. **The `prior_marginal` columns** of the sampling run go to `/tmp/run/prior.parquet`, the source of the report's prior
    density and of the contraction; the checks' run's redrawn ones are dropped; `checks.parquet` holds the check columns only.
 4. **The replicated output** names each row's outcome in a column `outcome` (`bayes-contract.md`, the same correction).
+
+## Correction of 2026-11-24 (owner): a model with correlated effects has no posterior checks and no replicated data
+
+The posterior checks and the replicated output run `generate_quantities` on the fitted draws, which CmdStan reads back from its CSV written to 8
+significant digits; the correlated effects' `cholesky_factor_corr` is checked to 1e-8 on reading and refuses the rounded rows (lot R6). The
+owner decided the CSV keeps its 8 digits: for a program whose quantity manifest says `gq_reread: false` (`CodegenVersion` 4: the Cholesky factor of
+correlated effects) the checks are off (`checks.on` false in the task, no setting on the node) and the replicated output is not offered or run.
+Where this section and the text above differ, this section holds. The prior predictive check is not touched: it runs `fixed_param`, with no draws
+to read. No verdict is given about a model whose checks are off. See `bayes-contract.md`, «Correction of 2026-11-24 (owner)».
