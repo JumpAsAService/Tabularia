@@ -82,6 +82,8 @@ class Task:
     # the `of` of every prior marginal whose prior has a finite variance (bayeschecks.FiniteVariance, written by flow-node); None when
     # the task does not say (every contraction NULL, with its note)
     finite_variance: frozenset[str] | None = None
+    # the original-scale pairs of the linear predictors (bayeschecks.ScalePairs): {"coef", "data"} or {"intercept", "lp", "data"}; [] without
+    scale_pairs: list[dict[str, Any]] = field(default_factory=list)
 
     def limit(self, name: str) -> int:
         return int(self.limits[name])
@@ -181,8 +183,22 @@ def parse_task(raw: Any) -> Task:
     finite = bayes.get("finite_variance")
     if finite is not None and not (isinstance(finite, list) and all(isinstance(x, str) for x in finite)):
         raise task_value("bayes.finite_variance")
+    pairs = bayes.get("scale_pairs", [])
+    if not (isinstance(pairs, list) and all(_scale_pair(x) for x in pairs)):
+        raise task_value("bayes.scale_pairs")
     return Task(raw, mode, mode, output, limits, model, sampler, lists["plates"], lists["mapping"], lists["data"], lists["quantities"],
-                bayes.get("checks"), replicated, series, frozenset(finite) if finite is not None else None)
+                bayes.get("checks"), replicated, series, frozenset(finite) if finite is not None else None, pairs)
+
+
+def _scale_pair(x: Any) -> bool:
+    """A term {coef, data} or an intercept {intercept (a name or null), lp, data}: strings, `lp` and `data` of one non-zero length."""
+    if not isinstance(x, dict):
+        return False
+    if "lp" not in x:
+        return isinstance(x.get("coef"), str) and isinstance(x.get("data"), str)
+    lp, data = x["lp"], x.get("data")
+    return (isinstance(lp, list) and isinstance(data, list) and len(lp) == len(data) > 0 and all(isinstance(v, str) for v in lp + data)
+            and (x.get("intercept") is None or isinstance(x["intercept"], str)))
 
 
 def _sampler(s: Any, mode: str) -> dict[str, Any]:

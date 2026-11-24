@@ -72,6 +72,12 @@ class TestReadTask(unittest.TestCase):
             bayes_task.parse_task(bad)
         self.assertEqual(e.exception.code, "mode")
 
+    def test_the_scale_pairs_go_writes_are_read(self):
+        task = bayes_task.parse_task(go_task("sample_scale"))
+        self.assertEqual(task.scale_pairs[0], {"coef": "b_x", "data": "x"})
+        self.assertEqual(task.scale_pairs[1]["lp"], ["b_x"])
+        self.assertEqual(bayes_task.parse_task(go_task("sample")).scale_pairs, [])
+
     def test_every_value_out_of_range_is_task_value(self):
         def broken(mutate):
             t = go_task("sample")
@@ -98,6 +104,9 @@ class TestReadTask(unittest.TestCase):
         broken(lambda t: t["bayes"].update(replicated={"draws_per_chain": 5}))      # set, and the output is not replicated
         broken(lambda t: t.update(output="replicated"))                              # replicated, and none set
         broken(lambda t: t.update(output="nope"))
+        broken(lambda t: t["bayes"].update(scale_pairs=[{"coef": "b"}]))
+        broken(lambda t: t["bayes"].update(scale_pairs=[{"intercept": "a", "lp": ["b"], "data": []}]))
+        broken(lambda t: t["bayes"].update(scale_pairs="b"))
         broken(lambda t: t["bayes"].update(data="x"))
         broken(lambda t: t.update(group="regression"))
         broken(lambda t: t["bayes"].update(series={"by": 3}))

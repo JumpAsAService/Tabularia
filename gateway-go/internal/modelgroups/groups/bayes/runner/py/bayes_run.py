@@ -32,8 +32,7 @@ After the second pass, when the program holds the predictive checks (lot R2, bay
 run on the thinned draws the node asked for. The thinned draw lines are written while the chains are followed (`on_line`); a run that would
 pass the time left is `too_slow` for the whole step, before any partial result.
 
-Not here yet: the prior predictive mode (R3), the original scale (R4). `begin` refuses the prior predictive as not built, before anything is
-fetched.
+The original scale of the linear predictors' coefficients (lot R4, bayes_scale) is read from `bayes.scale_pairs` and written by the second pass.
 """
 from __future__ import annotations
 
@@ -51,6 +50,7 @@ import bayes_card
 import bayes_checks
 import bayes_draws
 import bayes_facts
+import bayes_scale
 import bayes_follow
 import bayes_gq
 import bayes_main
@@ -650,7 +650,9 @@ class SampleJob:
             report = bayes_pass2.second_pass(str(draws_path), layout, task.limits, w, summary_path=str(summary_path), budget=budget,
                                              diagnostics=True, prior=prior.draws_at, seed=int(s.get("seed") or 0),
                                              seconds_left=self.clock.left() - self.copy_seconds(), quantity_entries=entries,
-                                             prior_variance=prior.variance_at)
+                                             prior_variance=prior.variance_at,
+                                             scale=bayes_scale.plan(task.scale_pairs, layout, self.facts.standardized,
+                                                                    task.limit("bayes_max_quantity_entries")))
             self.seconds["pass_2"] = report.seconds
             if prior_w is not None:
                 prior_path.unlink(missing_ok=True)

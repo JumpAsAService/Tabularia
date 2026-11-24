@@ -521,6 +521,29 @@ Applied on the owner's approval of 2026-11-24, each marked «Correction of 2026-
   `finite_variance` and `scale_pairs` (`b_x`/`x`, and `alpha` shifted by `b_x`). `bayes.series` is not added by this lot
   (`flow-node`'s, lot F2).
 
+## As built — lot R4, the runner
+
+`bayes_scale.py` (`plan`, `read_columns`, `original_scale`), `bayes_task.py` (`Task.scale_pairs`, read and checked: `task_value` for a
+pair that is not a term or an intercept), `bayes_pass2.py` (`second_pass(scale=...)`), `bayes_run.py` (the plan from the task's pairs and
+pass A's `facts.standardized`); tests `reference/runner_tests/test_scale.py` and `test_task.py`.
+
+- **`plan`** resolves the pairs against the layout (a coefficient must be a single value, a pair's data a standardized real: otherwise
+  `ManifestMismatch`, a fault of Tabularia) into term jobs (column, sd) and intercept jobs (the intercept's columns, one for a scalar and
+  one a unit for a quantity over a group plate; the terms' columns with mean / sd). A `null` intercept has no row. The cap is
+  `bayes_max_quantity_entries` **quantities** (a plate's elements count one each, cut where the cap falls; the rest is the note
+  `original_capped`), so the 93,490 rows of the caps' arithmetic hold.
+- **`original_scale`** runs after the blocks of the second pass (no diagnostics, so not in the prior predictive mode): the term's draws
+  are coef / sd, the intercept's intercept − Σ coef × mean / sd draw by draw (the shift is accumulated over blocks of at most
+  `pass_bytes` of coefficient columns, then each block of intercept columns is read, shifted and measured), each block one read of the
+  `value` column of every row group. Nothing is kept beyond a block.
+- **Rows**: a second row of the summary output per quantity with `scale` `original` (mean, sd, q5…q95; the diagnostics and the
+  contraction NULL), and `orig_mean`, `orig_sd`, `orig_q5`, `orig_q50`, `orig_q95` in the `summary` rows of the quantities of the report's
+  scope. The declaration (`orig_*` in the summary numbers, 5 rows an entry in `MaxResultRows`) was already in place.
+- **Tested** on a regression with a flat prior drawn exactly (a multivariate normal around the least squares on the standardized
+  columns): the original-scale mean is the regression made on the raw columns within the Monte Carlo error and its sd within 5%; the
+  numbers equal a hand calculation draw by draw to nine places; a vector intercept; no intercept slot; the cap and its note; the budgets
+  (one quantity a block, all) do not change a number.
+
 ## Open questions
 
 None.

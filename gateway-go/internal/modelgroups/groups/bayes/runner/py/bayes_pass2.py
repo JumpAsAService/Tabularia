@@ -27,7 +27,12 @@ when `diagnostics` is. `prior_variance(position)` is a function the caller gives
 Cauchy, a Student-t with ν ≤ 2) or `NO_PRIOR_DRAWS` (the run has no prior marginal for it); the contraction is then NULL and the
 facts, counted, are the note `contraction_null`. Without the function every contraction is NULL for want of prior draws.
 
-Not here: the original-scale pairs (the linear predictors'), the checks' prior marginals (`prior` is a function the caller gives:
+THE ORIGINAL SCALE. The pairs of `bayes.scale_pairs` (bayes_scale) give a linear predictor's coefficients on the columns' own scale: a
+second summary row (`scale` `original`: mean, sd, q5…q95, the diagnostics NULL) and `orig_mean`, `orig_sd`, `orig_q5`, `orig_q50`,
+`orig_q95` in the coefficient's `summary` rows, for at most `bayes_max_quantity_entries` quantities (the note `original_capped` says
+the rest), read after the blocks, a block at a time.
+
+Not here: the checks' prior marginals (`prior` is a function the caller gives:
 the draws of a quantity's prior marginal, or None).
 """
 from __future__ import annotations
@@ -44,6 +49,7 @@ import pyarrow.parquet as pq
 
 import bayes_charts
 import bayes_diag
+import bayes_scale
 from bayes_card import summary_kind
 from bayes_draws import read_metadata
 from bayes_task import DEFAULT_LIMITS, Entry, Layout, ManifestMismatch, report_order
@@ -55,6 +61,7 @@ NOT_DECIDED = "variance_not_decided"   # the task does not say which priors have
 SUMMARY_FLUSH = 4096
 SUMMARY_NUMBERS = (*bayes_diag.NUMBERS, "contraction")
 SUMMARY_COLUMNS = ("quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", *SUMMARY_NUMBERS)
+ORIGINAL_NUMBERS = ("orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95")
 DIAGNOSTIC_NUMBERS = ("mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail")
 SUMMARY_SCHEMA = pa.schema(
     [pa.field("quantity", pa.string(), nullable=False), pa.field("node", pa.string(), nullable=False), pa.field("label", pa.string()),
@@ -94,6 +101,8 @@ class PassReport:
     density_cut: dict[str, tuple[int, int]] = field(default_factory=dict)   # quantity → (posterior draws, prior draws) outside the range
     summary_rows: int = 0
     contraction: dict[str, int] = field(default_factory=dict)      # quantities by what the contraction is: "computed" or a reason
+    original: int = 0                    # the quantities that got a row of the original scale
+    original_capped: int = 0             # the ones the cap left without
     not_finite_draws: int = 0            # the prior predictive: draws in which some quantity is not finite (left out of that quantity's measures)
     total_draws: int = 0                 # the draws of all the chains
 
@@ -151,7 +160,7 @@ class _SummaryFile:
         self._rows: dict[str, list[Any]] = {name: [] for name in SUMMARY_COLUMNS}
         self.total = 0
 
-    def add(self, element: Any, entry: Entry | None, measures: dict[str, np.ndarray], i: int) -> None:
+    def add(self, element: Any, entry: Entry | None, measures: dict[str, np.ndarray], i: int, scale: str = "model") -> None:
         r = self._rows
         r["quantity"].append(element.quantity)
         r["node"].append(element.node or element.quantity)
@@ -160,9 +169,10 @@ class _SummaryFile:
         r["index"].append(element.index)
         r["index_2"].append(element.index_2)
         r["kind"].append(summary_kind(entry.kind) if entry and entry.kind else "parameter")
-        r["scale"].append("model")
+        r["scale"].append(scale)
         for name in SUMMARY_NUMBERS:
-            v = float(measures[name][i]) if name in measures else math.nan
+            kept = name in measures and (scale == "model" or name in bayes_diag.NUMBERS[:7])   # the original scale has no diagnostics
+            v = float(measures[name][i]) if kept else math.nan
             r[name].append(v if math.isfinite(v) else None)
         if len(r["quantity"]) >= SUMMARY_FLUSH:
             self.flush()
@@ -225,7 +235,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                 budget: Budget | None = None, diagnostics: bool = True, prior: Callable[[int], np.ndarray | None] | None = None,
                 seed: int = 0, seconds_left: float | None = None, quantity_entries: Sequence[Entry] | None = None,
                 prior_variance: Callable[[int], float | str] | None = None, read_row_group: Callable[..., Any] | None = None,
-                charts: bool | None = None) -> PassReport:
+                charts: bool | None = None, scale: bayes_scale.ScalePlan | None = None) -> PassReport:
     """Reads the draws parquet back by blocks of quantities and writes the summary, the quantity measures and the charts.
 
     `writer`: a ResultsWriter (`number`, `points`, `note`); `diagnostics` False is the prior predictive mode (mean, sd, the
@@ -233,6 +243,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     `seconds_left`: the time the pass may take (the projection above it is `too_slow`); `quantity_entries`: the entries that have a
     `quantity` row (default: the report's first `bayes_max_quantity_entries`); `prior_variance(position)`: the variance of a quantity's
     prior marginal or the reason it has none (the contraction). A refusal or an error leaves the summary file deleted.
+    `scale`: the original-scale jobs (`bayes_scale.plan`), written after the blocks when `diagnostics`.
     `charts` (default: `diagnostics`) False writes no chart at all: the prior predictive variant declares no `hist` and no `point`, and its
     report shows the priors' summary and the checks only (bayes-report.md, «The pages of `prior_predictive`»). Without `diagnostics` a draw in
     which a quantity is not finite (an ancestral draw that threw, or one with no mass) is left out of that quantity's measures, counted in
@@ -343,6 +354,18 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                 if diagnostics:
                     _extremes(extremes, entry_of, p0 + a, b - a, m)
             del block
+        if scale is not None and diagnostics:
+            def emit(position: int, m: dict[str, np.ndarray], j: int) -> None:
+                element, entry = layout.draws[position], layout.entries[int(entry_of[position])]
+                if summary is not None:
+                    summary.add(element, entry, m, j, scale="original")
+                if position in scope_set:
+                    for name in ORIGINAL_NUMBERS:
+                        v = float(m[name[5:]][j])
+                        writer.number("summary", name, v if math.isfinite(v) else None, level=element.node, level_2=element.unit)
+                report.original += 1
+            bayes_scale.original_scale(scale, read, groups, p_all, chains, draws, per_block, per_sub, emit)
+            report.original_capped = scale.capped
         if summary is not None:
             summary.close()
             report.summary_rows = summary.total
@@ -419,6 +442,9 @@ def _finish(writer: Any, report: PassReport, layout: Layout, limits: Mapping[str
                 NOT_DECIDED: "the model's version does not say whether the prior has a finite variance"}
         writer.note("contraction_null", "The contraction is empty for " + "; ".join(
             f"{n} quantities ({said.get(k, k)})" for k, n in sorted(nulls.items())) + ".")
+    if report.original_capped:
+        writer.note("original_capped", f"The original scale is given for {report.original} coefficients: {report.original_capped} more are "
+                                       "left without it (the node's limit on the quantities listed).")
     if report.density_cut:
         parts = [f"{name} ({a} posterior and {b} prior draws)" for name, (a, b) in report.density_cut.items()]
         writer.note("density_cut", "The density charts cut the draws outside their range: " + "; ".join(parts) + ".")
