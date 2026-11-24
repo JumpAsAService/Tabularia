@@ -230,13 +230,18 @@ async function runChecks () {
 function scheduleChecks (delay: number) {
   if (checkTimer) clearTimeout(checkTimer)
   checkSeq++
+  // until the new graph is read, no verdict of the old one is good for «Apply»
+  const turn = active.value
+  if (turn) for (const k of Object.keys(turn.checks)) turn.checks[k] = { state: 'run', added: [], applicable: false }
   checkTimer = setTimeout(() => { checkTimer = null; void runChecks() }, delay)
 }
 // a proposal arrives: its graph is read at once; the graph changes under it: after a moment
 watch(() => active.value?.proposal, (p) => { if (p) scheduleChecks(0) })
 watch(docText, (v, old) => { if (v && old && v !== old) scheduleChecks(500) })
 
-const checkOf = (turn: Turn, key: string): Check | undefined => turn.checks[key]
+// a unit left alone (the other applied) is read as the whole: the verdict of '*' is the verdict of that one unit
+const checkOf = (turn: Turn, key: string): Check | undefined =>
+  turn.checks[key] ?? (key !== '*' && turn === active.value && openUnits.value.length === 1 ? turn.checks['*'] : undefined)
 const canApply = (turn: Turn, key: string): boolean => {
   const c = checkOf(turn, key)
   return !props.readOnly && c?.state === 'done' && c.applicable
@@ -244,6 +249,15 @@ const canApply = (turn: Turn, key: string): boolean => {
 
 function snapshot (turn: Turn) { turn.closed = activeUnits.value.map(u => ({ ...u })) }
 
+// the focus does not fall to the page when the button it was on goes away: it moves to the note that says what happened
+// (not to a field: the canvas' keys and the editor's undo stay the page's)
+function focusOutcome (turn: Turn) {
+  void nextTick(() => {
+    const i = turns.value.indexOf(turn)
+    const el = document.getElementById(`ba-out-${i}`) ?? document.getElementById(`ba-out-${i}-unit`)
+    el?.focus()
+  })
+}
 function apply (turn: Turn, which: BayesUnit[]) {
   const units = which.filter(u => u.place === 'ok')
   if (!units.length || props.readOnly) return
@@ -255,11 +269,13 @@ function apply (turn: Turn, which: BayesUnit[]) {
       snapshot(turn)
       turn.outcome = 'applied'
     }
+    focusOutcome(turn)
   })
 }
 function discard (turn: Turn) {
   snapshot(turn)
   turn.outcome = 'discarded'
+  focusOutcome(turn)
 }
 
 /** The words of what a unit changes: «Prior», «Bounds», «Form», or the slot's («σ of the prior»). */
@@ -427,7 +443,7 @@ function onKey (e: KeyboardEvent) {
                   <code class="ba-to">{{ shownValue(u, u.after) }}</code>
                 </div>
                 <p v-if="u.why" class="ba-why">{{ u.why }}</p>
-                <p v-if="turn.appliedKeys.includes(u.key) && turn.outcome === 'pending'" class="ba-note ok"><Check :size="12" aria-hidden="true" /> {{ t('bayesAssistant.applied', { keys: undoKeys }) }}</p>
+                <p v-if="turn.appliedKeys.includes(u.key) && turn.outcome === 'pending'" class="ba-note ok" :id="`ba-out-${ti}-unit`" tabindex="-1"><Check :size="12" aria-hidden="true" /> {{ t('bayesAssistant.applied', { keys: undoKeys }) }}</p>
                 <p v-else-if="u.place !== 'ok' && !turn.appliedKeys.includes(u.key)" class="ba-note"><CircleAlert :size="12" aria-hidden="true" /> <span>{{ t(`bayesAssistant.place.${u.place}`) }}</span></p>
                 <template v-else-if="turn === active && unitsOf(turn).length > 1">
                   <ul v-if="checkOf(turn, u.key)?.added.length" class="ba-found">
@@ -465,9 +481,9 @@ function onKey (e: KeyboardEvent) {
               <button v-if="checkOf(turn, '*')?.added.length" type="button" class="ba-mini-btn" :disabled="busy || !ready" @click="sendBack(turn)">{{ t('bayesAssistant.sendFindings') }}</button>
               <button type="button" class="ba-mini-btn" @click="discard(turn)">{{ t('bayesAssistant.discard') }}</button>
             </div>
-            <p v-else-if="turn.outcome === 'applied'" class="ba-note ok"><Check :size="12" aria-hidden="true" /> {{ t('bayesAssistant.applied', { keys: undoKeys }) }}</p>
-            <p v-else-if="turn.outcome === 'outdated'" class="ba-note">{{ t('bayesAssistant.outdated') }}</p>
-            <p v-else class="ba-note">{{ t('bayesAssistant.discarded') }}</p>
+            <p v-else-if="turn.outcome === 'applied'" :id="`ba-out-${ti}`" tabindex="-1" class="ba-note ok"><Check :size="12" aria-hidden="true" /> {{ t('bayesAssistant.applied', { keys: undoKeys }) }}</p>
+            <p v-else-if="turn.outcome === 'outdated'" :id="`ba-out-${ti}`" tabindex="-1" class="ba-note">{{ t('bayesAssistant.outdated') }}</p>
+            <p v-else :id="`ba-out-${ti}`" tabindex="-1" class="ba-note">{{ t('bayesAssistant.discarded') }}</p>
           </div>
         </div>
       </template>
@@ -530,6 +546,7 @@ function onKey (e: KeyboardEvent) {
 .ba-activity { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .ba-note { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .ba-note svg { flex: none; margin-top: 2px; }
+.ba-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .ba-note.err { color: var(--danger-text); }
 .ba-note.ok { color: var(--accent-2); }
 .ba-note.warn { color: var(--text); }

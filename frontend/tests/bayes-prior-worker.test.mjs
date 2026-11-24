@@ -260,3 +260,22 @@ test('no phrase of the preview judges: a measure is said as a number', () => {
   }
   assert.ok(enBase)
 })
+
+test('a new request starts without the failure of the earlier one (review of the editor)', async () => {
+  const states = []
+  let attempts = 0
+  const worker = fakeWorker()
+  const quiet = console.error
+  console.error = () => {}
+  const client = bayesPriorPreviewClient(async () => { if (++attempts === 1) throw new Error('no chunk'); return worker }, s => states.push(s), 5)
+  try {
+    client.request(normalPlan, 'mu', 1)
+    await wait(30)
+    assert.equal(states.at(-1).failed, true)
+    client.request(normalPlan, 'mu', 2)
+    assert.equal(states.at(-1).pending, true)
+    assert.equal(states.at(-1).failed, false, 'asked again: not failed until it fails')
+    await wait(30)
+  } finally { console.error = quiet }
+  client.dispose()
+})

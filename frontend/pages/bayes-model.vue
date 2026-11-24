@@ -132,8 +132,11 @@ function reset () {
 }
 
 /** What the address asks: a saved model (or one of its versions), a new one, a template's preview. */
+let openSeq = 0 // the answers of an address the person has left are dropped (a slow model must not overwrite the next one)
 async function openAddress (q: LocationQuery) {
+  const mine = ++openSeq
   reset()
+  loading.value = false
   const id = num(q.id)
   const version = num(q.version)
   const project = num(q.project)
@@ -143,7 +146,7 @@ async function openAddress (q: LocationQuery) {
     modelId.value = id
     // the list's «Versions» opens the model on that tab
     if (route.hash === '#versions') tab.value = 'versions'
-    await loadModel(id, version)
+    await loadModel(id, version, mine)
   } else if (project !== null) {
     mode.value = 'new'
     modelId.value = null
@@ -162,10 +165,11 @@ async function openAddress (q: LocationQuery) {
   }
 }
 
-async function loadModel (id: number, version: number | null) {
+async function loadModel (id: number, version: number | null, mine: number) {
   loading.value = true
   try {
     const d = await api.get(id)
+    if (mine !== openSeq) return
     detail.value = d
     name.value = savedName.value = d.name
     projectId.value = savedProjectId.value = d.project_id
@@ -173,6 +177,7 @@ async function loadModel (id: number, version: number | null) {
     let v = d.version
     if (version !== null && version !== d.current_version) {
       v = await api.version(id, version)
+      if (mine !== openSeq) return
       editor.readonly.value = true
     }
     shownVersion.value = v.version
@@ -185,18 +190,29 @@ async function loadModel (id: number, version: number | null) {
     nextTick(() => canvas.value?.refit())
     loadVersions()
   } catch (e) {
+    if (mine !== openSeq) return
     const { status } = bayesFetchError(e)
     loadError.value = status === 404 ? t('bayes.editor.store.notFound') : t('bayes.editor.store.loadFailed', { error: String((e as Error)?.message ?? '') })
     editor.load(null)
   } finally {
-    loading.value = false
+    if (mine === openSeq) loading.value = false
   }
 }
 
+let versionsSeq = 0
 async function loadVersions () {
-  if (modelId.value === null) return
+  const id = modelId.value
+  if (id === null) return
+  const mine = ++versionsSeq
   versionsLoading.value = true
-  try { versions.value = await api.versions(modelId.value) } catch { versions.value = [] } finally { versionsLoading.value = false }
+  try {
+    const list = await api.versions(id)
+    if (mine === versionsSeq && modelId.value === id) versions.value = list
+  } catch {
+    if (mine === versionsSeq && modelId.value === id) versions.value = []
+  } finally {
+    if (mine === versionsSeq) versionsLoading.value = false
+  }
 }
 
 // another address of this page (a version opened, a restore, a model just created) opens it in place
@@ -388,11 +404,13 @@ async function restore () {
   restoring.value = v
   try {
     const d = await api.restore(id, v)
+    // the watch of the address opens what the address names; when the address does not change (restored from the current
+    // one's page) it does not fire: open it by hand then, and only then (never twice)
+    const sameAddress = JSON.stringify(route.query) === JSON.stringify({ id: String(id) })
     leaveConfirmed = true
     await router.replace({ path: '/bayes-model', query: { id: String(id) } })
     leaveConfirmed = false
-    // the same address (restored from the current one's page): open it again by hand
-    if (route.query.version === undefined && shownVersion.value !== d.current_version) await openAddress(route.query)
+    if (sameAddress) await openAddress(route.query)
     toast.success(t('bayes.editor.versions.restored', { from: v, n: d.current_version }))
   } catch (e) {
     const { data } = bayesFetchError(e)
@@ -422,7 +440,9 @@ const savedWords = computed(() => {
 const leaveOpen = ref(false)
 let decideLeaving: ((leave: boolean) => void) | null = null
 let leaveConfirmed = false
-function askToLeave (): Promise<boolean> {
+let leaveTo = ''
+function askToLeave (to?: { fullPath: string }): Promise<boolean> {
+  if (to) leaveTo = to.fullPath
   editor.flush()
   if (!unsaved.value) return Promise.resolve(true)
   leaveOpen.value = true
@@ -435,17 +455,26 @@ function answerLeaving (leave: boolean) {
   decideLeaving = null
 }
 async function saveAndLeave () {
+  const wasNew = mode.value === 'new'
   const ok = await save()
   // a refused save keeps the person here, its findings in sight
-  answerLeaving(ok && !unsaved.value)
+  const leave = ok && !unsaved.value
+  if (leave && wasNew && leaveTo) {
+    // a new model's save moved the address (?id=) and that cancels the navigation waiting: stay, then go where it was going
+    const to = leaveTo
+    answerLeaving(false)
+    await navigateTo(to)
+    return
+  }
+  answerLeaving(leave)
 }
 const wantedLeave = useLeaving()
-onBeforeRouteLeave(() => (leaveConfirmed || wantedLeave.value ? true : askToLeave()))
+onBeforeRouteLeave((to) => (leaveConfirmed || wantedLeave.value ? true : askToLeave(to)))
 // another model or version of this page replaces what is on screen: the same question
 onBeforeRouteUpdate((to, from) => {
   const same = ['id', 'version', 'project', 'template'].every(k => to.query[k] === from.query[k])
   if (same || quietRoute || leaveConfirmed || wantedLeave.value) return true
-  return askToLeave().then((ok) => { leaveConfirmed = false; return ok })
+  return askToLeave(to).then((ok) => { leaveConfirmed = false; return ok })
 })
 function browserWarning (e: BeforeUnloadEvent) {
   editor.flush()
@@ -797,6 +826,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
         <main class="cv">
           <BayesCanvas
             ref="canvas"
+            :inert="galleryOpen ? '' : undefined"
             :doc="doc"
             :model="model"
             :findings="findings"
@@ -846,7 +876,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             @mousedown="startPanelResize"
             @keydown="panelKeys"
           />
-          <div v-roving.main class="tabs" :class="{ many: aiAvailable }" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
+          <div v-roving.main class="tabs" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
             <button id="bt-inspector" type="button" role="tab" class="tab" :title="t('bayes.editor.inspector.title')" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
               <SlidersHorizontal :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.inspector.title') }}</span>
             </button>
@@ -1114,10 +1144,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 }
 .tab .cnt.e { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
 .tab.gl { margin-left: auto; padding: 5px 8px; }
-/* with the assistant's tab there are six: in a narrow panel only the chosen one says its name (the others keep it for a screen reader and as a tooltip) */
-.tabs { container: bayes-tabs / inline-size; }
+/* five tabs (six with the assistant's): in a narrow panel only the chosen one says its name (the others keep it for a screen reader and as a tooltip); never a tab bar wider than the panel */
+.tabs { container: bayes-tabs / inline-size; overflow-x: auto; scrollbar-width: none; }
 @container bayes-tabs (max-width: 540px) {
-  .tabs.many .tab:not([aria-selected="true"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tabs .tab:not([aria-selected="true"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 /* the panel's body is the container the inspector's two columns read (600 px: beside; less: under) */
 .sbody.assist { overflow: hidden; display: flex; flex-direction: column; padding-top: 10px; }

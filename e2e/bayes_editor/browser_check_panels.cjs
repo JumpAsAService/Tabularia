@@ -27,7 +27,7 @@ const SHA = '9f2b6c1a7d34e85f0a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef'
 const AGO = (m) => new Date(Date.now() - m * 60000).toISOString()
 
 function makeMock () {
-  const state = { checks: [], bodies: [], posts: [], nextRun: 11, live: {}, priorDone: false }
+  const state = { checks: [], bodies: [], posts: [], nextRun: 11, live: {}, priorDone: false, ai: true, saves: 0, creates: 0 }
   const dataManifest = [...manifest.data, { stan: 'Ppc_on', kind: 'checks_on' }, { stan: 'Prior_o1_n', kind: 'prior_count' }]
   const ver = (version) => ({ version, note: 'edited', created_at: '2026-11-20T10:00:00Z', created_by: 3, graph, format_version: 1, semantic_hash: 'aaa', findings: [], program, program_sha256: SHA, mapping, data_manifest: dataManifest, quantity_manifest: manifest.quantities, codegen_version: 3, family: 'hierarchical', catalog_sha256: 'cd', codegen_current: 3, current: true })
   const model = { id: 17, name: 'School scores', description: '', project_id: 2, owner_id: 3, current_version: 4, template_id: null, template_version: null, family: 'hierarchical', created_at: '2026-11-01T10:00:00Z', updated_at: '2026-11-20T10:00:00Z', editable: true, runnable: true, compile: { state: 'ready', detail: '', at: null }, uses: 1, saved_by: 'ada@example.org' }
@@ -36,8 +36,9 @@ function makeMock () {
   const nodeData = { label: '', bayesModelId: 17, bayesModelVersion: 4, bindings: { g: 'school', x: 'hours', y: 'score' }, sampler: { chains: 4, warmup: 1000, draws: 1000, seed: 1840277361, adapt_delta: 0.8, max_treedepth: 10, init: null }, output: 'summary', replicatedDraws: 50, timeoutSeconds: 1800, retries: 0, retryDelaySeconds: 60 }
   const definition = { nodes: [
     { id: 'source', type: 'source', position: { x: 60, y: 140 }, data: { filename: 'schools.csv', bucket: 'data-prep', parquetKey: 'sample/schools.parquet', rows: 1240, columns: COLUMNS } },
-    { id: 'ctl-1', type: 'bayes_model', position: { x: 340, y: 140 }, data: nodeData }],
-  edges: [{ id: 'e1', source: 'source', target: 'ctl-1', targetHandle: 'left' }] }
+    { id: 'ctl-1', type: 'bayes_model', position: { x: 340, y: 140 }, data: nodeData },
+    { id: 'ctl-2', type: 'bayes_model', position: { x: 340, y: 340 }, data: { ...nodeData, bayesModelVersion: 3, label: 'Older pin' } }],
+  edges: [{ id: 'e1', source: 'source', target: 'ctl-1', targetHandle: 'left' }, { id: 'e2', source: 'source', target: 'ctl-2', targetHandle: 'left' }] }
   const FLOW = { id: 1, name: 'Scores', description: '', project_id: 1, owner_id: 3, owner_name: 'Ada', engine: 'polars', production_engine: null, run_schedule: null, next_run_at: null, created_at: null, updated_at: '2026-11-24T10:00:00Z', last_run_status: null, last_run_at: null, definition: JSON.stringify(definition) }
   const GROUPS = { disabled_reason: null, groups: [{ id: 'bayes', enabled: true, usable: true, ready: true, max_timeout_seconds: 3600, max_rows: 1000000 }] }
   const CONNS = [{ id: 3, name: 'Tracking MLflow', db_type: 'mlflow', project_id: 1 }, { id: 4, name: 'Warehouse', db_type: 'postgres', project_id: 1 }]
@@ -74,14 +75,18 @@ function makeMock () {
   state.answer = (method, url, body) => {
     const p = url.pathname; let m
     if (p === '/auth/me') return ME
-    if (p === '/ai/status') return AI
+    if (p === '/ai/status') return state.ai ? AI : { ...AI, enabled: false, models: [], options: [] }
     if (p === '/models/groups') return GROUPS
     if (p === '/connections') return CONNS
     if (p === '/models/mlflow/3/experiments') return { experiments: [{ name: 'School scores' }, { name: 'Price elasticity' }] }
     if (p === '/bayes-models') return [model]
     if (p === '/projects') return [{ id: 1, name: 'Teaching', parent_id: null }, { id: 2, name: 'Schools', parent_id: 1 }]
-    if (p === '/bayes-models/17') return { ...model, version: ver(4) }
+    if (p === '/bayes-models/17') { if (method === 'PATCH') state.saves++; return { ...model, version: ver(4) } }
+    if (p === '/projects/2/bayes-models' && method === 'POST') { state.creates++; return { ...model, id: 18, name: 'New model', current_version: 1, version: ver(1) } }
+    if (p === '/bayes-models/18') return { ...model, id: 18, name: 'New model', current_version: 1, version: ver(1) }
+    if (p === '/bayes-models/18/versions') return [{ version: 1, note: '', created_at: '2026-11-20T10:00:00Z', created_by: 'ada@example.org', semantic_hash: 'aaa', program_sha256: 'x', codegen_version: 3, family: 'hierarchical', current: true }]
     if (p === '/bayes-models/17/versions') return [{ version: 4, note: 'edited', created_at: '2026-11-20T10:00:00Z', created_by: 'ada@example.org', semantic_hash: 'aaa', program_sha256: 'x', codegen_version: 3, family: 'hierarchical', current: true }]
+    if (p === '/bayes-models/17/versions/0') return ver(9)
     if (p.startsWith('/bayes-models/17/versions/')) return ver(4)
     if (p === '/bayes-models/17/runs') return RUNS
     if ((m = p.match(/^\/bayes-models\/17\/runs\/(\d+)\/facts$/))) return +m[1] === 11 ? FACTS : { __status: 404, detail: 'no' }
@@ -129,6 +134,7 @@ async function install (ctx, mock, UI) {
       const b = JSON.parse(req.postData()); mock.bodies.push(b)
       return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream' }, body: mock.assist(b) })
     }
+    if (/\/bayes-models\/17\/versions\/0$/.test(url.pathname)) await new Promise(r => setTimeout(r, 1500))
     const b = mock.answer(req.method(), url, req.postData())
     return route.fulfill({ status: b?.__status ?? 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(b) })
   })
@@ -207,6 +213,40 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
     await page.click('#bt-assistant'); await settle(300); await shot('tabs-assistant')
   }
 
+  // ---- 1b. the tab bar without the assistant, in the five languages (review of the editor) ---------------------
+  // five tabs with names, the longest of de/fr/es and the Problems counter: the bar never grows wider than the panel and
+  // the glossary's button stays inside the window.
+  mock.ai = false
+  for (const lang of ['en', 'it', 'de', 'es', 'fr']) {
+    await ctx.addCookies([{ name: 'tabularia-locale', value: lang, url: UI }])
+    for (const width of [1440, 1280]) {
+      await openEditor(width)
+      ok(`${tag}: ${lang} ${width} px, no assistant: the tab bar has no assistant tab`, (await page.locator('#bt-assistant').count()) === 0)
+      for (const id of ['inspector', 'code', 'problems', 'versions']) {
+        await page.click(`#bt-${id}`); await settle(200)
+        const m = await page.evaluate(() => {
+          const t = document.querySelector('.tabs'); const bar = t.getBoundingClientRect()
+          const tabs = [...t.querySelectorAll('[role=tab]')].map(b => b.getBoundingClientRect())
+          const gl = document.getElementById('bt-glossary').getBoundingClientRect()
+          return { bar: Math.round(bar.width), over: t.scrollWidth - t.clientWidth, outside: tabs.filter(r => r.right > bar.right + 0.5).length, glRight: Math.round(gl.right), win: window.innerWidth }
+        })
+        ok(`${tag}: ${lang} ${width} px, no assistant, «${id}» chosen (bar ${m.bar} px): nothing overflows the bar and the glossary is in the window`, m.over <= 0 && m.outside === 0 && m.glRight <= m.win, JSON.stringify(m))
+      }
+    }
+  }
+  await ctx.addCookies([{ name: 'tabularia-locale', value: 'en', url: UI }])
+  mock.ai = true
+
+  // ---- 1c. a new model: the template gallery makes the canvas inert; «Save and leave» leaves ------------------------
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(`${UI}/bayes-model?project=2`, { waitUntil: 'networkidle', timeout: 180000 })
+  await page.waitForSelector('.galwrap', { timeout: 90000 })
+  ok(`${tag}: the gallery over an empty canvas makes the canvas inert`, await page.evaluate(() => !!document.querySelector('.cv .vue-flow')?.closest('[inert]')))
+  await page.click('.pl [data-kind]'); await page.waitForSelector('.vue-flow__node', { timeout: 10000 }); await settle(800)
+  await page.click('.brand'); await page.waitForSelector('.modal-foot .primary', { timeout: 10000 })
+  await page.click('.modal-foot .primary'); await settle(1500)
+  ok(`${tag}: «Save and leave» on a new model saves it (once) and leaves for where it was going`, mock.creates === 1 && new URL(page.url()).pathname === '/', `creates ${mock.creates} at ${page.url()}`)
+
   // ---- 2. «Stan code» ----------------------------------------------------------------------------------------
   await openEditor(1440)
   await page.click('.vue-flow__node[data-id="mua"] .bn'); await settle(300)
@@ -218,6 +258,12 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
   ok(`${tag}: the Stan tab opens with scrollTop 0 and a node selected`, top.scrollTop === 0 && top.h2Top >= top.tabsBottom, JSON.stringify(top))
   ok(`${tag}: the selected node selects its row`, (await page.$$eval('.rows .row[aria-selected="true"]', r => r.length)) === 1)
   ok(`${tag}: the code is read only (typing adds nothing)`, await (async () => { await page.click('.monaco-editor .view-line'); await page.keyboard.type('zzz'); await settle(100); return page.evaluate(() => !document.querySelector('.monaco-editor').textContent.includes('zzz')) })())
+  for (const mod of ['Control', 'Meta']) {
+    // the key of the editor from the code's own field: it saves (the browser's «save the page» never opens)
+    const before = mock.saves
+    await page.click('.monaco-editor .view-line'); await page.keyboard.press(`${mod}+s`); await settle(700)
+    ok(`${tag}: ${mod === 'Meta' ? '⌘S' : 'Ctrl+S'} with the focus inside the code saves the model`, mock.saves === before + 1, `${before} -> ${mock.saves}`)
+  }
   await page.keyboard.press('Escape'); await settle(200)
   ok(`${tag}: Esc from the code goes to the tab`, (await page.evaluate(() => document.activeElement?.id)) === 'bt-code')
   await page.click('.monaco-editor .view-line'); await page.keyboard.press('Tab'); await settle(200)
@@ -261,6 +307,7 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
   }
   const nodeText = (id) => page.$eval(`.vue-flow__node[data-id="${id}"]`, e => e.textContent.replace(/\s+/g, ' '))
   const before = await nodeText('mua')
+  const tauaBefore = await nodeText('taua')
   await ask('PROPOSE two things')
   await page.waitForSelector('.ba-proposal.pending', { timeout: 5000 })
   await page.waitForFunction(() => document.querySelectorAll('.ba-pactions .primary:not([disabled])').length > 0, null, { timeout: 8000 })
@@ -275,6 +322,22 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
   ok(`${tag}: the proposal says how to undo`, /Undo/.test(await page.$eval('.ba-proposal', e => e.textContent)))
   await page.keyboard.press('Control+z'); await settle(600)
   ok(`${tag}: one Ctrl+Z takes the whole proposal back`, (await nodeText('mua')) === before)
+  // a proposal of two units applied one by one (review of the editor): the focus goes to the note of what happened, the
+  // unit left can still be applied, and no verdict of the old graph stands while the new one is read
+  await ask('PROPOSE one by one')
+  await page.waitForFunction(() => document.querySelectorAll('.ba-a:last-child .ba-one:not([disabled])').length === 2, null, { timeout: 8000 })
+  await page.locator('.ba-a:last-child .ba-one').first().click()
+  await settle(80)
+  ok(`${tag}: right after one unit is applied the other's «Apply» is off until the new graph is read`, await page.evaluate(() => [...document.querySelectorAll('.ba-a:last-child .ba-one')].every(b => b.disabled)))
+  ok(`${tag}: after «Apply» the focus is on the note of what happened, not on the page`, await page.evaluate(() => /^ba-out-/.test(document.activeElement?.id ?? '')), await page.evaluate(() => document.activeElement?.outerHTML?.slice(0, 80)))
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('.ba-a:last-child .ba-one')]; return b.length >= 1 && b.some(x => !x.disabled) }, null, { timeout: 8000 }).catch(() => {})
+  ok(`${tag}: the unit left alone can be applied (its «Apply» is enabled)`, await page.evaluate(() => [...document.querySelectorAll('.ba-a:last-child .ba-one')].some(b => !b.disabled)))
+  await page.locator('.ba-a:last-child .ba-pactions button', { hasText: 'Discard' }).click(); await settle(300)
+  ok(`${tag}: after «Discard» the focus is on its note`, await page.evaluate(() => /^ba-out-/.test(document.activeElement?.id ?? '')))
+  await page.keyboard.press('Delete'); await settle(300)
+  ok(`${tag}: Delete with the focus on that note removes no node`, (await page.locator('.vue-flow__node[data-id="mua"]').count()) === 1 && (await page.locator('.vue-flow__node[data-id="taua"]').count()) === 1)
+  await page.keyboard.press('Control+z'); await settle(600)
+  ok(`${tag}: Ctrl+Z from there takes the applied unit back`, (await nodeText('mua')) === before && (await nodeText('taua')) === tauaBefore)
   await ask('BROKEN')
   await page.waitForFunction(() => /refuses/.test(document.querySelector('.ba-a:last-child .ba-proposal')?.textContent ?? ''), null, { timeout: 8000 })
   const refused = await page.$eval('.ba-a:last-child .ba-proposal', e => ({ buttons: [...e.querySelectorAll('button')].map(b => ({ t: b.textContent.trim(), off: b.disabled })) }))
@@ -352,6 +415,15 @@ async function panelsPart ({ browser, which, UI, theme, ok }) {
   const refusedText = await page.locator('.bayes-panel').innerText()
   ok(`${tag}: MLflow: the gateway's refusal is shown under Run`, /name the MLflow experiment/.test(refusedText), refusedText.slice(-200))
   await sc.evaluate(el => { el.scrollTop = el.scrollHeight }); await settle(300); await shot('mlflow-refusal')
+
+  // 4c. «Use version N» on a node, then another node chosen while the version is read (review of the editor): the other
+  // node keeps its own model and version
+  sc = await openNode()
+  await page.click('.vue-flow__node[data-id="ctl-2"] .node-title'); await settle(1200)
+  await page.locator('.bayes-panel .notice button').click()
+  await page.click('.vue-flow__node[data-id="ctl-1"] .node-title'); await settle(2500)
+  const otherText = await page.locator('.bayes-panel').innerText()
+  ok(`${tag}: a node chosen while «Use version» is read keeps its own version (no v9 from the other)`, /v4/.test(otherText) && !/v9/.test(otherText), otherText.slice(0, 200))
 
   ok(`${tag}: no page error in the panels`, errors.length === 0, errors.join(' | '))
   await ctx.close()

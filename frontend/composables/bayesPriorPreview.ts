@@ -113,7 +113,8 @@ export function bayesPriorPreviewClient (
     request (plan, target, seed) {
       if (disposed) return
       waiting = { plan, target, seed }
-      set({ pending: true })
+      // a failure of an earlier request is not this one's: it must not be read as the answer to it
+      set({ pending: true, failed: false })
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => { timer = null; void send() }, delay)
     },
