@@ -393,9 +393,12 @@ func TestABayesStepWaitsForItsBinaryRunsItsJobAndKeepsItsResults(t *testing.T) {
 	compile, _ := info["compile"].(map[string]any)
 	bm, _ := info["bayes_model"].(map[string]any)
 	if info["model"] != "bayes_model" || info["group"] != "bayes" || info["variant"] != "sample" || compile["state"] != "ready" ||
-		compile["seconds"] != float64(6) || compile["waiting"] != false || bm["name"] != "Schools" || bm["version"] != float64(1) ||
+		compile["seconds"] != float64(6) || compile["waiting"] != false || bm["version"] != float64(1) ||
 		info["fingerprint"] == "" {
 		t.Errorf("the run's script: %s", r.script)
+	}
+	if _, has := bm["name"]; has {
+		t.Errorf("the run keeps the saved model's name, which GET /runs would hand to a person who cannot see the model: %s", r.script)
 	}
 	// one Job: the sampling Job, its deadline the timeout less the wait
 	if len(w.attempts) != 1 {

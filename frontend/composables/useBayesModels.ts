@@ -200,3 +200,15 @@ export function useBayesModels() {
 export function bayesFamilyKey(family: string | null | undefined): string {
   return `bayesModels.family_${family === 'hierarchical' || family === 'series' || family === 'glm' ? family : 'free'}`
 }
+
+/** The name of the saved model a run used. A run keeps the model's id and version, never its name (the run is read with VIEW on
+ *  the flow's folder, the model with VIEW on its own): the page asks the model, which answers 404 to a person who cannot see it. */
+export type SavedModelName = { name: string } | { hidden: true } | { failed: true }
+export async function resolveSavedModelName(get: (id: number) => Promise<{ name: string }>, id: number): Promise<SavedModelName> {
+  try {
+    return { name: (await get(id)).name }
+  } catch (e: any) {
+    const code = e?.response?.status ?? e?.statusCode ?? e?.status
+    return code === 404 ? { hidden: true } : { failed: true }
+  }
+}

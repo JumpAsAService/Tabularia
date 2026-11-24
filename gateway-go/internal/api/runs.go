@@ -14,6 +14,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
@@ -124,7 +125,7 @@ func (x *runRow) out() RunOut {
 		SQLScriptID: x.SQLScriptID, Status: x.Status, LaunchedBy: x.LaunchedBy, TriggerType: x.TriggerType, Engine: x.Engine,
 		OutputKey: x.OutputKey, RowsWritten: x.RowsWritten, Error: x.Error, ErrorDetail: x.ErrorDetail, PublishName: x.PublishName,
 		DatasourceID: x.DatasourceID, Destination: x.Destination, Mirror: x.Mirror, Email: x.Email, Notes: x.Notes,
-		Script: x.Script, ParentRunID: x.ParentRunID, StartedAt: iso(x.StartedAt), FinishedAt: isoPtr(x.FinishedAt)}
+		Script: withoutBayesModelName(x.Script), ParentRunID: x.ParentRunID, StartedAt: iso(x.StartedAt), FinishedAt: isoPtr(x.FinishedAt)}
 }
 
 const runJoins = ` LEFT JOIN flows f ON r.flow_id = f.id LEFT JOIN datasources ds ON r.datasource_id = ds.id
@@ -341,3 +342,40 @@ func (d *Deps) runsActivity(w http.ResponseWriter, r *http.Request, p *auth.Prin
 }
 
 var _ = pgx.ErrNoRows
+
+// withoutBayesModelName takes `name` out of the `bayes_model` object of a run's script on its way out: a run keeps the saved
+// model's id and version, and the page that shows it asks GET /bayes-models/{id} for the name, which answers only a person who
+// sees the model (the run is read with VIEW on the flow's folder, the model with VIEW on its own). Runs written before that
+// kept the name; this hides it for them too, and the stored text is left as it is.
+func withoutBayesModelName(script *string) *string {
+	if script == nil || !strings.Contains(*script, `"bayes_model"`) {
+		return script
+	}
+	v, err := pyjson.Loads(*script)
+	if err != nil {
+		return script
+	}
+	info, ok := v.(pyjson.Object)
+	if !ok {
+		return script
+	}
+	bm, ok := info.Value("bayes_model").(pyjson.Object)
+	if !ok {
+		return script
+	}
+	if _, has := bm.Get("name"); !has {
+		return script
+	}
+	kept := make(pyjson.Object, 0, len(bm))
+	for _, kv := range bm {
+		if kv.Key != "name" {
+			kept = append(kept, kv)
+		}
+	}
+	info = info.Set("bayes_model", kept)
+	text, err := pyjson.Dumps(info, pyjson.Options{})
+	if err != nil {
+		return script
+	}
+	return &text
+}

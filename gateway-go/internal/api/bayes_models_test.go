@@ -20,6 +20,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesmodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayestemplates"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/masking"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
 
 // The saved Bayesian models' routes on a PostgreSQL the Python migrations made
@@ -841,5 +843,99 @@ func TestBayesModelListCarriesCompileUsesAndAuthor(t *testing.T) {
 	if got := read(listBayesModels, nil); got[a.ID].Compile.State != "ready" || got[b.ID].Compile.State != "ready" ||
 		got[a.ID].Compile.At == nil || got[a.ID].Compile.Detail != "x" {
 		t.Errorf("list with a ready compile: %+v", got)
+	}
+}
+
+// An observer-only account reads the emails masked, in the list of models (saved_by) and in the list
+// of versions (created_by), like every other object; a normal account reads them in full.
+func TestBayesModelEmailsAreMaskedForAnObserver(t *testing.T) {
+	w := newBayesWorld(t)
+	m := w.create("Masked emails", w.folder, w.editor)
+	email := fmt.Sprintf("bmr-obs-%d@x.test", time.Now().UnixNano())
+	obs := &auth.User{Email: email, IsActive: true, IsObserver: true}
+	obs.ID = w.one(`INSERT INTO users (email, full_name, hashed_password, is_active, is_superuser, is_observer, is_service, created_at)
+		VALUES ($1, 'observer', 'x', true, false, true, false, now()) RETURNING id`, email)
+	w.one(`INSERT INTO permissions (project_id, user_id, capability) VALUES ($1, $2, 'view') RETURNING id`, w.folder, obs.ID)
+	t.Cleanup(func() {
+		_, _ = w.db.Exec(w.ctx, `DELETE FROM permissions WHERE user_id = $1`, obs.ID)
+		_, _ = w.db.Exec(w.ctx, `DELETE FROM audit_logs WHERE actor_id = $1`, obs.ID)
+		_, _ = w.db.Exec(w.ctx, `DELETE FROM users WHERE id = $1`, obs.ID)
+	})
+	masked := masking.Email(w.editor.Email)
+	if masked == w.editor.Email {
+		t.Fatal("the masking must change the email")
+	}
+	for _, who := range []struct {
+		u    *auth.User
+		want string
+	}{{obs, masked}, {w.viewer, w.editor.Email}} {
+		rec := w.call(listBayesModels, who.u, bayesCall{method: "GET", path: "/x"})
+		w.want(rec, 200)
+		var rows []struct {
+			ID      int64   `json:"id"`
+			SavedBy *string `json:"saved_by"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, r := range rows {
+			if r.ID == m.ID {
+				found = true
+				if r.SavedBy == nil || *r.SavedBy != who.want {
+					t.Errorf("saved_by for %s: %v, want %s", who.u.Email, deref(r.SavedBy), who.want)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("model not listed for %s", who.u.Email)
+		}
+		rec = w.call(listBayesModelVersions, who.u, bayesCall{method: "GET", path: "/x", values: map[string]string{"model_id": bmID(m.ID)}})
+		w.want(rec, 200)
+		var vs []struct {
+			CreatedBy *string `json:"created_by"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &vs); err != nil {
+			t.Fatal(err)
+		}
+		if len(vs) == 0 || vs[0].CreatedBy == nil || *vs[0].CreatedBy != who.want {
+			t.Errorf("created_by for %s: %v, want %s", who.u.Email, len(vs) > 0 && vs[0].CreatedBy != nil, who.want)
+		}
+	}
+}
+
+// A run keeps the saved model's id and version, never its name: a person who may read the run (VIEW on the flow's folder) but
+// not see the model (another folder) does not learn the name from GET /runs, not even from a run written with it before.
+func TestBayesRunListNeverCarriesTheModelName(t *testing.T) {
+	w := newBayesWorld(t)
+	m := w.create("Secret model name", w.folder, w.editor)
+	flow := w.one(`INSERT INTO flows (name, description, project_id, owner_id, definition, engine, created_at, updated_at)
+		VALUES ('run name', '', $1, $2, '{"nodes": [], "edges": []}', 'duckdb', now(), now()) RETURNING id`, w.other, w.stranger.ID)
+	t.Cleanup(func() {
+		_, _ = w.db.Exec(w.ctx, `DELETE FROM runs WHERE flow_id = $1`, flow)
+	})
+	script := fmt.Sprintf(`{"node_id": "b", "model": "bayes_model", "bayes_model": {"id": %d, "version": 1, "name": "Secret model name"}, "label": "x"}`, m.ID)
+	w.one(`INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key,
+		publish_description, publish_overwrite, publish_sort_keys, started_at, finished_at, script)
+		VALUES ('model', $1, '', 'SUCCESS', $2, 'manual', '', 'data-prep', '', '', false, '[]', now(), now(), $3) RETURNING id`,
+		flow, w.stranger.ID, script)
+	w.d.Panel = settings.New(w.d.Config, false, w.d.Log)
+	for _, u := range []*auth.User{w.stranger, w.admin} {
+		r := httptest.NewRequest("GET", "/runs?limit=200", nil)
+		rec := httptest.NewRecorder()
+		w.d.searchRuns(rec, r, &auth.Principal{User: *u})
+		w.want(rec, 200)
+		text := rec.Body.String()
+		if !strings.Contains(text, "bayes_model") || !strings.Contains(text, fmt.Sprintf(`\"id\": %d`, m.ID)) {
+			t.Errorf("%s: the run lost the model's id: %s", u.FullName, text)
+		}
+		if strings.Contains(text, "Secret model name") {
+			t.Errorf("%s: the model's name is in GET /runs: %s", u.FullName, text)
+		}
+	}
+	// the stored run is left as it was: only what leaves the gateway changes
+	var stored string
+	if err := w.db.QueryRow(w.ctx, `SELECT script FROM runs WHERE flow_id = $1`, flow).Scan(&stored); err != nil || !strings.Contains(stored, "Secret model name") {
+		t.Errorf("the stored script: %q (%v)", stored, err)
 	}
 }

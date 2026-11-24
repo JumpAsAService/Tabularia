@@ -78,3 +78,20 @@ test('the client knows the state timeout and the 409 of «Compile now»', () => 
   assert.match(client, /export type BayesCompileState = 'none' \| 'queued' \| 'running' \| 'ready' \| 'failed' \| 'timeout'/)
   assert.match(client, /409 with\s+\* the state's sentence/)
 })
+
+test('a run page asks the model for its name: a 404 says «a model you cannot see», the run never holds the name', async () => {
+  const hidden = await B.resolveSavedModelName(async () => { throw { response: { status: 404 } } }, 7)
+  assert.deepEqual(hidden, { hidden: true })
+  assert.deepEqual(await B.resolveSavedModelName(async () => { throw { statusCode: 404 } }, 7), { hidden: true })
+  assert.deepEqual(await B.resolveSavedModelName(async (id) => ({ name: `m${id}` }), 7), { name: 'm7' })
+  assert.deepEqual(await B.resolveSavedModelName(async () => { throw { response: { status: 500 } } }, 7), { failed: true })
+  const page = readFileSync(new URL('../components/models/ModelRunDetail.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(page, /bayes\.name|name\?: string \}/, 'the page does not read a name from the run')
+  assert.match(page, /resolveSavedModelName\(bayesApi\.get, id\)/)
+  assert.match(page, /models\.runDetail\.savedModelHidden/)
+  for (const [lang, cat] of Object.entries(langs)) {
+    assert.equal(typeof cat.models?.runDetail?.savedModelHidden, 'string', lang)
+    assert.notEqual(cat.models.runDetail.savedModelHidden.trim(), '', lang)
+  }
+  assert.notEqual(en.models.runDetail.savedModelHidden, langs.it.models.runDetail.savedModelHidden)
+})

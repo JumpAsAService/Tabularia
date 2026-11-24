@@ -4,10 +4,11 @@
 // when it refused the data, and the end of its log; and where a flow run logged it in MLflow
 // (jobs_models_mlflow.go): the experiment, the run and the registered version, with their links,
 // or why it was not logged.
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import { modelNameKey } from '~/composables/modelCatalog'
+import { resolveSavedModelName, useBayesModels } from '~/composables/useBayesModels'
 
 const props = defineProps<{ script: string }>()
 const { t, te } = useI18n()
@@ -22,7 +23,7 @@ interface ModelRunInfo {
   exit_code?: number | null
   refusal?: { code?: string; message?: string }
   /** a Bayesian model's step: the saved model it ran and the compile it waited for (gateway-go/internal/api/jobs_bayes.go) */
-  bayes_model?: { id?: number; version?: number; name?: string }
+  bayes_model?: { id?: number; version?: number }
   compile?: { state?: string; detail?: string; waiting?: boolean; seconds?: number }
   check?: string
   log?: string
@@ -59,6 +60,19 @@ const modelName = computed(() => {
 })
 const ml = computed(() => info.value.mlflow ?? null)
 const bayes = computed(() => info.value.bayes_model ?? null)
+// the run holds the saved model's id and version; the name is asked of the model, which a person who cannot see it is refused
+const bayesApi = useBayesModels()
+const savedName = ref<string | null>(null)
+const savedHidden = ref(false)
+watch(() => bayes.value?.id, async (id) => {
+  savedName.value = null
+  savedHidden.value = false
+  if (!id) return
+  const got = await resolveSavedModelName(bayesApi.get, id)
+  if (bayes.value?.id !== id) return
+  if ('name' in got) savedName.value = got.name
+  else if ('hidden' in got) savedHidden.value = true
+}, { immediate: true })
 /** What the step did about the compiled model: waiting for it, how long it waited, or its refusal; nothing when the binary was
  *  there at once. A failed or timed-out compile says the gateway's own sentence. */
 const compileText = computed(() => {
@@ -84,7 +98,7 @@ const groupName = computed(() => {
   <div class="model-run-detail">
     <dl>
       <div><dt>{{ $t('models.runDetail.model') }}</dt><dd>{{ modelName }}<template v-if="info.check === 'prior_predictive'"> · {{ $t('models.runDetail.priorCheck') }}</template></dd></div>
-      <div v-if="bayes"><dt>{{ $t('models.runDetail.savedModel') }}</dt><dd>{{ bayes.name }}<template v-if="bayes.version"> · v{{ bayes.version }}</template></dd></div>
+      <div v-if="bayes"><dt>{{ $t('models.runDetail.savedModel') }}</dt><dd>{{ savedHidden ? $t('models.runDetail.savedModelHidden') : (savedName ?? `#${bayes.id ?? ''}`) }}<template v-if="bayes.version"> · v{{ bayes.version }}</template></dd></div>
       <div v-if="compileText" class="largo"><dt>{{ $t('models.runDetail.compile') }}</dt><dd :class="{ bad: compileBad }">{{ compileText }}</dd></div>
       <div><dt>{{ $t('models.runDetail.group') }}</dt><dd>{{ groupName }}<template v-if="info.version"> · v{{ info.version }}</template></dd></div>
       <div v-if="info.input_rows != null"><dt>{{ $t('models.runDetail.inputRows') }}</dt><dd>{{ info.input_rows }}</dd></div>

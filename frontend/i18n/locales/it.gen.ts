@@ -7474,6 +7474,7 @@ export default {
     },
     "runDetail": {
       "savedModel": "Modello salvato",
+      "savedModelHidden": "un modello che non puoi vedere",
       "compile": "Compilazione",
       "compiling": "Compilazione del modello prima di tutto (di solito 10–30 s)…",
       "compiled": "Compilato in {s} s",

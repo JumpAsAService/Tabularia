@@ -407,7 +407,7 @@ None.
   retries; then `Binaries.Need` with the run's authority (`ErrRefused` fails with the state's sentence). The editor's trial
   route calls it before inserting its run (409 models off, 403 the group's use or the model not available, 422 the rest), so
   the compile is queued from the moment the person presses Run.
-- **`runBayes`**: the child run (kind `model`, its `info` the model step's plus `bayes_model {id, version, name}` and
+- **`runBayes`**: the child run (kind `model`, its `info` the model step's plus `bayes_model {id, version} (never the name: the run page asks the model, a 404 reads «a model you cannot see»)` and
   `compile {state, detail, waiting[, seconds]}`), the input (`modelPrepareInput` gained `then []any`, the operations after the
   `select`: nil for the model and Predict nodes, whose requests keep their bytes — `modelInputRequest`, tested; for a series
   the engine's `sort` `{"by": [<the group index's column of series.by>, <the time column>]}`, or the time alone for one

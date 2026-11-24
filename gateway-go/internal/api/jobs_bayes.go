@@ -719,8 +719,7 @@ func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "log", Value: ""}, {Key: "trial", Value: trial},
 		{Key: "fingerprint", Value: bayesFingerprint(r.definition, r.node)}, {Key: "budget_seconds", Value: s.budget},
 		{Key: "namespace", Value: ns}, {Key: "internet_access", Value: false}, {Key: "input_rows", Value: nil},
-		{Key: "bayes_model", Value: pyjson.Object{{Key: "id", Value: s.model.ID}, {Key: "version", Value: s.version.Version},
-			{Key: "name", Value: s.model.Name}}},
+		{Key: "bayes_model", Value: pyjson.Object{{Key: "id", Value: s.model.ID}, {Key: "version", Value: s.version.Version}}},
 		{Key: "compile", Value: bayesCompileInfo(s.compile, s.binary == nil, 0)}}
 	if s.mode == bayescontract.ModePriorPredictive {
 		// what keeps the run out of the node's outputs (runsOfNodeChecked) and gives it to the Report tab apart

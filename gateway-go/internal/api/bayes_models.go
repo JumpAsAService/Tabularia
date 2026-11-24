@@ -403,6 +403,11 @@ func bayesMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker,
 		}
 	}
 	rights := map[int64][2]bool{}
+	shown, err := shownEmail(ctx, c)
+	if err != nil {
+		fail(d, w, "bayes models: the emails", err)
+		return
+	}
 	out := make([]bayesListedOut, 0, len(rows))
 	for i := range rows {
 		o, err := bayesOutOf(ctx, c, &rows[i].Model, rows[i].Family, rights)
@@ -414,8 +419,13 @@ func bayesMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker,
 		if !ok {
 			st = bayesmodels.CompileState{State: bayesmodels.CompileNone}
 		}
+		var savedBy *string
+		if rows[i].SavedBy != nil {
+			e := shown(*rows[i].SavedBy)
+			savedBy = &e
+		}
 		out = append(out, bayesListedOut{bayesModelOut: o, Compile: bayesCompileOutOf(st), Uses: counts[rows[i].ID],
-			SavedBy: rows[i].SavedBy})
+			SavedBy: savedBy})
 	}
 	server.JSON(w, http.StatusOK, out)
 }
@@ -725,11 +735,17 @@ func listBayesModelVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *
 	if !ok {
 		return
 	}
-	m, _, ok := bayesVisible(d, w, r, perm.For(d.DB, &p.User), p, ids[0])
+	c := perm.For(d.DB, &p.User)
+	m, _, ok := bayesVisible(d, w, r, c, p, ids[0])
 	if !ok {
 		return
 	}
 	ctx := r.Context()
+	shown, err := shownEmail(ctx, c)
+	if err != nil {
+		fail(d, w, "bayes models: the emails", err)
+		return
+	}
 	rows, err := bayesmodels.Versions(ctx, d.DB, m.ID)
 	if err != nil {
 		fail(d, w, "bayes models: the versions", err)
@@ -756,7 +772,7 @@ func listBayesModelVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *
 				fail(d, w, "bayes models: the authors", err)
 				return
 			}
-			emails[id] = email
+			emails[id] = shown(email)
 		}
 		us.Close()
 		if err := us.Err(); err != nil {

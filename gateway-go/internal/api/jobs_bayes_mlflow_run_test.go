@@ -258,7 +258,7 @@ func TestABayesFlowRunIsRecordedInMLflow(t *testing.T) {
 	}
 }
 
-// No draw, ever: whatever the output (the summary, the draws), the files are the same five, the read-back
+// No draw, ever: whatever the output (the summary, the draws, and the replicated data of a model that has them), the files are the same five, the read-back
 // asks for the five sections alone, and no value of a curve row (the thinned traces, the densities) is in a file or a metric.
 func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 	w := newBayesMLflowWorld(t)
@@ -280,7 +280,14 @@ func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 		!strings.Contains(err.Error(), "the replicated data are not available for this model") || len(ml.Runs) != 0 {
 		t.Fatalf("the replicated data of the slopes model: %v (%d runs)", err, len(ml.Runs))
 	}
-	for i, output := range []string{"summary", "draws"} {
+	// the replicated data are an output of a model without correlated effects: the same five files, nothing drawn
+	intercepts := w.save("Schools intercepts", templateGraph(t, "hier_intercepts"))
+	for i, c := range []struct{ output, model string }{{"summary", "slopes"}, {"draws", "slopes"}, {"replicated", "intercepts"}} {
+		output := c.output
+		if c.model == "intercepts" {
+			w.saved = intercepts
+			w.ml.files["model.json"] = w.card("")
+		}
 		_, id, err := w.step(w.ann, w.node("", map[string]any{"output": output}), true, "manual")
 		if err != nil {
 			t.Fatalf("%s: %v", output, err)
@@ -321,10 +328,13 @@ func TestNoDrawOfABayesianRunReachesMLflow(t *testing.T) {
 		if strings.Contains(text, "PAR1") {
 			t.Errorf("%s: a parquet file in MLflow", output)
 		}
+		if output == "replicated" && run.Params["replicated_draws"] != "50" {
+			t.Errorf("replicated_draws = %q", run.Params["replicated_draws"])
+		}
 	}
 	// the sections the read-back asked for, every time: the five, never a chart's
 	asked := w.asked()
-	if len(asked) != 2 {
+	if len(asked) != 3 {
 		t.Fatalf("%d read-backs", len(asked))
 	}
 	for _, body := range asked {
