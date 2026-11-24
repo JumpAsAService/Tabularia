@@ -1919,6 +1919,13 @@ not record it» and the reason. With **Continue without MLflow** on, the step su
 warning instead and the run page says «Not logged, the step went on». A step that fails after
 its Job ran is logged to MLflow as a failed run, as far as the server answers.
 
+**The Bayesian model node** has the same block, in its panel between the output and the limits, and the same words. Its run
+records the parameters, the sampler's facts and the summary of the quantities, and its files are `tabularia/summary.csv`,
+`tabularia/report.pdf`, `model/MLmodel`, `model/model.json` and `model/program.stan`: **never the draws and never
+`results.parquet`**, whatever the node's output. **Register the model as** adds a version with the model's program and its
+summary; a Predict step does not apply it. A trial and the prior predictive check log nothing. The experiment is checked, and
+the connection's CONNECT right with it, before the program is compiled; the refusal is said under **Run**.
+
 **No secret reaches the Job.** The connection's password or token is decrypted in the
 gateway, which makes the calls; the Job's `task.json` only says that files for MLflow are
 wanted, and it holds no MLflow variable, address or token. The Job has no internet access in

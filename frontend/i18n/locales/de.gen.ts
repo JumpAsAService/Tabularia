@@ -8770,6 +8770,8 @@ export default {
       "replicatedDraws": "Behaltene Ziehungen je Kette",
       "replicatedMax": "Von 1 bis {max}.",
     },
+    "mlflowNote": "An MLflow gehen die Parameter, die Zusammenfassung der Größen, die Fakten des Samplers, der Bericht und die Dateien des Modells; die Ziehungen nie.",
+    "mlflowRegisterHint": "Optional. Jeder Lauf fügt unter diesem Namen eine Version hinzu, mit dem Programm des Modells und seiner Zusammenfassung. Ein Predict-Schritt wendet sie nicht an.",
     "limits": {
       "title": "Grenzen",
       "timeout": "Zeitlimit (s)",

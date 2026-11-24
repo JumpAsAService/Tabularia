@@ -28,6 +28,7 @@ import { commitFocusedField } from '~/composables/commitFocusedField'
 import { vDraft } from '~/composables/draftField'
 import Select from '~/components/ui/Select.vue'
 import ModelRun from '~/components/models/ModelRun.vue'
+import BayesMlflow from '~/components/bayes/BayesMlflow.vue'
 
 const props = defineProps<{
   node: Node
@@ -38,6 +39,8 @@ const props = defineProps<{
   outputs?: ScriptOutputs[string] | null
   trial?: { runId: number | null; status: string; startedAt: number; error: string; check?: string } | null
   flowDirty?: boolean
+  // the person's connections: the `mlflow` ones are offered in the MLflow section
+  connections?: { id: number; name: string; db_type: string }[]
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -430,6 +433,9 @@ async function runPrior() {
         <span class="def">{{ $t('bayesNode.output.replicatedMax', { max: fmt.count(Math.max(1, sampler.draws)) }) }}</span>
       </div>
     </fieldset>
+
+    <!-- 5b. MLflow: the flow's runs recorded on a server, the draws never -->
+    <BayesMlflow :node-id="node.id" :mlflow="data.mlflow" :connections="connections" :read-only="readOnly" @update="emit('update', $event)" />
 
     <!-- 6. the limits -->
     <div class="block">

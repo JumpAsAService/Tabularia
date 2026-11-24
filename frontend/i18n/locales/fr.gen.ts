@@ -8770,6 +8770,8 @@ export default {
       "replicatedDraws": "Tirages conservés par chaîne",
       "replicatedMax": "De 1 à {max}.",
     },
+    "mlflowNote": "Vers MLflow partent les paramètres, le résumé des grandeurs, les faits de l'échantillonneur, le rapport et les fichiers du modèle ; les tirages jamais.",
+    "mlflowRegisterHint": "Facultatif. Chaque exécution ajoute une version sous ce nom, avec le programme du modèle et son résumé. Une étape Predict ne l'applique pas.",
     "limits": {
       "title": "Limites",
       "timeout": "Durée maximale (s)",

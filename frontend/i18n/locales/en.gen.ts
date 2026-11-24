@@ -8770,6 +8770,8 @@ export default {
       "replicatedDraws": "Draws kept for each chain",
       "replicatedMax": "From 1 to {max}.",
     },
+    "mlflowNote": "The parameters, the summary of the quantities, the sampler's facts, the report and the model's files go to MLflow; the draws never do.",
+    "mlflowRegisterHint": "Optional. Each run adds a version under this name, with the model's program and its summary. A Predict step does not apply it.",
     "limits": {
       "title": "Limits",
       "timeout": "Time limit (s)",

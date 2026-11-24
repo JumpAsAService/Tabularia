@@ -8770,6 +8770,8 @@ export default {
       "replicatedDraws": "Estrazioni tenute per catena",
       "replicatedMax": "Da 1 a {max}.",
     },
+    "mlflowNote": "A MLflow vanno i parametri, il riepilogo delle quantità, i fatti del campionatore, il report e i file del modello; le estrazioni mai.",
+    "mlflowRegisterHint": "Facoltativo. Ogni esecuzione aggiunge una versione con questo nome, con il programma del modello e il suo riepilogo. Un passo Predict non la applica.",
     "limits": {
       "title": "Limiti",
       "timeout": "Tempo massimo (s)",

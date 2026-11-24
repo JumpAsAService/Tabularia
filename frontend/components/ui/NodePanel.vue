@@ -817,6 +817,7 @@ function pickDatasource(id: number | null) {
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"
         :flow-dirty="!!flowDirty"
+        :connections="connections"
         @update="emit('update', $event)"
         @delete="emit('delete')"
         @run="emit('script-run', node.id)"
