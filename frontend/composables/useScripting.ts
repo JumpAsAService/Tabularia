@@ -222,7 +222,17 @@ export interface ScriptNodeOutput {
   finished_at: string | null
   stale: boolean
 }
-export type ScriptOutputs = Record<string, { last: ScriptNodeRun | null; output: ScriptNodeOutput | null }>
+/** A Bayesian model node's latest prior predictive check (a trial of its own, never its output). */
+export interface ScriptPriorCheck {
+  run_id: number
+  status: string
+  trial: boolean
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+  stale: boolean // the node changed since
+}
+export type ScriptOutputs = Record<string, { last: ScriptNodeRun | null; output: ScriptNodeOutput | null; prior_check?: ScriptPriorCheck | null }>
 
 // one copy for the whole editor (palette, node panel, code editor); loaded again when
 // the editor page opens and when the code editor opens, so what administrators changed
@@ -257,8 +267,10 @@ export function useScriptingEditor() {
     return completionsCache.get(key)!
   }
   // the editor's «Run» of a Script node of the saved flow; follow the run with GET /runs/{id}
-  const runNode = (flowId: number, nodeId: string) =>
-    apiFetch<{ run_id: number }>(`/scripting/flows/${flowId}/nodes/${encodeURIComponent(nodeId)}/run`, { method: 'POST' })
+  // `check`: a Bayesian model node's prior predictive check, a trial of its own (the same route, {"check": "prior_predictive"})
+  const runNode = (flowId: number, nodeId: string, check?: 'prior_predictive') =>
+    apiFetch<{ run_id: number }>(`/scripting/flows/${flowId}/nodes/${encodeURIComponent(nodeId)}/run`,
+      { method: 'POST', ...(check ? { body: { check } } : {}) })
   const outputs = (flowId: number) => apiFetch<ScriptOutputs>(`/scripting/flows/${flowId}/outputs`)
   // files: the paths of the node's files, the modules its code may import
   const lint = (environmentId: number, path: string, content: string, files: string[]) =>

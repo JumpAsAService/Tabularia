@@ -59,9 +59,16 @@ export interface StatModelRuns {
   trial: boolean
   failed: boolean
   running: boolean
+  /** a Bayesian model node's: which run the tab shows (the sampling's or the prior predictive check's), whether the node
+   *  has a prior predictive check to switch to, and when the run shown ended (ISO) */
+  view?: StatModelView
+  hasPrior?: boolean
+  at?: string | null
 }
 
-type NodeRun = { run_id: number; status?: string; trial?: boolean; stale?: boolean } | null | undefined
+export type StatModelView = 'posterior' | 'prior'
+
+type NodeRun = { run_id: number; status?: string; trial?: boolean; stale?: boolean; finished_at?: string | null; started_at?: string | null } | null | undefined
 
 /** The run a model node's report draws, from the node's entry of GET /scripting/flows/{id}/outputs
  *  (C2 gives model nodes theirs, as Script nodes have): its latest run when it succeeded, else
@@ -73,6 +80,22 @@ export function statModelReportRun(entry: { last?: NodeRun; output?: NodeRun } |
   const good = last && last.status === 'SUCCESS' ? last : entry?.output && entry.output.status !== 'FAILURE' ? entry.output : null
   if (!good) return { runId: null, stale: false, trial: false, failed }
   return { runId: good.run_id, stale: !!good.stale, trial: !!good.trial, failed }
+}
+
+/** What the Report tab of a Bayesian model node shows: the sampling's latest run, or (`prior`, when the node has one) its latest
+ *  prior predictive check, a trial of its own that never stands in for the other; and the date of the run shown. */
+export function statModelReportOf(entry: { last?: NodeRun; output?: NodeRun; prior_check?: NodeRun } | null | undefined, view: StatModelView):
+  { runId: number | null; stale: boolean; trial: boolean; failed: boolean; view: StatModelView; hasPrior: boolean; at: string | null } {
+  const prior = entry?.prior_check ?? null
+  const hasPrior = !!prior
+  if (view === 'prior' && prior) {
+    const ok = prior.status === 'SUCCESS'
+    return { runId: ok ? prior.run_id : null, stale: ok && !!prior.stale, trial: ok, failed: prior.status === 'FAILURE', view, hasPrior,
+      at: ok ? (prior.finished_at ?? prior.started_at ?? null) : null }
+  }
+  const run = statModelReportRun(entry)
+  const shown = run.runId === null ? null : [entry?.last, entry?.output].find((r) => r && r.run_id === run.runId) ?? null
+  return { ...run, view: 'posterior', hasPrior, at: shown ? (shown.finished_at ?? shown.started_at ?? null) : null }
 }
 
 /** The body of POST /tasks/model-report: the run, the format, the language. Nothing else: the

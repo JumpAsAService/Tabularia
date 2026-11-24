@@ -406,6 +406,9 @@ type scriptNodeRun struct {
 	// trial is the editor's «Run» (run_trial): the run is that row (the node's own), the
 	// output asked for even without a node after it; 0 within an orchestration
 	trial int64
+	// check is the trial's check instead of the node's sampling: bayesCheckPrior for a Bayesian model's prior predictive
+	// check, "" for the run (docs/specs/bayes-flow-node.md); never set within an orchestration
+	check string
 	// firstIO: called when the run first waits on the network (the trial's beat starts there)
 	firstIO func()
 }

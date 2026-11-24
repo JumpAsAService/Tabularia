@@ -6503,7 +6503,14 @@ export default {
     "failed": "La dernière exécution de ce nœud a échoué : son journal est dans le panneau du nœud. Relancez-le une fois corrigé.",
     "staleTitle": "Le nœud ou une étape avant lui a changé après cette exécution : relancez-le pour voir le rapport du modèle tel qu'il est",
     "trial": "Essai",
-    "trialTitle": "Un essai sur l'échantillon de développement : une exécution du flux lit toutes les lignes"
+    "trialTitle": "Un essai sur l'échantillon de développement : une exécution du flux lit toutes les lignes",
+    "switch": "Rapport affiché",
+    "posterior": "A posteriori",
+    "prior": "Contrôle prédictif a priori",
+    "priorShort": "A priori",
+    "priorTitle": "Le contrôle prédictif a priori, dessiné avec les seules lois a priori, avant les données",
+    "when": "Exécuté {when}",
+    "priorFailed": "Le dernier contrôle prédictif a priori de ce nœud a échoué : le message est dans le panneau du nœud. Relancez-le une fois corrigé."
   },
   "models": {
     "palette": {
@@ -7397,6 +7404,13 @@ export default {
       "log": "Log"
     },
     "runDetail": {
+      "savedModel": "Modèle enregistré",
+      "compile": "Compilation",
+      "compiling": "Compilation du modèle d'abord (en général 10–30 s)…",
+      "compiled": "Compilé en {s} s",
+      "compileReady": "Le modèle compilé était déjà prêt.",
+      "compileFailed": "Le modèle n'a pas été compilé.",
+      "priorCheck": "Contrôle prédictif a priori",
       "group": "Groupe de modèles",
       "model": "Modèle",
       "attempts": "Tentatives",
@@ -8657,6 +8671,15 @@ export default {
       "none": "Enregistré avant les contrôles prédictifs : l'enregistrer de nouveau les ajoute.",
       "posterior": "Les contrôles a posteriori sont disponibles. Le contrôle prédictif a priori n'est pas proposé : ce modèle a une loi a priori tronquée que Stan ne sait pas tirer par ascendance.",
       "both": "Les contrôles a posteriori et le contrôle prédictif a priori sont disponibles.",
+    },
+    "prior": {
+      "title": "Contrôle prédictif a priori",
+      "hint": "Tire les données que les seules lois a priori produiraient : quatre chaînes de 250 tirages depuis la graine de ce nœud, sans échauffement. C'est un essai : son rapport est dans l'onglet Rapport et les nœuds après celui-ci ne le reçoivent jamais.",
+      "run": "Exécuter le contrôle prédictif a priori",
+      "saveAndRun": "Enregistrer et exécuter le contrôle",
+      "running": "Tirage depuis la loi a priori…",
+      "last": "Dernier contrôle prédictif a priori {when} : {status}",
+      "stale": "Pas à jour : le nœud a changé après ce contrôle.",
     },
     "sampler": {
       "title": "Échantillonneur",

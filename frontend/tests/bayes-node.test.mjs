@@ -204,3 +204,57 @@ test('the panel writes a missing seed and a missing timeout when it opens a node
   assert.match(panel, /seed: bayesNodeSeed\(\) \}/)
   assert.ok(panel.includes('patch.timeoutSeconds = BAYES_NODE_TIMEOUT.default'))
 })
+
+// ── the prior predictive check (docs/specs/bayes-flow-node.md, lot F4) ─────────────────────────────────────────────
+
+test('the Report tab of a Bayesian model: the sampling\'s run, or the prior predictive check\'s, a trial of its own', async () => {
+  const R = await import('~/composables/statReport.ts')
+  const ok = { run_id: 5, status: 'SUCCESS', trial: true, stale: false, finished_at: '2026-11-24T10:00:00Z' }
+  const prior = { run_id: 9, status: 'SUCCESS', trial: true, stale: true, finished_at: '2026-11-24T11:00:00Z' }
+  const entry = { last: ok, output: ok, prior_check: prior }
+  assert.deepEqual(R.statModelReportOf(entry, 'posterior'), { runId: 5, stale: false, trial: true, failed: false, view: 'posterior', hasPrior: true, at: ok.finished_at })
+  assert.deepEqual(R.statModelReportOf(entry, 'prior'), { runId: 9, stale: true, trial: true, failed: false, view: 'prior', hasPrior: true, at: prior.finished_at })
+  // no prior run: the sampling's pages, nothing to switch to; a prior that failed shows no run (and never the sampling's)
+  assert.equal(R.statModelReportOf({ last: ok, output: ok }, 'prior').view, 'posterior')
+  assert.equal(R.statModelReportOf({ last: ok, output: ok }, 'prior').hasPrior, false)
+  const failed = R.statModelReportOf({ last: ok, output: ok, prior_check: { run_id: 10, status: 'FAILURE' } }, 'prior')
+  assert.deepEqual([failed.runId, failed.failed, failed.view], [null, true, 'prior'])
+  // a prior predictive check alone (no sampling yet) is still a page
+  assert.equal(R.statModelReportOf({ last: null, output: null, prior_check: prior }, 'prior').runId, 9)
+  assert.equal(R.statModelReportOf({ last: null, output: null, prior_check: prior }, 'posterior').runId, null)
+})
+
+test('the prior predictive check is wired: the button in the panel, the trial\'s body, the switch, the run page, five languages', () => {
+  const panel = read('components/bayes/BayesNodePanel.vue')
+  assert.match(panel, /v-if="checks === 'both'" class="block prior"/)
+  assert.match(panel, /emit\('check'\)/)
+  assert.match(read('components/ui/NodePanel.vue'), /@check="emit\('script-check', node\.id\)"/)
+  const editor = read('components/FlowEditor.vue')
+  assert.match(editor, /@script-check="\(id: string\) => runScriptNode\(id, 'prior_predictive'\)"/)
+  assert.match(editor, /scriptingEditor\.runNode\(flowId\.value, nodeId, check\)/)
+  assert.match(read('composables/useScripting.ts'), /body: \{ check \}/)
+  const view = read('components/ui/StatReportView.vue')
+  assert.match(view, /emit\('view', 'prior'\)/)
+  const detail = read('components/models/ModelRunDetail.vue')
+  assert.match(detail, /bayes_model/)
+  assert.match(detail, /compile/)
+  const keys = { bayesNode: ['prior.title', 'prior.hint', 'prior.run', 'prior.saveAndRun', 'prior.running', 'prior.last', 'prior.stale'],
+    modelReport: ['switch', 'posterior', 'prior', 'priorShort', 'priorTitle', 'when', 'priorFailed'],
+    'models.runDetail': ['savedModel', 'compile', 'compiling', 'compiled', 'compileReady', 'compileFailed', 'priorCheck'] }
+  for (const l of LANGS) {
+    const src = read(`i18n/locales/${l}.gen.ts`)
+    for (const [ns, list] of Object.entries(keys)) {
+      for (const k of list) {
+        const leaf = k.split('.').pop()
+        let at = ns === 'models.runDetail' ? src.indexOf('    "runDetail": {') : src.indexOf(`  "${ns}": {`)
+        assert.ok(at > 0, `${l}: ${ns}`)
+        if (ns === 'bayesNode') at = src.indexOf('    "prior": {', at)
+        const text = src.slice(at, at + 1500)
+        const m = new RegExp(`"${leaf}": "((?:[^"\\\\]|\\\\.)*)"`).exec(text)
+        assert.ok(m, `${l}: ${ns}.${k}`)
+        // no brace, bar or at sign but the placeholders (vue-i18n would read them as syntax)
+        assert.doesNotMatch(m[1].replace(/\{(when|status|s)\}/g, ''), /[{}|@]/, `${l}: ${ns}.${k}`)
+      }
+    }
+  }
+})

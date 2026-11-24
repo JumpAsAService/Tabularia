@@ -42,7 +42,7 @@ import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, row
 import { opSubject } from '~/composables/opSummary'
 import { statIsOp, statIsUnset } from '~/composables/statTests'
 import {
-  STAT_REPORT_REMEMBERED, statModelReportRun, type StatModelRuns, type StatReportChain, type StatReportShown,
+  STAT_REPORT_REMEMBERED, statModelReportOf, type StatModelRuns, type StatModelView, type StatReportChain, type StatReportShown,
 } from '~/composables/statReport'
 import StatReportView from '~/components/ui/StatReportView.vue'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
@@ -485,15 +485,18 @@ async function loadScriptOutputs() {
 
 // «Run» of a Script or Container node: the SAVED flow runs it on the sample (saved first if there
 // are changes), and the run is followed until it ends
-interface ScriptTrial { runId: number | null; status: string; startedAt: number; error: string }
+// `check`: a Bayesian model node's prior predictive check, a trial of its own
+interface ScriptTrial { runId: number | null; status: string; startedAt: number; error: string; check?: 'prior_predictive' }
 const scriptTrials = reactive<Record<string, ScriptTrial>>({})
+// a Bayesian model node's Report tab: the sampling's report or its prior predictive check's (per node, for this visit)
+const reportViews = reactive<Record<string, StatModelView>>({})
 let editorGone = false // the page was left: the trials stop following their runs
 onUnmounted(() => { editorGone = true })
-async function runScriptNode(nodeId: string) {
+async function runScriptNode(nodeId: string, check?: 'prior_predictive') {
   if (deniedToObserver()) return
   const live = scriptTrials[nodeId]
   if (live && (live.status === 'PENDING' || live.status === 'STARTED')) return // a second click while it starts
-  scriptTrials[nodeId] = { runId: null, status: 'PENDING', startedAt: Date.now(), error: '' }
+  scriptTrials[nodeId] = { runId: null, status: 'PENDING', startedAt: Date.now(), error: '', ...(check ? { check } : {}) }
   // a change made a moment ago (a field, a script picked) counts: the history settles
   // a change after a short quiet, and «Run» must not run the flow saved before it
   history.flush()
@@ -503,7 +506,7 @@ async function runScriptNode(nodeId: string) {
     return
   }
   try {
-    const { run_id } = await scriptingEditor.runNode(flowId.value, nodeId)
+    const { run_id } = await scriptingEditor.runNode(flowId.value, nodeId, check)
     scriptTrials[nodeId]!.runId = run_id
     // a network hiccup or a gateway restarting does not end the trial: a few failed
     // reads in a row do, and then the run page still has the truth
@@ -532,6 +535,8 @@ async function runScriptNode(nodeId: string) {
   }
   if (editorGone) return
   await loadScriptOutputs()
+  // the Report tab of a Bayesian model shows what was run last: the sampling, or the prior predictive check
+  if (findNode(nodeId)?.type === 'bayes_model' && scriptTrials[nodeId]?.status === 'SUCCESS') reportViews[nodeId] = check ? 'prior' : 'posterior'
   invalidateColumns()
   invalidateStats(nodeId)
   if (selectedId.value) refreshForNode(selectedId.value)
@@ -2911,9 +2916,15 @@ const modelReportRuns = computed<StatModelRuns | null>(() => {
   const id = modelReportNodeId.value
   if (!id || flowId.value === null) return null
   const trial = scriptTrials[id]
-  return { flowId: flowId.value, ...statModelReportRun(scriptOutputs.value[id]),
+  const entry = scriptOutputs.value[id]
+  const bayes = findNode(id)?.type === 'bayes_model'
+  return { flowId: flowId.value, ...statModelReportOf(entry, bayes ? (reportViews[id] ?? 'posterior') : 'posterior'),
     running: !!trial && (trial.status === 'PENDING' || trial.status === 'STARTED') }
 })
+// the Report tab's Run runs what it shows: the prior predictive check when that is the page
+function runModelReport(id: string) {
+  runScriptNode(id, modelReportRuns.value?.view === 'prior' ? 'prior_predictive' : undefined)
+}
 const reportNodeId = computed(() => statNodeId.value ?? modelReportNodeId.value)
 watch(reportNodeId, (id) => { if (!id && viewTab.value === 'report') viewTab.value = 'table' })
 // the step's changes against its input: the selected node's own preview only. Compared with
@@ -3812,6 +3823,7 @@ async function pollTask(id: string) {
         :has-data-out="selectedHasDataOut"
         :read-only="observerOnly"
         @script-run="runScriptNode"
+        @script-check="(id: string) => runScriptNode(id, 'prior_predictive')"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
@@ -4034,7 +4046,8 @@ async function pollTask(id: string) {
           :memory="statReportMemory"
           :model="statNodeId ? null : modelReportRuns"
           @expand="toggleGridExpanded"
-          @run="modelReportNodeId && runScriptNode(modelReportNodeId)"
+          @run="modelReportNodeId && runModelReport(modelReportNodeId)"
+          @view="(v: StatModelView) => modelReportNodeId && (reportViews[modelReportNodeId] = v)"
         />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>

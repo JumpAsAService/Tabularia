@@ -21,6 +21,10 @@ interface ModelRunInfo {
   attempts?: number
   exit_code?: number | null
   refusal?: { code?: string; message?: string }
+  /** a Bayesian model's step: the saved model it ran and the compile it waited for (gateway-go/internal/api/jobs_bayes.go) */
+  bayes_model?: { id?: number; version?: number; name?: string }
+  compile?: { state?: string; detail?: string; waiting?: boolean; seconds?: number }
+  check?: string
   log?: string
   log_expired?: boolean
   mlflow?: ModelRunMlflow
@@ -54,6 +58,18 @@ const modelName = computed(() => {
   return key && te(key) ? t(key) : (info.value.model ?? '')
 })
 const ml = computed(() => info.value.mlflow ?? null)
+const bayes = computed(() => info.value.bayes_model ?? null)
+/** What the step did about the compiled model: waiting for it, how long it waited, or its refusal; nothing when the binary was
+ *  there at once. A failed or timed-out compile says the gateway's own sentence. */
+const compileText = computed(() => {
+  const c = info.value.compile
+  if (!c?.state) return ''
+  if (c.waiting) return t('models.runDetail.compiling')
+  if (c.state === 'failed' || c.state === 'timeout') return c.detail || t('models.runDetail.compileFailed')
+  if (c.seconds) return t('models.runDetail.compiled', { s: c.seconds })
+  return t('models.runDetail.compileReady')
+})
+const compileBad = computed(() => info.value.compile?.state === 'failed' || info.value.compile?.state === 'timeout')
 /** A link only to an http(s) address (the connection's own, checked when it was saved). */
 function link(url: string | null | undefined): string | undefined {
   return url && /^https?:\/\//i.test(url) ? url : undefined
@@ -67,7 +83,9 @@ const groupName = computed(() => {
 <template>
   <div class="model-run-detail">
     <dl>
-      <div><dt>{{ $t('models.runDetail.model') }}</dt><dd>{{ modelName }}</dd></div>
+      <div><dt>{{ $t('models.runDetail.model') }}</dt><dd>{{ modelName }}<template v-if="info.check === 'prior_predictive'"> · {{ $t('models.runDetail.priorCheck') }}</template></dd></div>
+      <div v-if="bayes"><dt>{{ $t('models.runDetail.savedModel') }}</dt><dd>{{ bayes.name }}<template v-if="bayes.version"> · v{{ bayes.version }}</template></dd></div>
+      <div v-if="compileText" class="largo"><dt>{{ $t('models.runDetail.compile') }}</dt><dd :class="{ bad: compileBad }">{{ compileText }}</dd></div>
       <div><dt>{{ $t('models.runDetail.group') }}</dt><dd>{{ groupName }}<template v-if="info.version"> · v{{ info.version }}</template></dd></div>
       <div v-if="info.input_rows != null"><dt>{{ $t('models.runDetail.inputRows') }}</dt><dd>{{ info.input_rows }}</dd></div>
       <div><dt>{{ $t('models.runDetail.attempts') }}</dt><dd>{{ info.attempts ?? 0 }}</dd></div>
@@ -127,6 +145,7 @@ dl > div { min-width: 0; }
 .largo { grid-column: 1 / -1; }
 dt { font-size: 11px; color: var(--muted); }
 dd { margin: 2px 0 0; font-size: 12.5px; overflow-wrap: anywhere; }
+dd.bad { color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .log { margin: 6px 0 0; max-height: 320px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { margin: 0; font-size: 12px; }

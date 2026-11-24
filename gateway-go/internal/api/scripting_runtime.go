@@ -358,11 +358,26 @@ type stepRun struct {
 // runsOfNode is script_runs._runs_of_node: the runs of one node of a flow, newest first (the
 // `script` column starts with the node's id).
 func runsOfNode(ctx context.Context, q perm.Querier, flowID int64, nodeID any, succeeded bool) (*stepRun, error) {
+	return runsOfNodeChecked(ctx, q, flowID, nodeID, succeeded, false)
+}
+
+// priorCheckMark is what a prior predictive check's run keeps in its `script` (its info's `check`, written by pyDumps: the
+// separators of Python's json.dumps; a text inside a string has its quotes escaped, so it cannot be mistaken for the key).
+const priorCheckMark = `"check": "` + bayesCheckPrior + `"`
+
+// runsOfNodeChecked is runsOfNode for the runs that are not a prior predictive check (a node's output and its «last» run are
+// the sampling's), or, with `prior`, for those that are alone.
+func runsOfNodeChecked(ctx context.Context, q perm.Querier, flowID int64, nodeID any, succeeded, prior bool) (*stepRun, error) {
 	key, _ := pyjson.Dumps(pyjson.Object{{Key: "node_id", Value: nodeID}}, pyjson.Options{EnsureASCII: true})
 	prefix := key[:len(key)-1] + ","
 	extra := ""
 	if succeeded {
 		extra = ` AND status = 'SUCCESS' AND output_key != ''`
+	}
+	if prior {
+		extra += ` AND strpos(script, '` + priorCheckMark + `') > 0`
+	} else {
+		extra += ` AND strpos(script, '` + priorCheckMark + `') = 0`
 	}
 	var r stepRun
 	err := q.QueryRow(ctx, `SELECT id, status, script, output_bucket, output_key, error, started_at, finished_at, rows_written
@@ -384,6 +399,7 @@ func str0(s *string) string {
 
 type latest struct {
 	last, output pyjson.Object // nil = None
+	prior        pyjson.Object // a Bayesian model's prior predictive check, the latest (nil = none): never its output
 	has          bool
 }
 
@@ -423,6 +439,7 @@ func addToLatest(e *latest, run *stepRun) error {
 type savedNode struct {
 	id          any
 	fingerprint string
+	prior       bool // a Bayesian model node: its prior predictive check is asked for too (latest.prior)
 }
 
 // latestOutputs is script_runs.latest_outputs for the nodes given, in their order.
@@ -433,7 +450,21 @@ func latestOutputs(ctx context.Context, q perm.Querier, flowID int64, nodes []sa
 		if err != nil {
 			return nil, err
 		}
+		var prior *stepRun
+		if n.prior {
+			if prior, err = runsOfNodeChecked(ctx, q, flowID, n.id, false, true); err != nil {
+				return nil, err
+			}
+		}
+		if last == nil && prior == nil {
+			continue
+		}
+		e := &latest{}
+		if prior != nil {
+			e.has, e.prior = true, priorRun(prior)
+		}
 		if last == nil {
+			out[jsonKey(n.id)] = e
 			continue
 		}
 		ok := last
@@ -442,7 +473,6 @@ func latestOutputs(ctx context.Context, q perm.Querier, flowID int64, nodes []sa
 				return nil, err
 			}
 		}
-		e := &latest{}
 		if err := addToLatest(e, last); err != nil {
 			return nil, err
 		}
@@ -456,6 +486,18 @@ func latestOutputs(ctx context.Context, q perm.Querier, flowID int64, nodes []sa
 		}
 	}
 	return out, nil
+}
+
+// priorRun is the latest prior predictive check of a node as the outputs give it: its run, outcome and end, and the
+// fingerprint to compare with the node's (docs/specs/bayes-flow-node.md, «Not up to date»).
+func priorRun(run *stepRun) pyjson.Object {
+	var info pyjson.Object
+	if v, err := pyjson.Loads(str0(run.script)); err == nil {
+		info = pyjson.Obj(v)
+	}
+	return pyjson.Object{{Key: "run_id", Value: run.id}, {Key: "status", Value: run.status}, {Key: "trial", Value: true},
+		{Key: "error", Value: run.errText}, {Key: "started_at", Value: utcIso(&run.started)}, {Key: "finished_at", Value: utcIso(run.finished)},
+		{Key: "fingerprint", Value: info.Value("fingerprint")}}
 }
 
 // nodeFingerprint is script_nodes.fingerprint: code_fingerprint, with the version a saved
@@ -498,7 +540,7 @@ func nodeOutputs(d *Deps) authedFunc {
 				return
 			}
 			index[k] = len(saved)
-			saved = append(saved, savedNode{id, fp})
+			saved = append(saved, savedNode{id: id, fingerprint: fp})
 		}
 		for _, n := range flowaccess.ScriptNodes(f.Definition) {
 			fp, err := nodeFingerprint(q.ctx, d.DB, n)
@@ -519,6 +561,7 @@ func nodeOutputs(d *Deps) authedFunc {
 			for _, n := range models {
 				if n.Value("type") == bayesNodeType {
 					put(n.Value("id"), bayesFingerprint(definition, n))
+					saved[index[jsonKey(n.Value("id"))]].prior = true
 				} else if n.Value("type") == "model" {
 					put(n.Value("id"), modelFingerprint(definition, n))
 				} else {
@@ -558,8 +601,11 @@ func nodeOutputs(d *Deps) authedFunc {
 				s, isStr := fp.(string)
 				return append(rest, pyjson.KV{Key: "stale", Value: !(isStr && s == n.fingerprint)})
 			}
-			out = append(out, pyjson.KV{Key: jsonKey(n.id), Value: pyjson.Object{{Key: "last", Value: stale(e.last)},
-				{Key: "output", Value: stale(e.output)}}})
+			entry := pyjson.Object{{Key: "last", Value: stale(e.last)}, {Key: "output", Value: stale(e.output)}}
+			if n.prior {
+				entry = append(entry, pyjson.KV{Key: "prior_check", Value: stale(e.prior)})
+			}
+			out = append(out, pyjson.KV{Key: jsonKey(n.id), Value: entry})
 		}
 		writePy(w, out)
 	}

@@ -25,11 +25,12 @@ import {
 } from 'lucide-vue-next'
 import ReportPages from '~/components/report/ReportPages.vue'
 import { errMessage } from '~/composables/useApi'
+import { useFormat } from '~/composables/useFormat'
 import type { Recent } from '~/composables/previewGrid'
 import {
   STAT_REPORT_SETTLE_MS, STAT_REPORT_ZOOM_KEY, STAT_REPORT_ZOOMS, statReportCancelPath, statModelReportKey, statModelReportRequest, statReportKey, statReportProblem,
   statReportRequest, statReportRetryable, statReportShouldDraw, statReportState, statReportUnset, statReportZoomRead,
-  statReportZoomStep, type StatModelReportTarget, type StatModelRuns, type StatReportChain, type StatReportProblem,
+  statReportZoomStep, type StatModelReportTarget, type StatModelRuns, type StatModelView, type StatReportChain, type StatReportProblem,
   type StatReportShown,
 } from '~/composables/statReport'
 
@@ -49,11 +50,12 @@ const props = withDefaults(defineProps<{
   model?: StatModelRuns | null
 }>(), { step: '', expanded: false, memory: null, model: null })
 
-const emit = defineEmits<{ (e: 'expand'): void; (e: 'run'): void }>()
+const emit = defineEmits<{ (e: 'expand'): void; (e: 'run'): void; (e: 'view', v: StatModelView): void }>()
 
 const { t, locale } = useI18n()
 const { apiFetch } = useApiClient()
 const reports = useReports()
+const fmt = useFormat()
 const toast = useToast()
 
 // a model node's: the run whose results are drawn
@@ -285,6 +287,15 @@ const problemTitle = computed(() => {
       </div>
 
       <div class="sr-mid">
+        <!-- a Bayesian model with a prior predictive check: the report of the sampling or the check's -->
+        <div v-if="model?.hasPrior" class="sr-group sr-switch" role="group" :aria-label="$t('modelReport.switch')">
+          <button type="button" class="mini" :class="{ on: model.view !== 'prior' }" :aria-pressed="model.view !== 'prior'" @click="emit('view', 'posterior')">
+            {{ $t('modelReport.posterior') }}
+          </button>
+          <button type="button" class="mini" :class="{ on: model.view === 'prior' }" :aria-pressed="model.view === 'prior'" :title="$t('modelReport.priorTitle')" @click="emit('view', 'prior')">
+            <span class="sr-sw-long">{{ $t('modelReport.prior') }}</span><span class="sr-sw-short">{{ $t('modelReport.priorShort') }}</span>
+          </button>
+        </div>
         <span v-if="model?.running" class="sr-status"><LoaderCircle :size="12" class="spin" aria-hidden="true" /> {{ $t('modelReport.running') }}</span>
         <span v-else-if="busy" class="sr-status"><LoaderCircle :size="12" class="spin" aria-hidden="true" /> {{ $t('statReport.drawing') }}<template v-if="seconds >= 2"> · {{ $t('dataGrid.seconds', { s: seconds }) }}</template></span>
         <template v-else-if="model && modelStale">
@@ -325,6 +336,11 @@ const problemTitle = computed(() => {
       </div>
     </div>
 
+    <!-- which of the two reports this is, and when its run ended -->
+    <p v-if="model?.hasPrior && model.at && target && !model.running" class="sr-sub">
+      <span class="sr-sub-what">{{ model.view === 'prior' ? $t('modelReport.prior') : $t('modelReport.posterior') }}</span>
+      <span class="sr-when">{{ $t('modelReport.when', { when: fmt.ago(model.at) }) }}</span>
+    </p>
     <div class="sr-stage">
       <div v-if="problem && !busy" class="sr-state">
         <div class="sr-error" role="alert">
@@ -336,7 +352,7 @@ const problemTitle = computed(() => {
         </button>
       </div>
       <div v-else-if="model && !target && !busy" class="sr-state">
-        <p class="sr-note muted">{{ model.failed ? $t('modelReport.failed') : $t('modelReport.noRun') }}</p>
+        <p class="sr-note muted">{{ model.view === 'prior' ? $t('modelReport.priorFailed') : model.failed ? $t('modelReport.failed') : $t('modelReport.noRun') }}</p>
         <button type="button" class="sr-again" :disabled="model.running" :title="$t('modelReport.runTitle')" @click="emit('run')">
           <LoaderCircle v-if="model.running" :size="13" class="spin" aria-hidden="true" /><Play v-else :size="13" aria-hidden="true" />
           {{ model.running ? $t('modelReport.running') : $t('modelReport.run') }}
@@ -384,6 +400,20 @@ const problemTitle = computed(() => {
 .sr-update { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 12px; white-space: nowrap; }
 /* a trial's pages: its rows before the node were the development sample's (the header of the page says it too) */
 .sr-trial { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sr-switch { gap: 0; }
+.sr-switch button { border-radius: 0; }
+.sr-switch button:first-child { border-radius: 6px 0 0 6px; }
+.sr-switch button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.sr-switch button:focus-visible { position: relative; z-index: 1; }
+.sr-short, .sr-sw-short { display: none; }
+.sr-sub { margin: 0; padding: 3px 10px; display: flex; gap: 8px; align-items: baseline; flex-shrink: 0; font-size: 12px; border-bottom: 1px solid var(--border-soft); }
+.sr-sub-what { color: var(--text); font-weight: 600; }
+.sr-when { color: var(--muted); }
+/* the panel opened beside the canvas leaves the switch the room of its short words */
+@container statreport (max-width: 960px) {
+  .sr-sw-long { display: none; }
+  .sr-sw-short { display: inline; }
+}
 .sr-stage { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .sr-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px; }
 .sr-state .sr-note { margin: 0; }
@@ -400,6 +430,7 @@ const problemTitle = computed(() => {
    for the screen reader and in the tooltips */
 @container statreport (max-width: 640px) {
   .sr-long, .sr-pageof, .sr-trial { display: none; }
+  .sr-short { display: inline; }
   .sr-tools { gap: 6px; padding: 4px 6px; }
 }
 </style>

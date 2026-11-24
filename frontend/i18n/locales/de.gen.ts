@@ -6503,7 +6503,14 @@ export default {
     "failed": "Die letzte Ausführung dieses Knotens ist fehlgeschlagen: Das Protokoll steht im Bereich des Knotens. Führen Sie ihn nach der Korrektur erneut aus.",
     "staleTitle": "Der Knoten oder ein Schritt davor hat sich nach dieser Ausführung geändert: Führen Sie ihn erneut aus, um den Bericht des aktuellen Modells zu sehen",
     "trial": "Probelauf",
-    "trialTitle": "Ein Probelauf auf der Entwicklungsstichprobe: Eine Ausführung des Flows liest alle Zeilen"
+    "trialTitle": "Ein Probelauf auf der Entwicklungsstichprobe: Eine Ausführung des Flows liest alle Zeilen",
+    "switch": "Angezeigter Bericht",
+    "posterior": "Posterior",
+    "prior": "Prädiktive Prüfung der Priori",
+    "priorShort": "Priori",
+    "priorTitle": "Die prädiktive Prüfung der Priori, allein aus den Prioris gezeichnet, vor allen Daten",
+    "when": "Ausgeführt {when}",
+    "priorFailed": "Die letzte prädiktive Prüfung der Priori dieses Knotens ist fehlgeschlagen: Die Meldung steht im Bereich des Knotens. Führen Sie sie nach der Korrektur erneut aus."
   },
   "models": {
     "palette": {
@@ -7397,6 +7404,13 @@ export default {
       "log": "Log"
     },
     "runDetail": {
+      "savedModel": "Gespeichertes Modell",
+      "compile": "Kompilierung",
+      "compiling": "Das Modell wird zuerst kompiliert (meist 10–30 s)…",
+      "compiled": "In {s} s kompiliert",
+      "compileReady": "Das kompilierte Modell lag bereit.",
+      "compileFailed": "Das Modell wurde nicht kompiliert.",
+      "priorCheck": "Prädiktive Prüfung der Priori",
       "group": "Modellgruppe",
       "model": "Modell",
       "attempts": "Versuche",
@@ -8657,6 +8671,15 @@ export default {
       "none": "Vor den prädiktiven Prüfungen gespeichert: erneutes Speichern fügt sie hinzu.",
       "posterior": "Die Posterior-Prüfungen sind verfügbar. Die prädiktive Prüfung der Priori wird nicht angeboten: dieses Modell hat eine abgeschnittene Priori, die Stan nicht vorwärts ziehen kann.",
       "both": "Die Posterior-Prüfungen und die prädiktive Prüfung der Priori sind verfügbar.",
+    },
+    "prior": {
+      "title": "Prädiktive Prüfung der Priori",
+      "hint": "Zieht die Daten, die allein die Prioris erzeugen würden: vier Ketten mit 250 Ziehungen ab dem Seed dieses Knotens, ohne Warm-up. Es ist ein Probelauf: sein Bericht steht im Reiter Bericht, und die Knoten nach diesem erhalten ihn nie.",
+      "run": "Prädiktive Prüfung der Priori ausführen",
+      "saveAndRun": "Speichern und die Prüfung ausführen",
+      "running": "Ziehung aus der Priori…",
+      "last": "Letzte prädiktive Prüfung der Priori {when}: {status}",
+      "stale": "Nicht aktuell: Der Knoten hat sich nach dieser Prüfung geändert.",
     },
     "sampler": {
       "title": "Sampler",

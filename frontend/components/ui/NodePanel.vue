@@ -54,6 +54,7 @@ const emit = defineEmits<{
   (e: 'preview'): void // preview on command (SQL node)
   (e: 'email-test'): void // dry run: sends the attachment to oneself
   (e: 'script-run', nodeId: string): void // «Run» of a Script or Container node (the flow saved first)
+  (e: 'script-check', nodeId: string): void // a Bayesian model node's prior predictive check, a trial of its own
 }>()
 
 const isSource = () => props.node?.type === 'source'
@@ -819,6 +820,7 @@ function pickDatasource(id: number | null) {
         @update="emit('update', $event)"
         @delete="emit('delete')"
         @run="emit('script-run', node.id)"
+        @check="emit('script-check', node.id)"
       />
     </template>
 

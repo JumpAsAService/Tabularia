@@ -6503,7 +6503,14 @@ export default {
     "failed": "La última ejecución de este nodo falló: su registro está en el panel del nodo. Ejecútelo de nuevo una vez corregido.",
     "staleTitle": "El nodo o un paso anterior cambió después de esta ejecución: ejecútelo de nuevo para ver el informe del modelo tal como está",
     "trial": "Prueba",
-    "trialTitle": "Una prueba sobre la muestra de desarrollo: una ejecución del flujo lee todas las filas"
+    "trialTitle": "Una prueba sobre la muestra de desarrollo: una ejecución del flujo lee todas las filas",
+    "switch": "Informe mostrado",
+    "posterior": "A posteriori",
+    "prior": "Control predictivo a priori",
+    "priorShort": "A priori",
+    "priorTitle": "El control predictivo a priori, dibujado solo con las distribuciones a priori, antes de los datos",
+    "when": "Ejecutado {when}",
+    "priorFailed": "El último control predictivo a priori de este nodo falló: el mensaje está en el panel del nodo. Ejecútelo de nuevo una vez corregido."
   },
   "models": {
     "palette": {
@@ -7397,6 +7404,13 @@ export default {
       "log": "Log"
     },
     "runDetail": {
+      "savedModel": "Modelo guardado",
+      "compile": "Compilación",
+      "compiling": "Compilando primero el modelo (suele tardar 10–30 s)…",
+      "compiled": "Compilado en {s} s",
+      "compileReady": "El modelo compilado ya estaba listo.",
+      "compileFailed": "El modelo no se compiló.",
+      "priorCheck": "Control predictivo a priori",
       "group": "Grupo de modelos",
       "model": "Modelo",
       "attempts": "Intentos",
@@ -8657,6 +8671,15 @@ export default {
       "none": "Guardado antes de los controles predictivos: al guardarlo de nuevo se añaden.",
       "posterior": "Los controles a posteriori están disponibles. El control predictivo a priori no se ofrece: este modelo tiene una a priori truncada que Stan no sabe extraer por antecesores.",
       "both": "Están disponibles los controles a posteriori y el control predictivo a priori.",
+    },
+    "prior": {
+      "title": "Control predictivo a priori",
+      "hint": "Extrae los datos que producirían solo las distribuciones a priori: cuatro cadenas de 250 extracciones desde la semilla de este nodo, sin calentamiento. Es una prueba: su informe está en la pestaña Informe y los nodos posteriores a este nunca lo reciben.",
+      "run": "Ejecutar el control predictivo a priori",
+      "saveAndRun": "Guardar y ejecutar el control",
+      "running": "Extrayendo de la distribución a priori…",
+      "last": "Último control predictivo a priori {when}: {status}",
+      "stale": "No actualizado: el nodo cambió después de este control.",
     },
     "sampler": {
       "title": "Muestreador",

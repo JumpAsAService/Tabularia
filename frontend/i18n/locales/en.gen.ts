@@ -6503,7 +6503,14 @@ export default {
     "failed": "The last run of this node failed: its log is in the node's panel. Run it again once it is set right.",
     "staleTitle": "The node or a step before it changed after this run: Run it again to see the report of the model as it is",
     "trial": "Trial",
-    "trialTitle": "A trial on the development sample: a run of the flow reads every row"
+    "trialTitle": "A trial on the development sample: a run of the flow reads every row",
+    "switch": "Report shown",
+    "posterior": "Posterior",
+    "prior": "Prior predictive check",
+    "priorShort": "Prior",
+    "priorTitle": "The prior predictive check, drawn from the priors alone, before any data",
+    "when": "Run {when}",
+    "priorFailed": "The last prior predictive check of this node failed: its message is in the node's panel. Run it again once it is set right."
   },
   "models": {
     "palette": {
@@ -7397,6 +7404,13 @@ export default {
       "log": "Log"
     },
     "runDetail": {
+      "savedModel": "Saved model",
+      "compile": "Compile",
+      "compiling": "Compiling the model first (usually 10–30 s)…",
+      "compiled": "Compiled in {s} s",
+      "compileReady": "The compiled model was ready.",
+      "compileFailed": "The model did not compile.",
+      "priorCheck": "Prior predictive check",
       "group": "Model group",
       "model": "Model",
       "attempts": "Attempts",
@@ -8657,6 +8671,15 @@ export default {
       "none": "Saved before the predictive checks: saving it again adds them.",
       "posterior": "The posterior checks run. The prior predictive check is not offered: this model has a truncated prior Stan cannot draw ancestrally.",
       "both": "The posterior checks and the prior predictive check are available.",
+    },
+    "prior": {
+      "title": "Prior predictive check",
+      "hint": "Draws the data the priors alone would produce: four chains of 250 draws from this node's seed, with no warm-up. It is a trial: its report is in the Report tab and the nodes after this one never receive it.",
+      "run": "Run the prior predictive check",
+      "saveAndRun": "Save and run the check",
+      "running": "Drawing from the prior…",
+      "last": "Last prior predictive check {when}: {status}",
+      "stale": "Not up to date: the node changed since this check.",
     },
     "sampler": {
       "title": "Sampler",

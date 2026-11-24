@@ -6503,7 +6503,14 @@ export default {
     "failed": "L'ultima esecuzione di questo nodo è fallita: il log è nel pannello del nodo. Eseguitelo di nuovo dopo averlo corretto.",
     "staleTitle": "Il nodo o un passo prima di lui è cambiato dopo questa esecuzione: eseguitelo di nuovo per vedere il report del modello com'è ora",
     "trial": "Prova",
-    "trialTitle": "Una prova sul campione di sviluppo: un'esecuzione del flusso legge tutte le righe"
+    "trialTitle": "Una prova sul campione di sviluppo: un'esecuzione del flusso legge tutte le righe",
+    "switch": "Report mostrato",
+    "posterior": "A posteriori",
+    "prior": "Controllo predittivo a priori",
+    "priorShort": "A priori",
+    "priorTitle": "Il controllo predittivo a priori, disegnato con le sole distribuzioni a priori, prima dei dati",
+    "when": "Eseguito {when}",
+    "priorFailed": "L'ultimo controllo predittivo a priori di questo nodo è fallito: il messaggio è nel pannello del nodo. Eseguitelo di nuovo dopo averlo corretto."
   },
   "models": {
     "palette": {
@@ -7397,6 +7404,13 @@ export default {
       "log": "Log"
     },
     "runDetail": {
+      "savedModel": "Modello salvato",
+      "compile": "Compilazione",
+      "compiling": "Compilazione del modello prima di tutto (di solito 10–30 s)…",
+      "compiled": "Compilato in {s} s",
+      "compileReady": "Il modello compilato era già pronto.",
+      "compileFailed": "Il modello non si è compilato.",
+      "priorCheck": "Controllo predittivo a priori",
       "group": "Gruppo di modelli",
       "model": "Modello",
       "attempts": "Tentativi",
@@ -8657,6 +8671,15 @@ export default {
       "none": "Salvato prima dei controlli predittivi: salvandolo di nuovo si aggiungono.",
       "posterior": "I controlli a posteriori sono disponibili. Il controllo predittivo a priori non è offerto: questo modello ha una priori troncata che Stan non sa estrarre per antenati.",
       "both": "Sono disponibili i controlli a posteriori e il controllo predittivo a priori.",
+    },
+    "prior": {
+      "title": "Controllo predittivo a priori",
+      "hint": "Estrae i dati che le sole distribuzioni a priori produrrebbero: quattro catene di 250 estrazioni dal seme di questo nodo, senza riscaldamento. È una prova: il suo report è nella scheda Report e i nodi dopo questo non lo ricevono mai.",
+      "run": "Esegui il controllo predittivo a priori",
+      "saveAndRun": "Salva ed esegui il controllo",
+      "running": "Estrazione dalla distribuzione a priori…",
+      "last": "Ultimo controllo predittivo a priori {when}: {status}",
+      "stale": "Non aggiornato: il nodo è cambiato dopo questo controllo.",
     },
     "sampler": {
       "title": "Campionatore",

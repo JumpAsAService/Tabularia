@@ -6,7 +6,7 @@
 // checks it again at the run. The node never holds the program: it holds the model's id, the version and the choices.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ExternalLink, RotateCcw, Shuffle, Sigma, Trash2, TriangleAlert } from 'lucide-vue-next'
+import { CheckCircle2, ExternalLink, FlaskConical, LoaderCircle, RotateCcw, Shuffle, Sigma, Trash2, TriangleAlert, XCircle } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { ScriptOutputs } from '~/composables/useScripting'
@@ -24,6 +24,7 @@ import { useBayesPins } from '~/composables/useBayesPins'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFormat } from '~/composables/useFormat'
 import { useModelGroups } from '~/composables/useModelGroups'
+import { commitFocusedField } from '~/composables/commitFocusedField'
 import { vDraft } from '~/composables/draftField'
 import Select from '~/components/ui/Select.vue'
 import ModelRun from '~/components/models/ModelRun.vue'
@@ -35,13 +36,14 @@ const props = defineProps<{
   readOnly?: boolean
   // the node's latest trial or run and the trial in progress (the editor's, as a Script node's)
   outputs?: ScriptOutputs[string] | null
-  trial?: { runId: number | null; status: string; startedAt: number; error: string } | null
+  trial?: { runId: number | null; status: string; startedAt: number; error: string; check?: string } | null
   flowDirty?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
   (e: 'run'): void
+  (e: 'check'): void // the prior predictive check, a trial of its own
 }>()
 const { t } = useI18n()
 const fmt = useFormat()
@@ -249,6 +251,23 @@ const why = computed(() => {
 // a version that could not be read cannot run either: its variables are not known
 const disabled = computed(() => !!off.value || !!why.value || (modelId.value != null && !detail.value))
 const title = computed(() => (data.value.label as string) || t('models.bayes_model.name'))
+
+// ── the prior predictive check ────────────────────────────────────────────────
+// Offered when the pinned version can draw from its priors (`checks === 'both'`); the same trial as Run with
+// {check: "prior_predictive"}: its pages are the Report tab's, never the nodes after it.
+const live = (s?: string) => s === 'PENDING' || s === 'STARTED'
+const priorTrial = computed(() => (props.trial?.check === 'prior_predictive' ? props.trial : null))
+const sampleTrial = computed(() => (props.trial?.check ? null : props.trial))
+const anyRunning = computed(() => live(props.trial?.status))
+const priorRunning = computed(() => live(priorTrial.value?.status))
+const prior = computed(() => props.outputs?.prior_check ?? null)
+// the trial's own message only when its run is not the one shown (refused before it started, or the outputs not read yet)
+const priorFailedEarly = computed(() => priorTrial.value?.status === 'FAILURE' && !!priorTrial.value.error
+  && (priorTrial.value.runId == null || prior.value?.run_id !== priorTrial.value.runId))
+async function runPrior() {
+  await commitFocusedField()
+  emit('check')
+}
 </script>
 
 <template>
@@ -451,13 +470,32 @@ const title = computed(() => (data.value.label as string) || t('models.bayes_mod
     <div class="block">
       <ModelRun
         :outputs="outputs"
-        :trial="trial"
+        :trial="sampleTrial"
         :flow-dirty="flowDirty"
-        :disabled="disabled"
+        :disabled="disabled || priorRunning"
         :why="off ? '' : why"
         :read-only="readOnly"
         @run="emit('run')"
       />
+    </div>
+
+    <!-- 8. the prior predictive check -->
+    <div v-if="checks === 'both'" class="block prior">
+      <h4>{{ $t('bayesNode.prior.title') }}</h4>
+      <p class="hint">{{ $t('bayesNode.prior.hint') }}</p>
+      <button type="button" class="check" :disabled="readOnly || disabled || anyRunning" @mousedown.prevent @click="runPrior">
+        <LoaderCircle v-if="priorRunning" :size="14" class="spin" aria-hidden="true" /><FlaskConical v-else :size="14" aria-hidden="true" />
+        {{ priorRunning ? $t('bayesNode.prior.running') : flowDirty ? $t('bayesNode.prior.saveAndRun') : $t('bayesNode.prior.run') }}
+      </button>
+      <p v-if="priorFailedEarly" class="outcome ko" role="alert"><XCircle :size="13" aria-hidden="true" /> <span>{{ priorTrial!.error }}</span></p>
+      <template v-if="prior && !priorRunning">
+        <p class="outcome" :class="prior.status === 'SUCCESS' ? 'ok' : 'ko'">
+          <component :is="prior.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13" aria-hidden="true" />
+          <span>{{ $t('bayesNode.prior.last', { when: fmt.ago(prior.finished_at ?? prior.started_at), status: prior.status }) }}</span>
+        </p>
+        <p v-if="prior.status !== 'SUCCESS' && prior.error" class="hint error">{{ prior.error }}</p>
+        <p v-if="prior.status === 'SUCCESS' && prior.stale" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ $t('bayesNode.prior.stale') }}</p>
+      </template>
     </div>
   </div>
 </template>
@@ -474,6 +512,12 @@ const title = computed(() => (data.value.label as string) || t('models.bayes_mod
 .lbl { font-size: 12px; color: var(--muted); padding: 0; }
 .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 .version { overflow-wrap: anywhere; }
+.check { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.outcome { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.4; }
+.outcome svg { flex: none; margin-top: 2px; }
+.outcome.ok svg { color: var(--accent-2); }
+.outcome.ko, .outcome.ko svg { color: var(--danger); }
+.error { overflow-wrap: anywhere; }
 .note { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .note svg { flex: none; margin-top: 2px; }
 .note.warn { color: var(--warning); }

@@ -64,7 +64,7 @@ var (
 // image, the timeout and retries, the parameters the engine's import checks) and everything the task needs.
 type bayesStep struct {
 	*modelStep
-	mode       string // bayescontract.ModeSample (the prior predictive's trial: lot F4)
+	mode       string // bayescontract.ModeSample, or ModePriorPredictive for the check's trial (bayesCheckPrior)
 	model      *bayesmodels.Model
 	version    *bayesmodels.Version
 	graph      *bayesgraph.Model
@@ -126,10 +126,22 @@ func bayesCompileSentence(s bayesmodels.CompileState) string {
 	return "the generated program did not compile: this is a fault of Tabularia, not of the model. The administrator's log says where"
 }
 
+// bayesCheckPrior is the trial's `check` that asks for the prior predictive check instead of the sampling (docs/specs/
+// bayes-flow-node.md, «The prior predictive check»): a trial of the node, never its output.
+const bayesCheckPrior = "prior_predictive"
+
+// The prior predictive check's sampler: the checks spec's «The runs» (four chains, no warm-up, 250 draws, the node's seed).
+const (
+	priorChains = 4
+	priorWarmup = 0
+	priorDraws  = 250
+)
+
 // planBayes is «Before anything» for a Bayesian model node: the step, or why it cannot run (a *scriptFailed), before any
 // row, input or Job exists. `user` is the run's authority: the person who runs the flow or tries the node, or the
-// schedule's author; every right is checked again at every run.
-func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Object) (*bayesStep, error) {
+// schedule's author; every right is checked again at every run. `check` is "" for the sampling, bayesCheckPrior for the
+// prior predictive check (a trial's alone).
+func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Object, check string) (*bayesStep, error) {
 	label := modelLabel(node)
 	what := "Bayesian model «" + label + "»"
 	fail := func(format string, a ...any) error { return &scriptFailed{what + ": " + fmt.Sprintf(format, a...)} }
@@ -170,6 +182,12 @@ func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Obje
 		return nil, fail("the model or its version no longer exists: choose another")
 	}
 	s := &bayesStep{mode: bayescontract.ModeSample, model: m, version: v}
+	if check != "" && check != bayesCheckPrior {
+		return nil, fail("the check %q is not one it makes", check)
+	}
+	if check == bayesCheckPrior {
+		s.mode = bayescontract.ModePriorPredictive
+	}
 	if err := s.read(); err != nil {
 		return nil, err
 	}
@@ -177,16 +195,33 @@ func (q *queue) planBayes(ctx context.Context, user *auth.User, node pyjson.Obje
 	if !s.graph.Valid() {
 		return nil, fail("its saved version does not validate in this version of Tabularia: open the model and save it again")
 	}
+	if s.mode == bayescontract.ModePriorPredictive && !s.hasPriorCheck() {
+		return nil, fail("this version of the model has no prior predictive check (a truncated prior Stan cannot draw ancestrally, or a " +
+			"version saved before the checks): open the model and save it again, or run the sampling")
+	}
 
 	// the bindings: every entry that reads a column, by its node's id, and the series' time
 	if err := s.bind(data, fail); err != nil {
 		return nil, err
 	}
-	// the sampler, the output, the limits
+	// the sampler, the output, the limits; the prior predictive check keeps the node's seed alone (its settings are its own:
+	// the output and the replicated data's thinning are not read, they belong to the sampling)
+	if s.mode == bayescontract.ModePriorPredictive {
+		data = withoutKeys(data, "output", "replicatedDraws")
+	}
 	if err := s.settings(data, fail); err != nil {
 		return nil, err
 	}
-	checked, err := modelcatalog.Check(bayescontract.Model, map[string]any{"mode": s.mode, "output": s.output})
+	if s.mode == bayescontract.ModePriorPredictive {
+		s.sampler = bayescontract.Sampler{Chains: priorChains, Warmup: priorWarmup, Draws: priorDraws, Seed: s.sampler.Seed,
+			AdaptDelta: bayescontract.DefaultAdaptDelta, MaxTreedepth: bayescontract.DefaultMaxTreedepth, Refresh: bayescontract.DefaultRefresh}
+		s.modelStep.output, s.replicated = bayescontract.OutputResults, nil
+	}
+	params := map[string]any{"mode": s.mode, "output": s.output}
+	if s.mode == bayescontract.ModePriorPredictive {
+		params = map[string]any{"mode": s.mode} // the catalogue's variant takes no output: it writes the results table alone
+	}
+	checked, err := modelcatalog.Check(bayescontract.Model, params)
 	if err != nil {
 		var ce *modelcatalog.Error
 		if errors.As(err, &ce) {
@@ -457,6 +492,12 @@ func (s *bayesStep) sortOps() []any {
 	return []any{pyjson.Object{{Key: "type", Value: "sort"}, {Key: "params", Value: pyjson.Object{{Key: "by", Value: stringsAny(s.sortBy)}}}}}
 }
 
+// hasPriorCheck: the stored program holds the predictive checks and the prior's draws (the entries of kind prior_count: a
+// truncated gamma or inverse-gamma prior has none, and the check is not offered).
+func (s *bayesStep) hasPriorCheck() bool {
+	return s.hasChecks() && slices.ContainsFunc(s.stored, func(e bayescontract.DataEntry) bool { return e.Kind == "prior_count" })
+}
+
 // hasChecks: the stored program holds the predictive checks (a data entry of kind checks_on: generator 2 on).
 func (s *bayesStep) hasChecks() bool {
 	return slices.ContainsFunc(s.stored, func(e bayescontract.DataEntry) bool { return e.Kind == "checks_on" })
@@ -600,7 +641,7 @@ func (q *queue) bayesBinary(ctx context.Context, s *bayesStep, child *childRun, 
 // runBayes is a flow's Bayesian model node as a step: where the nodes after it read, nil when it failed.
 func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.Source, error) {
 	d := q.d
-	s, err := q.planBayes(ctx, r.user, r.node)
+	s, err := q.planBayes(ctx, r.user, r.node, r.check)
 	if err != nil {
 		return nil, err
 	}
@@ -649,6 +690,10 @@ func (q *queue) runBayes(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		{Key: "bayes_model", Value: pyjson.Object{{Key: "id", Value: s.model.ID}, {Key: "version", Value: s.version.Version},
 			{Key: "name", Value: s.model.Name}}},
 		{Key: "compile", Value: bayesCompileInfo(s.compile, s.binary == nil, 0)}}
+	if s.mode == bayescontract.ModePriorPredictive {
+		// what keeps the run out of the node's outputs (runsOfNodeChecked) and gives it to the Report tab apart
+		info = append(info, pyjson.KV{Key: "check", Value: bayesCheckPrior})
+	}
 	childID, err := r.startChild(ctx, d, "model", r.flow.ID, fmt.Sprintf("%s v%d", s.group, s.img.Version), bucket, dataKey, info)
 	if err != nil {
 		return nil, err

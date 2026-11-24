@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -818,5 +819,91 @@ func TestABayesTrial(t *testing.T) {
 	}
 	if out := w.outputs(w.runner, flow.ID)["b"]; out == nil || out["output"]["stale"] != false {
 		t.Errorf("the outputs after the trial: %v", out)
+	}
+}
+
+// trialWith is the trial's route with a JSON body.
+func (w *bayesRunWorld) trialWith(u *auth.User, flow int64, node, body string) *httptest.ResponseRecorder {
+	w.t.Helper()
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body))
+	r.SetPathValue("flow_id", fmt.Sprint(flow))
+	r.SetPathValue("node_id", node)
+	w.d.trialNode(rec, r, &auth.Principal{User: *u})
+	return rec
+}
+
+// The prior predictive check is a trial with {"check": "prior_predictive"}: the sampler four chains without warm-up and 250
+// draws on the node's seed, the output the results table alone, the checks on; its run is never the node's output nor its
+// «last» run, and the outputs give it apart; the sampling's trial after it leaves it where it is.
+func TestAPriorPredictiveTrialIsNeverTheNodesOutput(t *testing.T) {
+	w := newBayesRunWorld(t)
+	saved := w.save("Schools", templateGraph(t, "hier_slopes"))
+	flow, _, _ := w.flowWith(bayesNodeJSON(saved.Model.ID, 1, slopesBindings, nil), true)
+	for _, body := range []string{`{"check": "posterior"}`, `{"check": 3}`, `[]`} {
+		if rec := w.trialWith(w.runner, flow.ID, "b", body); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+	if rec := w.trialWith(w.runner, flow.ID, "s", `{"check": "prior_predictive"}`); rec.Code != http.StatusUnprocessableEntity &&
+		rec.Code != http.StatusNotFound {
+		t.Errorf("a check of a source: %d %s", rec.Code, rec.Body)
+	}
+	var n int64
+	_ = w.db.QueryRow(w.ctx, `SELECT count(*) FROM runs WHERE flow_id = $1`, flow.ID).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d runs left by the refusals", n)
+	}
+	started := func(rec *httptest.ResponseRecorder) int64 {
+		t.Helper()
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("the trial: %d %s", rec.Code, rec.Body)
+		}
+		var b struct {
+			RunID int64 `json:"run_id"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &b)
+		return b.RunID
+	}
+	prior := started(w.trialWith(w.runner, flow.ID, "b", `{"check": "prior_predictive"}`))
+	if r := w.waitRun(prior); r.status != "SUCCESS" {
+		t.Fatalf("the prior predictive trial: %+v", r)
+	}
+	task, _ := bayesTaskOf(t, w.attempts[len(w.attempts)-1])
+	b := task.Bayes
+	if task.Mode != "prior_predictive" || task.Output != "results" || task.WriteOutput || task.RowsFrom != "trial" || task.Variant != "prior_predictive" ||
+		b.Sampler.Chains != 4 || b.Sampler.Warmup != 0 || b.Sampler.Draws != 250 || b.Sampler.Seed != 1840277361 || b.Sampler.Init != nil ||
+		b.Replicated != nil || len(b.Checks) == 0 || string(b.Checks) == "null" {
+		t.Errorf("the prior predictive task: %+v sampler %+v checks %s", task, b.Sampler, b.Checks)
+	}
+	row := w.row(prior)
+	var info map[string]any
+	_ = json.Unmarshal([]byte(row.script), &info)
+	if info["check"] != "prior_predictive" || info["variant"] != "prior_predictive" || info["trial"] != true {
+		t.Errorf("the run's script: %s", row.script)
+	}
+	out := w.outputs(w.runner, flow.ID)["b"]
+	if out == nil || out["last"] != nil || out["output"] != nil || out["prior_check"]["run_id"] != float64(prior) ||
+		out["prior_check"]["status"] != "SUCCESS" || out["prior_check"]["stale"] != false {
+		t.Fatalf("the outputs after the prior predictive trial alone: %v", out)
+	}
+	// the node's own trial: its output and last are its own; the prior's stays
+	sampling := started(w.trial(w.runner, flow.ID, "b"))
+	if r := w.waitRun(sampling); r.status != "SUCCESS" {
+		t.Fatalf("the trial: %+v", r)
+	}
+	out = w.outputs(w.runner, flow.ID)["b"]
+	if out["last"]["run_id"] != float64(sampling) || out["prior_check"]["run_id"] != float64(prior) {
+		t.Errorf("the outputs after both: %v", out)
+	}
+	if out["output"] != nil && out["output"]["run_id"] == float64(prior) {
+		t.Errorf("the prior predictive check became the node's output: %v", out)
+	}
+	// a change of the node's seed or bindings makes both «not up to date»
+	if _, err := w.db.Exec(w.ctx, `UPDATE flows SET definition = replace(definition, '1840277361', '99') WHERE id = $1`, flow.ID); err != nil {
+		t.Fatal(err)
+	}
+	if out = w.outputs(w.runner, flow.ID)["b"]; out["prior_check"]["stale"] != true {
+		t.Errorf("the prior predictive check after a new seed: %v", out)
 	}
 }

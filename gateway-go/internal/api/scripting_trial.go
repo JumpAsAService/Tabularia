@@ -79,6 +79,16 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		}
 	}
 	nodeType, _ := node.Value("type").(string)
+	// the body is optional: {"check": "prior_predictive"} asks a Bayesian model node for its prior predictive check
+	// (docs/specs/bayes-flow-node.md, «The prior predictive check»), as a trial of its own
+	check, ok := trialCheck(w, r)
+	if !ok {
+		return
+	}
+	if check != "" && nodeType != bayesNodeType {
+		q.refuse(http.StatusUnprocessableEntity, "Only a Bayesian model node has a check to run apart from its run")
+		return
+	}
 	kind := bayesRunKind(nodeType) // the run's kind: a Bayesian model node's runs are the models'
 	if node == nil || (nodeType != "script" && nodeType != "container" && nodeType != "model" && nodeType != "model_predict" && nodeType != bayesNodeType) {
 		q.refuse(http.StatusNotFound, "The node is not in the saved flow: save the flow first")
@@ -90,7 +100,7 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		// refused here, with its sentence, before any run exists; the compile asked for now, with the person's
 		// authority (docs/specs/bayes-flow-node.md, «From the node to the Job»)
 		qq := newQueue(d)
-		if _, err := qq.planBayes(q.ctx, &p.User, node); err != nil {
+		if _, err := qq.planBayes(q.ctx, &p.User, node, check); err != nil {
 			var sf *scriptFailed
 			if !errors.As(err, &sf) {
 				q.fail(err)
@@ -230,6 +240,11 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 			return
 		}
 		if run.Status == "PENDING" || run.Status == "STARTED" {
+			if now, _ := pyjson.Obj(info).Value("check").(string); now != check {
+				// the node's sampling and its prior predictive check share its place: one at a time
+				q.refuse(http.StatusConflict, "Another trial of this node is still running: wait for it to end")
+				return
+			}
 			server.JSON(w, http.StatusAccepted, pyjson.Object{{Key: "run_id", Value: run.ID}})
 			return
 		}
@@ -239,15 +254,22 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		q.fail(err)
 		return
 	}
+	first := pyjson.Object{{Key: "node_id", Value: nodeID}, {Key: "label", Value: label}, {Key: "trial", Value: true},
+		{Key: "budget_seconds", Value: budget}}
+	if check != "" {
+		first = append(first, pyjson.KV{Key: "check", Value: check})
+	}
 	var runID int64
 	if err := d.DB.QueryRow(q.ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, input_key, output_bucket,
 		output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at) VALUES ($1, $2, '', 'PENDING', $3, 'trial',
-		'', '', '', '', false, '[]', $4, $5) RETURNING id`, kind, flow.ID, p.User.ID, pyDumps(pyjson.Object{{Key: "node_id", Value: nodeID},
-		{Key: "label", Value: label}, {Key: "trial", Value: true}, {Key: "budget_seconds", Value: budget}}), jobs.Now()).Scan(&runID); err != nil {
+		'', '', '', '', false, '[]', $4, $5) RETURNING id`, kind, flow.ID, p.User.ID, pyDumps(first), jobs.Now()).Scan(&runID); err != nil {
 		q.fail(err)
 		return
 	}
 	action := "scripting.trial"
+	if check != "" {
+		detail = append(detail, pyjson.KV{Key: "check", Value: check})
+	}
 	switch kind {
 	case "container":
 		action = "container.trial"
@@ -259,6 +281,30 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	user := p.User
 	go d.runTrial(runID, &user, nodeID)
 	server.JSON(w, http.StatusAccepted, pyjson.Object{{Key: "run_id", Value: runID}})
+}
+
+// trialCheck reads the trial's optional body: no body, `{}` or `{"check": null}` is the node's run; `{"check":
+// "prior_predictive"}` the prior predictive check; anything else is refused (422) with the reason, ok false.
+func trialCheck(w http.ResponseWriter, r *http.Request) (check string, ok bool) {
+	_, payload, good := readJSON(w, r)
+	if !good {
+		return "", false
+	}
+	given, isObj := payload.(pyjson.Object)
+	if !isObj {
+		server.JSON(w, http.StatusUnprocessableEntity, map[string]string{"detail": "The request body must be a JSON object"})
+		return "", false
+	}
+	switch c := given.Value("check").(type) {
+	case nil:
+		return "", true
+	case string:
+		if c == bayesCheckPrior {
+			return c, true
+		}
+	}
+	server.JSON(w, http.StatusUnprocessableEntity, map[string]string{"detail": "The only check a trial runs apart from the node is «prior_predictive»"})
+	return "", false
 }
 
 // runTrial is run_trial: the trial carried to its end, beating while it runs.
@@ -354,8 +400,13 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 		}
 	}
 	resolveDS := d.flowDsResolver(ctx)
+	// the check the trial was asked with is in its row (written with it, before this goroutine started)
+	check := ""
+	if own, isJSON := scriptJSON(run.Script); isJSON {
+		check, _ = pyjson.Obj(own).Value("check").(string)
+	}
 	r := &scriptNodeRun{q: q, user: current, flow: flow, definition: definition, node: node, trigger: "trial", mode: "development",
-		outputs: upstream, resolveDS: resolveDS, trial: runID, firstIO: firstIO}
+		outputs: upstream, resolveDS: resolveDS, trial: runID, check: check, firstIO: firstIO}
 	switch pyjson.Str(node.Value("type")) {
 	case "container":
 		_, err = q.runContainer(ctx, r)

@@ -238,8 +238,8 @@ test('the editor shows the tab for a statistics or a model node only, and falls 
   assert.match(editor, /const reportNodeId = computed\(\(\) => statNodeId\.value \?\? modelReportNodeId\.value\)/)
   assert.match(editor, /findNode\(id\)\?\.type === 'model' \? id : null/)
   // a model node's runs are those the outputs give Script nodes; its Run is theirs
-  assert.match(editor, /statModelReportRun\(scriptOutputs\.value\[id\]\)/)
-  assert.match(editor, /@run="modelReportNodeId && runScriptNode\(modelReportNodeId\)"/)
+  assert.match(editor, /statModelReportOf\(entry, bayes \? \(reportViews\[id\] \?\? 'posterior'\) : 'posterior'\)/)
+  assert.match(editor, /@run="modelReportNodeId && runModelReport\(modelReportNodeId\)"/)
   assert.match(editor, /statIsOp\(n\.data\?\.opType\) \? id : null/)
   assert.match(editor, /if \(!id && viewTab\.value === 'report'\) viewTab\.value = 'table'/)
   // the chain is the preview's own, with the flow's engine: no second chain is built
