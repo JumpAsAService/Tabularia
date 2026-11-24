@@ -25,10 +25,10 @@ parameters {
   real<lower=0.0> sigma;
 }
 model {
-  mu ~ normal(1200.0, (2.5 * 300.0));
+  mu ~ normal(0.0, 2.5);
   phi1 ~ normal(0.0, 0.5);
   phi2 ~ normal(0.0, 0.5);
-  sigma ~ exponential((1.0 / 300.0));
+  sigma ~ exponential(1.0);
   y[Rows_lag] ~ normal(((mu + (phi1 * ((y[Lag1]) - mu))) + (phi2 * ((y[Lag2]) - mu))), sigma);
 }
 generated quantities {
@@ -50,15 +50,13 @@ generated quantities {
   array[Ppc_o1_slots] int Ppc_o1_count;
   array[Ppc_o1_rep] real Ppc_o1_yrep;
   {
-    real Prior_g_m1_2 = (2.5 * 300.0);
-    Prior_m_1 = (normal_rng(1200.0, fmin(fmax(Prior_g_m1_2, 1e-300), 1e+300)) + (0.0 * Prior_g_m1_2));
+    Prior_m_1 = normal_rng(0.0, 2.5);
     Prior_d_1 = Prior_m_1;
     Prior_m_2 = normal_rng(0.0, 0.5);
     Prior_d_2 = Prior_m_2;
     Prior_m_3 = normal_rng(0.0, 0.5);
     Prior_d_3 = Prior_m_3;
-    real Prior_g_m4_1 = (1.0 / 300.0);
-    Prior_m_4 = (exponential_rng(fmin(fmax(Prior_g_m4_1, 1e-300), 1e+300)) + (0.0 * Prior_g_m4_1));
+    Prior_m_4 = exponential_rng(1.0);
     Prior_d_4 = Prior_m_4;
     array[Ppc_o1_n] real Ppc_o1_post = normal_rng(((mu + (phi1 * ((y[Lag1[Ppc_o1_rows]]) - mu))) + (phi2 * ((y[Lag2[Ppc_o1_rows]]) - mu))), sigma);
     array[Prior_o1_n] real Prior_o1_draw = normal_rng(((Prior_m_1 + (Prior_m_2 * ((y[Lag1[Prior_o1_rows]]) - Prior_m_1))) + (Prior_m_3 * ((y[Lag2[Prior_o1_rows]]) - Prior_m_1))), Prior_m_4);

@@ -660,42 +660,6 @@
     "renamed": null
   },
   {
-    "stan": "Prior_g_m2_2",
-    "block": "generated quantities",
-    "node_id": null,
-    "component": null,
-    "name": null,
-    "label": null,
-    "kind": "extension",
-    "plate": null,
-    "role": null,
-    "renamed": null
-  },
-  {
-    "stan": "Prior_g_m3_2",
-    "block": "generated quantities",
-    "node_id": null,
-    "component": null,
-    "name": null,
-    "label": null,
-    "kind": "extension",
-    "plate": null,
-    "role": null,
-    "renamed": null
-  },
-  {
-    "stan": "Prior_g_m4_1",
-    "block": "generated quantities",
-    "node_id": null,
-    "component": null,
-    "name": null,
-    "label": null,
-    "kind": "extension",
-    "plate": null,
-    "role": null,
-    "renamed": null
-  },
-  {
     "stan": "Prior_u_m5",
     "block": "generated quantities",
     "node_id": null,

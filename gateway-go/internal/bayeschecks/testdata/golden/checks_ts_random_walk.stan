@@ -22,8 +22,8 @@ parameters {
   real<lower=0.0> sigma;
 }
 model {
-  delta ~ normal(0.0, 300.0);
-  sigma ~ exponential((1.0 / 300.0));
+  delta ~ normal(0.0, 1.0);
+  sigma ~ exponential(1.0);
   y[Rows_lag] ~ normal(((y[Lag1]) + delta), sigma);
 }
 generated quantities {
@@ -41,10 +41,9 @@ generated quantities {
   array[Ppc_o1_slots] int Ppc_o1_count;
   array[Ppc_o1_rep] real Ppc_o1_yrep;
   {
-    Prior_m_1 = normal_rng(0.0, 300.0);
+    Prior_m_1 = normal_rng(0.0, 1.0);
     Prior_d_1 = Prior_m_1;
-    real Prior_g_m2_1 = (1.0 / 300.0);
-    Prior_m_2 = (exponential_rng(fmin(fmax(Prior_g_m2_1, 1e-300), 1e+300)) + (0.0 * Prior_g_m2_1));
+    Prior_m_2 = exponential_rng(1.0);
     Prior_d_2 = Prior_m_2;
     array[Ppc_o1_n] real Ppc_o1_post = normal_rng(((y[Lag1[Ppc_o1_rows]]) + delta), sigma);
     array[Prior_o1_n] real Prior_o1_draw = normal_rng(((y[Lag1[Prior_o1_rows]]) + Prior_m_1), Prior_m_2);

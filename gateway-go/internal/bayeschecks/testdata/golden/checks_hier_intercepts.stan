@@ -28,10 +28,10 @@ parameters {
 }
 model {
   vector[N] eta = ((a_g[g]) + (b_x * x));
-  b_x ~ normal(0.0, (2.5 * 300.0));
-  mu_a ~ normal(1200.0, (2.5 * 300.0));
-  sigma ~ exponential((1.0 / 300.0));
-  tau_a ~ normal(0.0, 300.0);
+  b_x ~ normal(0.0, 2.5);
+  mu_a ~ normal(0.0, 2.5);
+  sigma ~ exponential(1.0);
+  tau_a ~ normal(0.0, 1.0);
   a_g ~ normal(mu_a, tau_a);
   y ~ normal(eta, sigma);
 }
@@ -58,17 +58,14 @@ generated quantities {
   array[Ppc_o1_rep] real Ppc_o1_yrep;
   {
     vector[N] eta = ((a_g[g]) + (b_x * x));
-    real Prior_g_m1_2 = (2.5 * 300.0);
-    Prior_m_1 = (normal_rng(0.0, fmin(fmax(Prior_g_m1_2, 1e-300), 1e+300)) + (0.0 * Prior_g_m1_2));
+    Prior_m_1 = normal_rng(0.0, 2.5);
     Prior_d_1 = Prior_m_1;
-    real Prior_g_m3_2 = (2.5 * 300.0);
-    Prior_m_3 = (normal_rng(1200.0, fmin(fmax(Prior_g_m3_2, 1e-300), 1e+300)) + (0.0 * Prior_g_m3_2));
+    Prior_m_3 = normal_rng(0.0, 2.5);
     Prior_d_3 = Prior_m_3;
-    real Prior_g_m4_1 = (1.0 / 300.0);
-    Prior_m_4 = (exponential_rng(fmin(fmax(Prior_g_m4_1, 1e-300), 1e+300)) + (0.0 * Prior_g_m4_1));
+    Prior_m_4 = exponential_rng(1.0);
     Prior_d_4 = Prior_m_4;
-    real Prior_u_m5 = (Phi(((0.0 + ((-1.0) * 0.0)) * inv(300.0))) + ((1.0 + ((-1.0) * Phi(((0.0 + ((-1.0) * 0.0)) * inv(300.0))))) * uniform_rng(0.0, 1.0)));
-    Prior_m_5 = (0.0 + (300.0 * inv_Phi(fmin(fmax(Prior_u_m5, 0.0), 1.0))));
+    real Prior_u_m5 = (Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))) + ((1.0 + ((-1.0) * Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))))) * uniform_rng(0.0, 1.0)));
+    Prior_m_5 = (0.0 + (1.0 * inv_Phi(fmin(fmax(Prior_u_m5, 0.0), 1.0))));
     Prior_d_5 = Prior_m_5;
     real Prior_g_m6_1 = Prior_m_3;
     real Prior_g_m6_2 = Prior_m_5;

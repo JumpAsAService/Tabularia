@@ -31,15 +31,15 @@ parameters {
 }
 transformed parameters {
   vector[N] level;
-  level[Rows_first] = (1200.0 + ((2.5 * 300.0) * Z_level[Rows_first]));
+  level[Rows_first] = (0.0 + (2.5 * Z_level[Rows_first]));
   for (I in 1:N_next) {
     level[Rows_next[I]] = (level[Prev[I]] + (sigma_level * Z_level[Rows_next[I]]));
   }
 }
 model {
-  sigma_level ~ normal(0.0, 300.0);
+  sigma_level ~ normal(0.0, 1.0);
   Z_level ~ std_normal();
-  sigma_obs ~ exponential((1.0 / 300.0));
+  sigma_obs ~ exponential(1.0);
   y ~ normal(level, sigma_obs);
 }
 generated quantities {
@@ -59,22 +59,20 @@ generated quantities {
   array[Ppc_o1_slots] int Ppc_o1_count;
   array[Ppc_o1_rep] real Ppc_o1_yrep;
   {
-    real Prior_u_m1 = (Phi(((0.0 + ((-1.0) * 0.0)) * inv(300.0))) + ((1.0 + ((-1.0) * Phi(((0.0 + ((-1.0) * 0.0)) * inv(300.0))))) * uniform_rng(0.0, 1.0)));
-    Prior_m_1 = (0.0 + (300.0 * inv_Phi(fmin(fmax(Prior_u_m1, 0.0), 1.0))));
+    real Prior_u_m1 = (Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))) + ((1.0 + ((-1.0) * Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))))) * uniform_rng(0.0, 1.0)));
+    Prior_m_1 = (0.0 + (1.0 * inv_Phi(fmin(fmax(Prior_u_m1, 0.0), 1.0))));
     Prior_d_1 = Prior_m_1;
-    real Prior_g_m2_2 = (2.5 * 300.0);
-    Prior_m_2 = (normal_rng(1200.0, fmin(fmax(Prior_g_m2_2, 1e-300), 1e+300)) + (0.0 * Prior_g_m2_2));
-    real Prior_a_p2_1 = 1200.0;
-    real Prior_a_p2_2 = (2.5 * 300.0);
+    Prior_m_2 = normal_rng(0.0, 2.5);
+    real Prior_a_p2_1 = 0.0;
+    real Prior_a_p2_2 = 2.5;
     real Prior_a_p2_3 = Prior_m_1;
     for (I in 1:Prior_first_n) {
-      Prior_p_2[Prior_first[I]] = (normal_rng(Prior_a_p2_1, fmin(fmax(Prior_a_p2_2, 1e-300), 1e+300)) + (0.0 * Prior_a_p2_2));
+      Prior_p_2[Prior_first[I]] = normal_rng(Prior_a_p2_1, Prior_a_p2_2);
     }
     for (I in 1:Prior_next_n) {
       Prior_p_2[Prior_next[I]] = (normal_rng(fmin(fmax(Prior_p_2[Prior_prev[I]], (-1e+300)), 1e+300), fmin(fmax(Prior_a_p2_3, 1e-300), 1e+300)) + (0.0 * (Prior_p_2[Prior_prev[I]] + Prior_a_p2_3)));
     }
-    real Prior_g_m3_1 = (1.0 / 300.0);
-    Prior_m_3 = (exponential_rng(fmin(fmax(Prior_g_m3_1, 1e-300), 1e+300)) + (0.0 * Prior_g_m3_1));
+    Prior_m_3 = exponential_rng(1.0);
     Prior_d_3 = Prior_m_3;
     array[Ppc_o1_n] real Ppc_o1_post = normal_rng(level[Ppc_o1_rows], sigma_obs);
     array[Prior_o1_n] real Prior_o1_draw = normal_rng(Prior_p_2[Prior_o1_rows], Prior_m_3);
