@@ -1252,37 +1252,13 @@ table.data col.hc { background: var(--row-hover); }
 table.data td.null { font-style: normal; } /* the ∅ in muted: upright, an italic symbol reads as noise */
 /* ══ end DATA GRID ═══ */
 
-/* ══ PAGE TRANSITIONS ═══════════════════════════════════════════════════════════════
-   plugins/page-transition.client.ts takes a picture of the page, the router swaps it, the
-   pictures cross-fade. Everything below hangs on `html.vt-active`, a class that exists only
-   while a transition runs: a `view-transition-name` makes its element a stacking context and
-   the containing block of its fixed descendants, which must never be true the rest of the time.
-   The shell stands still: the top bar is a named layer of its own (the same picture before and
-   after, so it does not seem to move), the page's content is another one and is the only thing
-   that moves, a few pixels in, over the cross-fade of the rest. The page's background is part
-   of the root's picture, so a dark theme never shows the browser's white between two pages.
-   The toasts and the confirmation dialog are layers of their own above both: they are not
-   faded with the page, they stay as they are. */
-html.vt-active .topbar { view-transition-name: vt-topbar; }
-html.vt-active .app-shell > .content { view-transition-name: vt-page; }
-html.vt-active .toasts { view-transition-name: vt-toasts; }
-html.vt-active .confirm-backdrop { view-transition-name: vt-confirm; }
-
-/* the pictures follow the app's own motion tokens (one duration for all, none for the shell) */
-::view-transition-group(*) { animation-duration: var(--dur-2); animation-timing-function: var(--ease-out); }
-::view-transition-old(*), ::view-transition-new(*) { animation-duration: var(--dur-2); animation-timing-function: var(--ease-out); }
-/* an incoming page's content rises 6px into place while it fades in; the outgoing one only fades */
-@keyframes vt-page-in { from { opacity: 0; transform: translateY(6px); } }
-::view-transition-new(vt-page) { animation-name: vt-page-in; }
-/* the content's box takes the new size at once: only the pictures change */
-::view-transition-group(vt-page) { animation: none; overflow: clip; }
-/* the shell, the toasts and the confirmation dialog keep their place: their picture before and
-   after is the same, so the default cross-fade between the two shows nothing */
-::view-transition-group(vt-topbar), ::view-transition-group(vt-toasts), ::view-transition-group(vt-confirm) { animation: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  /* the script does not start a transition here; if one is started anyway, it does not move */
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-  ::view-transition-old(*) { opacity: 0; }
+/* ══ PAGE ENTRANCE ══════════════════════════════════════════════════════════════════
+   When the page changes (not a filter or a folder: plugins/page-enter.client.ts decides), the
+   new page's content comes in with one short fade that starts from a visible opacity, never from
+   nothing: there is no empty frame, so nothing flashes. The old page leaves as it always did, the
+   top bar is not part of it, and no page is ever held back or mounted twice. */
+@keyframes page-enter { from { opacity: 0.6; } }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-page-enter] .app-shell > .content { animation: page-enter var(--dur-1) var(--ease-out); }
 }
-/* ══ end PAGE TRANSITIONS ═══ */
+/* ══ end PAGE ENTRANCE ═══ */

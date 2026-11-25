@@ -547,8 +547,6 @@ const alsoOpenLabel = computed(() => {
 })
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
 const flowName = ref(t('flowEditor.unnamedFlow'))
-// the opened flow's own name is in (not the placeholder): the title a page transition carries
-const flowTitled = ref(false)
 // the flow's engine: chosen at creation (?engine=… from the Flows page) for a new flow,
 // or loaded from flow.engine. Opening the editor without an explicit choice uses the
 // user's FAVOURITE engine. Passed to preview/run and saved.
@@ -685,7 +683,6 @@ async function loadFlow(id: number) {
   const f = await flowsApi.get(id)
   loadBlocked.value = ''
   flowName.value = f.name
-  flowTitled.value = true
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
   flowProductionEngine.value = f.production_engine ?? null
@@ -3633,7 +3630,6 @@ async function pollTask(id: string) {
       :busy="busy"
       :can-run="canRun"
       :flow-name="flowName"
-      :titled="flowTitled"
       :projects="projectsList"
       :project-id="projectId"
       :engine="flowEngine"

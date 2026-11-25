@@ -593,7 +593,6 @@ async function saveSchedule(cron: string) {
             v-model="name"
             class="gname"
             type="text"
-            :data-vt-title="name ? '' : undefined"
             maxlength="200"
             :readonly="!canEdit"
             :placeholder="$t('flowGroups.namePlaceholder')"

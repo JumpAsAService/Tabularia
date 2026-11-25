@@ -465,7 +465,6 @@ const unavailable = computed(() => {
             v-model="name"
             class="sname"
             type="text"
-            :data-vt-title="name ? '' : undefined"
             maxlength="200"
             :readonly="!canEdit"
             :placeholder="$t('scripts.namePlaceholder')"

@@ -1922,7 +1922,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <a v-else-if="r.kind === 'datasource'" :href="r.to" class="asname" @click="onDsLinkClick($event, r)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </a>
-              <NuxtLink v-else-if="r.to" :to="r.to" class="asname" data-vt-open>
+              <NuxtLink v-else-if="r.to" :to="r.to" class="asname">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </NuxtLink>
               <span v-else class="asname plain">

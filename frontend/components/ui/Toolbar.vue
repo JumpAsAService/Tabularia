@@ -24,8 +24,6 @@ const props = defineProps<{
   canRun?: boolean
   // saving the flow
   flowName?: string
-  // the name is the flow's own (loaded), not the placeholder: it is the page's title for a transition
-  titled?: boolean
   projects?: { id: number; name: string }[]
   projectId?: number | null
   // the flow's DEVELOPMENT engine (the one the editor works with)
@@ -99,7 +97,6 @@ const statusIcon = computed(() => {
     <input
       class="flowname"
       type="text"
-      :data-vt-title="titled ? '' : undefined"
       :value="flowName"
       :placeholder="$t('toolbar.flowNamePlaceholder')"
       :aria-label="$t('toolbar.flowNamePlaceholder')"

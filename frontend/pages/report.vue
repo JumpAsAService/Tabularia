@@ -477,7 +477,7 @@ const notesOpen = ref(false)
 
       <template v-else>
         <div class="page-head">
-          <h1 :title="detail?.name" :data-vt-title="detail ? '' : undefined">
+          <h1 :title="detail?.name">
             <FileChartColumn :size="18" aria-hidden="true" />
             <span v-if="detail" class="name">{{ detail.name }}</span>
             <span v-else class="sk" style="width: 220px; height: 16px" />

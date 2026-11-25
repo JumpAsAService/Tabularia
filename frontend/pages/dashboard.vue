@@ -622,7 +622,7 @@ onBeforeUnmount(() => {
 
       <template v-else-if="detail">
         <header class="head">
-          <h1 :title="detail.name" data-vt-title><LayoutDashboard :size="18" aria-hidden="true" /><span class="name">{{ detail.name }}</span></h1>
+          <h1 :title="detail.name"><LayoutDashboard :size="18" aria-hidden="true" /><span class="name">{{ detail.name }}</span></h1>
           <NuxtLink v-if="folderPath && !wall" :to="`/explore?folder=${detail.project_id}`" class="where">
             <FolderTree :size="13" aria-hidden="true" /> {{ folderPath }}
           </NuxtLink>

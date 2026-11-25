@@ -12,12 +12,10 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   app's own dialog instead of the browser's: the button names the action, a destructive one is
   red with the focus on Cancel, Esc and a click outside cancel. The browser's warning on closing
   a tab remains, and only appears when there are unsaved changes.
-- Changing page is no longer a hard cut: the page's content fades in over about 150 ms, rising a few
-  pixels, while the top bar stays still, and a flow, report, dashboard, script or model opened from
-  Explore carries its name from the row into the page's title. It uses the browser's View
-  Transitions (Chrome, Firefox 144 and later, Safari); elsewhere, and with reduced motion, the page
-  changes as before. Nothing animates when a page only changes its filter or folder, or when a
-  leave-with-unsaved-changes question is answered Cancel.
+- Changing page is no longer a hard cut: the new page's content fades in over 100 ms, starting
+  from a visible opacity so nothing flashes. The top bar stays still; nothing is held back or
+  mounted twice; nothing animates when a page only changes its filter or folder, when a
+  leave-with-unsaved-changes question is answered Cancel, or with reduced motion.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 
