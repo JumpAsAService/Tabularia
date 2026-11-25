@@ -1336,7 +1336,10 @@ def _instructions(ctx: RunContext[FlowDeps]) -> str:
 flow_agent: Agent[FlowDeps, str] = Agent(
     deps_type=FlowDeps,
     instructions=_instructions,
-    retries=2,
+    # how many times in a row one tool's call may be refused before the turn stops. A step with many
+    # parameters is seldom right at the third try if it was wrong twice, but two was one short: the
+    # turn's caps (requests, cost) are what bounds a model that keeps trying
+    retries=4,
     name="tabularia-flow-assistant",
     capabilities=[ai_agent.StopWhenWithheld(), ai_agent.LeanResults(), ai_agent.TurnGuard()],
 )

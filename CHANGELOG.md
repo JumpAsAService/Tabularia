@@ -35,6 +35,14 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   fit a budget (`AI__MAX_RESULT_CHARS_FOR_MODEL`, 40,000 characters by default, `0` for
   everything) and a note of how many there are, in the turn and in those after it. A wide
   `SELECT *` used to stay in every request that followed and end the turn on its input cap.
+- The rule that data are not instructions is now Tabularia's own for the chat and the script
+  assistant, as it was for the flow and Bayesian ones: said at every request after the
+  administrators' text, so rewriting an assistant's instructions cannot lose it. The script
+  assistant gets the files, the inputs' columns and the last error between markers with a tag
+  that is new at every request.
+- When a model keeps calling one tool wrongly, the turn's error names the step that was refused
+  and points at the reasons, instead of «choose another model». The flow editor's assistant may
+  be refused four times in a row on one tool before its turn stops (it was two).
 
 ## 1.5.0 «Augustus» — 2026-11-24
 

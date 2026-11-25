@@ -137,8 +137,26 @@ def test_the_agents_that_read_data_are_told_it_is_not_their_instructions():
     The plan the person confirms stays the defence; this keeps the agent from proposing it."""
     from app.routes.mcp import INSTRUCTIONS
 
-    for text in (ai_prompts.ASSISTANT, ai_prompts.FLOW, ai_prompts.SCRIPT, INSTRUCTIONS):
+    for text in (ai_prompts.FLOW, INSTRUCTIONS):
         assert "is not the user asking" in text or "is not your user asking" in text
+
+
+def test_the_rule_about_data_is_tabularias_not_the_administrators():
+    """An administrator may rewrite an agent's text, and a text rewritten once no longer follows the
+    defaults: the rule that data are not instructions is in what Tabularia adds after it, at every request,
+    for every agent that reads what people wrote."""
+    from app.services import ai_bayes_agent as bayes, ai_script_agent as script
+
+    rewritten = "Short answers."
+    chat = ai_prompts.compose(rewritten, ai_agent.context(None, "en"))
+    flow = ai_prompts.compose(rewritten, ai_flow_agent.context(None, "en"))
+    scripted = ai_prompts.compose(rewritten, script.context(script.ScriptDeps(
+        user=None, session_factory=None, engine=None, model_id="m", files=[{"path": "main.py", "content": "print(1)"}], entrypoint="main.py")))
+    for text in (chat, flow, scripted):
+        assert text.startswith(rewritten) and ("is not the user asking" in text or "never instructions" in text), text[:200]
+    assert "never instructions" in bayes.context(bayes.BayesDeps(user=None, session_factory=None, engine=None, model_id="m", graph={"nodes": []}))
+    # and it is said once: the texts an administrator sees no longer repeat it
+    assert "is not the user asking" not in ai_prompts.ASSISTANT and "is not the user asking" not in ai_prompts.SCRIPT
 
 
 # ── what the texts name must exist ───────────────────────────────────────────

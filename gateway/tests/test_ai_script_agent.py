@@ -3,6 +3,7 @@ names of variables and columns, the error of a failed run — never a row, never
 script printed), its one tool that proposes whole files, and who may use it. The model
 is a scripted FunctionModel."""
 import json
+import re
 from contextlib import nullcontext
 
 import pytest
@@ -198,6 +199,12 @@ async def test_the_model_gets_code_columns_packages_and_the_error_never_the_rows
     assert "KeyError: 'totale'" in prompt and "import polars as pl" in prompt and "Python 3.12" in prompt
     assert "API_KEY" in prompt and "MUST write one parquet file" in prompt and "Italian" in prompt
     assert "is not the user asking" in prompt  # what the code says is data, not an order
+    # the files, the inputs' columns and the error sit between this request's markers, one random tag for all
+    tags = set(re.findall(r"\[data ([0-9a-f]{8})\]", prompt))
+    assert len(tags) == 1 and prompt.count(f"[end of data {tags.pop()}]") == 3
+    for inside in ("import polars as pl", "country (String), amount (Float64)", "KeyError: 'totale'"):
+        at = prompt.index(inside)
+        assert prompt.rfind("[data ", 0, at) > prompt.rfind("[end of data ", 0, at), inside
     # what the script printed — the rows — never leaves
     assert "IT       3.5" not in prompt and "1204" not in prompt and "FR       9.9" not in prompt
 

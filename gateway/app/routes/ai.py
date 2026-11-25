@@ -452,6 +452,23 @@ def _check_spending(session: Session, user: User) -> None:
 REFUSED = "The model declined to answer this request. Rephrase it, or try another model."
 TOO_LONG = "The answer went over the length allowed for one request. Ask for it in smaller pieces."
 NO_USABLE_ANSWER = "The model gave no usable answer. Try again, or choose another model."
+# what the library says when a tool's calls were refused one time too many (tool_manager._check_max_retries)
+_RETRIES_OUT = re.compile(r"^Tool '([^']+)' exceeded max retries")
+
+
+def _refused_too_often(e: Any, kind: str) -> Optional[str]:
+    """The words for a turn that stopped because the model kept calling one tool wrongly: which step,
+    and where the reasons are. None when the turn failed for another reason.
+
+    The reasons themselves are not repeated: each refusal is a step of the turn already, with its own."""
+    hit = _RETRIES_OUT.match(str(getattr(e, "message", "") or ""))
+    if hit is None:
+        return None
+    name = hit.group(1)
+    known = AGENT_TOOLS.get(name) if kind == "assistant" else None
+    step = known.title if known is not None else name
+    return (f"The assistant kept getting «{step}» wrong: each of its calls was refused, and the turn stopped there. The steps "
+            "above say why each was refused. Ask again, saying more precisely what you want, or try another model.")
 
 
 def _cut_short(messages: list[Any]) -> bool:
@@ -633,9 +650,11 @@ async def _turn_stream(
     except IncompleteToolCall:
         logger.warning("assistant: a tool call went over the length allowed (chat %s, model %s)", chat_id, model_id)
         yield _sse("error", {"code": "too_long", "message": TOO_LONG, **unfinished()})
-    except UnexpectedModelBehavior:
+    except UnexpectedModelBehavior as e:
         logger.warning("assistant: no usable answer from the model (chat %s, model %s)", chat_id, model_id, exc_info=True)
-        yield _sse("error", {"code": "model_behavior", "message": NO_USABLE_ANSWER, **unfinished()})
+        refused = _refused_too_often(e, kind)
+        yield _sse("error", {"code": "tool_refused" if refused else "model_behavior", "message": refused or NO_USABLE_ANSWER,
+                             **unfinished()})
     except ModelAPIError as e:
         status = e.status_code if isinstance(e, ModelHTTPError) else None
         logger.warning("assistant: the provider answered %s for %s%s", status or "nothing", model_id, _what_it_said(e))

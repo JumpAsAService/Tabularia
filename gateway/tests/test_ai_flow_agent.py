@@ -1556,3 +1556,28 @@ async def test_the_earlier_turns_results_are_given_in_part_too(session, world, f
     assert events[-1][0] == "done"
     old = [p.content for m in seen[0] for p in m.parts if getattr(p, "tool_name", "") == "preview" and getattr(p, "part_kind", "") == "tool-return"]
     assert old and len(old[0]["rows"]) < 30 and "of the 30 rows" in old[0]["rows_given"]
+
+
+# ── a turn that stops on one tool refused again and again ────────────────────
+@pytest.mark.anyio
+async def test_a_tool_refused_again_and_again_ends_the_turn_naming_the_step(session, world, fake_engine, monkeypatch):
+    wrong = ("add_step", {"after": "source", "operation": "no_such_operation", "params": {}})
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}), wrong, wrong, wrong, wrong, wrong, "never reached"])
+    name, error = events[-1]
+    assert name == "error" and error["code"] == "tool_refused"
+    assert "«add_step»" in error["message"] and "choose another model" not in error["message"]
+    # each refusal is a step with its own reason, which is where the message sends the person
+    refused = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert len(refused) == 4 and not any(d["ok"] for d in refused) and all(d["error"] for d in refused)
+    # what was built before stays, and the turn is counted
+    assert [n["id"] for n in json.loads(error["definition"])["nodes"]] == ["source"]
+    assert len(session.exec(select(AiSpend)).all()) == 1
+
+
+def test_only_a_tool_s_exhausted_retries_are_told_as_such():
+    from pydantic_ai.exceptions import UnexpectedModelBehavior
+
+    assert ai_routes._refused_too_often(UnexpectedModelBehavior("Received empty model response"), "flow") is None
+    told = ai_routes._refused_too_often(UnexpectedModelBehavior("Tool 'query_datasource' exceeded max retries count of 3. Consider…"), "assistant")
+    assert "«Query a datasource»" in told  # the chat's tools have a title: the name the steps show
