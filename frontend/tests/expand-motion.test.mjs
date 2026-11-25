@@ -32,13 +32,18 @@ test('the last frame is held until the body is gone, and a click turns the trave
   assert.match(code, /const close = run \? !run\.closing : isOpen/)
 })
 
+test('opening holds the clock until the body has been drawn, closing starts at once', () => {
+  const code = read('composables/expandMotion.ts')
+  assert.match(code, /if \(closing\) box\.setAttribute\(EXPAND_CLOSING, ''\)\s+else \{[^}]*animation\.pause\(\)\s+requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{\s+if \(runs\.get\(box\)\?\.animation === animation\) animation\.play\(\)/)
+})
+
 test('the plugin leaves the browser alone with reduced motion and on what is not an expander', () => {
   const plugin = read('plugins/expand-motion.client.ts')
   assert.match(plugin, /if \(reduced\.matches\) return\s+const hit = expanderOf\(event\)\s+if \(!hit\) return\s+event\.preventDefault\(\)/)
 })
 
 test('the travel has its own soft curve, set in the styles', () => {
-  assert.match(read('assets/main.css'), /--ease-expand: cubic-bezier\(0\.33, 1, 0\.68, 1\);/)
+  assert.match(read('assets/main.css'), /--ease-expand: cubic-bezier\(0\.25, 0\.1, 0\.25, 1\);/)
   assert.match(read('composables/expandMotion.ts'), /getPropertyValue\('--ease-expand'\)/)
 })
 

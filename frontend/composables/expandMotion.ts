@@ -56,6 +56,16 @@ function slide(box: HTMLElement, from: number, to: number, closing: boolean, don
   )
   runs.set(box, { animation, closing })
   if (closing) box.setAttribute(EXPAND_CLOSING, '')
+  else {
+    // Opening costs the browser a long frame or two before anything can move: the body is laid
+    // out and painted for the first time, and the page answers the toggle. The clock is held
+    // on the first frame until that is spent, so the travel is whole and even; started at
+    // once, its first half would be gone by the time a frame reached the screen (a jump).
+    animation.pause()
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (runs.get(box)?.animation === animation) animation.play()
+    }))
+  }
   animation.onfinish = async () => {
     await done()
     if (runs.get(box)?.animation === animation) halt(box)
