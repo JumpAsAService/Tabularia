@@ -1454,3 +1454,105 @@ async def test_a_turn_beside_a_bayesian_node_hands_it_back_byte_for_byte(session
     handed = json.loads(events[-1][1]["definition"])
     assert json.dumps(next(n for n in handed["nodes"] if n["id"] == "bm-1"), sort_keys=True) == json.dumps(canvas["nodes"][2], sort_keys=True)
     assert [e for e in handed["edges"] if e["id"] in ("e1", "e2")] == canvas["edges"]
+
+
+# ── what the model is given of a result ──────────────────────────────────────
+def _rows(n, width=1):
+    return [{"country": "IT", "amount": i, **{f"c{k}": "x" * 40 for k in range(width)}} for i in range(n)]
+
+
+def test_a_result_that_fits_is_given_whole_and_untouched():
+    result = {"columns": COLUMNS, "rows": _rows(20), "row_count": 20}
+    assert ai_agent.lean_result(result, 40_000) is result
+    assert ai_agent.lean_result(result, 0) is result            # 0: no budget
+    assert ai_agent.lean_result("text", 10) == "text" and ai_agent.lean_result({"rows": 1204}, 10) == {"rows": 1204}
+
+
+def test_a_long_result_is_given_in_part_with_a_note_of_how_many_rows_there_are():
+    rows = _rows(400)
+    result = {"columns": COLUMNS, "rows": rows, "row_count": 400, "truncated": False}
+    one = len(json.dumps(rows[0]))
+    lean = ai_agent.lean_result(result, one * 50)
+    assert 45 <= len(lean["rows"]) <= 50 and lean["rows"] == rows[:len(lean["rows"])]
+    assert f"the first {len(lean['rows'])} of the 400 rows" in lean["rows_given"] and "aggregate in SQL" in lean["rows_given"]
+    # the rest of the result is as it was, and the result itself is not changed: the chat shows and keeps every row
+    assert lean["row_count"] == 400 and lean["columns"] is COLUMNS and len(result["rows"]) == 400 and "rows_given" not in result
+    # the same answer every time: the beginning of a conversation must stay what the provider cached
+    assert ai_agent.lean_result(result, one * 50) == lean
+
+
+def test_a_wide_result_still_gives_a_few_rows_and_a_sample_is_treated_the_same():
+    wide = {"rows": _rows(30, width=200)}
+    assert len(ai_agent.lean_result(wide, 100)["rows"]) == ai_agent.MIN_ROWS_FOR_MODEL
+    few = {"rows": _rows(ai_agent.MIN_ROWS_FOR_MODEL, width=200)}
+    assert ai_agent.lean_result(few, 100) is few
+    sample = ai_agent.lean_result({"name": "orders", "rows": 1204, "sample_rows": _rows(30, width=200)}, 100)
+    assert len(sample["sample_rows"]) == ai_agent.MIN_ROWS_FOR_MODEL and sample["rows"] == 1204 and "sample_rows_given" in sample
+
+
+def test_the_note_stays_outside_the_data_markers():
+    deps = SimpleNamespace(data_tag="t4g")
+    marked = ai_flow_agent.with_data(deps, {"datasource": "node op-1"}, {"columns": COLUMNS, "rows": _rows(60, width=30)})
+    keys = list(ai_agent.lean_result(marked, 500))
+    assert keys.index("data_start") < keys.index("rows") < keys.index("data_end") < keys.index("rows_given")
+
+
+@pytest.mark.anyio
+async def test_the_model_reads_part_of_a_long_preview_while_the_page_and_the_saved_turn_keep_it_all(session, world, fake_engine, monkeypatch, ai_on):
+    ai_on.ai.max_result_chars_for_model = 400
+    rows = [{"country": "IT", "amount": float(i)} for i in range(30)]
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": rows, "row_count": 30, "truncated": False})
+    seen = []
+    steps = [("add_source", {"datasource_id": world["orders"].id}), ("preview", {"node": "source", "rows": 30}), "Thirty rows.", ]
+
+    async def play(messages, info):
+        seen.append(messages)
+        step = steps.pop(0)
+        if isinstance(step, str):
+            yield step
+        else:
+            yield {0: DeltaToolCall(name=step[0], json_args=json.dumps(step[1]), tool_call_id=f"c{len(steps)}")}
+
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=play))
+    body = ai_routes.FlowAssistRequest(message="show me", model="gpt-oss-120b", flow_id=world["flow"].id,
+                                       definition=json.dumps(EMPTY_CANVAS), locale="en")
+    events = await _events(await ai_routes.flow_assist(body, request=None, user=world["editor"], session=session))
+    assert events[-1][0] == "done"
+
+    def previews(messages):
+        return [p.content for m in messages for p in m.parts if getattr(p, "tool_name", "") == "preview" and getattr(p, "part_kind", "") == "tool-return"]
+
+    # what the model was sent after the preview: the first rows, and how many there are
+    given = previews(seen[-1])[0]
+    assert ai_agent.MIN_ROWS_FOR_MODEL <= len(given["rows"]) < 30 and "of the 30 rows" in given["rows_given"]
+    # what is saved, which is what a reopened conversation shows and what the next turn starts from: every row
+    from app.models.ai_chat import AiChatTurn
+
+    turn = session.exec(select(AiChatTurn)).one()
+    kept = [p["content"] for m in json.loads(turn.messages) for p in m["parts"] if p.get("part_kind") == "tool-return" and p.get("tool_name") == "preview"]
+    assert len(kept[0]["rows"]) == 30 and "rows_given" not in kept[0]
+
+
+@pytest.mark.anyio
+async def test_the_earlier_turns_results_are_given_in_part_too(session, world, fake_engine, monkeypatch, ai_on):
+    """A result stays in the conversation: the turn after pays for it again, and again within its budget."""
+    rows = [{"country": "IT", "amount": float(i)} for i in range(30)]
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": rows, "row_count": 30, "truncated": False})
+    first = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}), ("preview", {"node": "source", "rows": 30}), "Thirty rows."])
+    chat_id = first[-1][1]["chat_id"]
+    canvas = json.loads(first[-1][1]["definition"])
+    ai_on.ai.max_result_chars_for_model = 400
+    seen = []
+
+    async def play(messages, info):
+        seen.append(messages)
+        yield "Still thirty."
+
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=play))
+    body = ai_routes.FlowAssistRequest(message="and now?", model="gpt-oss-120b", flow_id=world["flow"].id, chat_id=chat_id,
+                                       definition=json.dumps(canvas), locale="en")
+    events = await _events(await ai_routes.flow_assist(body, request=None, user=world["editor"], session=session))
+    assert events[-1][0] == "done"
+    old = [p.content for m in seen[0] for p in m.parts if getattr(p, "tool_name", "") == "preview" and getattr(p, "part_kind", "") == "tool-return"]
+    assert old and len(old[0]["rows"]) < 30 and "of the 30 rows" in old[0]["rows_given"]

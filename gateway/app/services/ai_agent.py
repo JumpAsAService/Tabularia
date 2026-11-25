@@ -31,7 +31,7 @@ import math
 import os
 import re
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any, Callable, Literal, Optional, get_args
 
@@ -131,6 +131,66 @@ class StopWhenWithheld(AbstractCapability[ChatDeps]):
         if not ctx.deps.metadata_turn and metadata_only.on(ctx.deps.origin):
             raise metadata_only.TurnOutdated
         return request_context
+
+
+# the keys under which a tool's result carries rows of data (a query, a preview, a datasource's sample)
+_ROW_KEYS = ("rows", "sample_rows")
+# never fewer than these, however wide they are: a result must show what it is made of
+MIN_ROWS_FOR_MODEL = 5
+
+
+def lean_result(content: Any, budget: int) -> Any:
+    """A tool's result as the model is given it: its rows up to `budget` characters, with a note of
+    how many there are. The same object when it fits, or carries no rows.
+
+    A pure function of the result: every request of a conversation gives the same answer for the
+    same result, so the beginning of the conversation stays what the provider has cached."""
+    if not budget or not isinstance(content, dict):
+        return content
+    lean = None
+    for key in _ROW_KEYS:
+        rows = content.get(key)
+        if not isinstance(rows, list) or len(rows) <= MIN_ROWS_FOR_MODEL:
+            continue
+        size = kept = 0
+        for row in rows:
+            size += len(json.dumps(row, ensure_ascii=False, default=str))
+            if size > budget and kept >= MIN_ROWS_FOR_MODEL:
+                break
+            kept += 1
+        if kept == len(rows):
+            continue
+        lean = lean or dict(content)
+        lean[key] = rows[:kept]
+        # after everything else, so outside the data markers of a result that has them: these are
+        # Tabularia's words, not data
+        lean[f"{key}_given"] = (
+            f"You are given the first {kept} of the {len(rows)} rows of this result, to keep the conversation light; the "
+            f"user sees all {len(rows)} in Tabularia. Do not state a figure that depends on rows you were not given: get "
+            "it with an aggregate in SQL.")
+    return lean or content
+
+
+class LeanResults(AbstractCapability[Any]):
+    """Before every request to the model: the rows the tools returned, in this turn and in the
+    earlier ones, within AI__MAX_RESULT_CHARS_FOR_MODEL each. Only what this request sends: the
+    turn's own messages keep every row, and those are what the chat shows and what is saved."""
+
+    async def before_model_request(self, ctx: RunContext[Any], request_context: Any) -> Any:
+        from pydantic_ai.messages import ModelRequest, ToolReturnPart
+
+        budget = get_settings().ai.max_result_chars_for_model
+        if not budget:
+            return request_context
+        messages, changed = [], False
+        for message in request_context.messages:
+            if isinstance(message, ModelRequest):
+                parts = [replace(p, content=lean_result(p.content, budget)) if isinstance(p, ToolReturnPart) else p
+                         for p in message.parts]
+                if any(new.content is not old.content for new, old in zip(parts, message.parts) if isinstance(old, ToolReturnPart)):
+                    message, changed = replace(message, parts=parts), True
+            messages.append(message)
+        return replace(request_context, messages=messages) if changed else request_context
 
 
 class ModelRefused(Exception):
@@ -313,6 +373,9 @@ def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | No
             lines.append(HISTORY_WITHHELD_CONTEXT)
     else:
         lines.append(f"- Query results are capped at {result_rows_cap()} rows.")
+        if get_settings().ai.max_result_chars_for_model:
+            lines.append("- A long or wide result reaches you in part: its first rows, and a note of how many there are. "
+                         "The user still sees all of it.")
     if level != "write":
         lines.append("- This user can only read: the tools that build, change, run or schedule are not available. "
                      "If they ask for a change, say they need an account that may make changes.")

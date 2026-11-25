@@ -310,6 +310,34 @@ def test_a_refused_call_and_its_retry_are_two_steps_and_the_query_is_audited_as_
     assert json.loads(entry.detail)["via"] == "chat" and entry.actor_id == world["anna"]
 
 
+def test_a_long_result_reaches_the_model_in_part_and_the_person_whole(app, world, session, monkeypatch, fake_engine, ai_on):
+    """The table is the person's evidence: every row to the page and to the saved conversation. The
+    model reads the first rows that fit, and is told how many there are (ai_agent.LeanResults)."""
+    ai_on.ai.max_result_chars_for_model = 600
+    rows = [{"country": f"C{i:03d}", "amount": float(i)} for i in range(60)]
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": rows, "row_count": 60, "truncated": False})
+    anna = signed_in(app, "anna@x.local")
+    script = Script(
+        [("query_datasource", {"datasource_id": world["orders"], "sql": "SELECT country, amount FROM self", "limit": 60})],
+        "Sixty countries.",
+    )
+    events = turn(anna, monkeypatch, script, "list the countries")
+    given = script.got["query_datasource"]
+    assert ai_agent.MIN_ROWS_FOR_MODEL <= len(given["rows"]) < 60 and given["rows"] == rows[:len(given["rows"])]
+    assert f"the first {len(given['rows'])} of the 60 rows" in given["rows_given"] and given["row_count"] == 60
+    assert "reaches you in part" in script.instructions[0]
+    shown = next(d for n, d in events if n == "tool_result")
+    assert shown["table"]["rows"] == rows
+    reopened = anna.get(f"/ai/chats/{done_of(events)['chat_id']}").json()["messages"][0]["steps"][0]
+    assert reopened["table"]["rows"] == rows
+
+    # with no budget everything goes, and the instructions do not say otherwise
+    ai_on.ai.max_result_chars_for_model = 0
+    script = Script([("query_datasource", {"datasource_id": world["orders"], "sql": "SELECT country, amount FROM self", "limit": 60})], "Sixty.")
+    turn(anna, monkeypatch, script, "again")
+    assert script.got["query_datasource"]["rows"] == rows and "reaches you in part" not in script.instructions[0]
+
+
 def test_a_card_is_checked_and_its_answers_are_read_back_by_question():
     from app.services.agent.questions import AskUserArgs, answers_of, card
     from app.services.agent.registry import ToolError

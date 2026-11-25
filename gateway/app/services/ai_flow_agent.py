@@ -1338,7 +1338,7 @@ flow_agent: Agent[FlowDeps, str] = Agent(
     instructions=_instructions,
     retries=2,
     name="tabularia-flow-assistant",
-    capabilities=[ai_agent.StopWhenWithheld(), ai_agent.TurnGuard()],
+    capabilities=[ai_agent.StopWhenWithheld(), ai_agent.LeanResults(), ai_agent.TurnGuard()],
 )
 
 # name → does it return values of the data? As the registry's `reads_data` (services/agent/

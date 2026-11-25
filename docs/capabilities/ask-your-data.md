@@ -59,7 +59,7 @@ and the conversation works on them, without searching the catalog first.
 | names, folders, row counts and descriptions of the datasources you can read | storage paths, buckets, credentials, connection details |
 | columns, types and field descriptions of the ones it describes | the rows beyond the cap of each query |
 | **five sample rows** of each datasource it describes | data of a connection that was never imported |
-| **the rows each query returns**, up to `AI__MAX_RESULT_ROWS` (2000 by default, and never more than the engine's preview cap of 1000), each text value cut at 300 characters | |
+| **the rows each query returns**, up to `AI__MAX_RESULT_ROWS` (2000 by default, and never more than the engine's preview cap of 1000), each text value cut at 300 characters; of a long or wide result, the first rows that fit `AI__MAX_RESULT_CHARS_FOR_MODEL` (40,000 characters by default) | |
 | today's date, the engine's SQL dialect, the interface language | |
 
 With [metadata-only mode](../integrations/ai.md#metadata-only-mode) on, the rows above
@@ -233,8 +233,11 @@ Act (article 50) asks of a system people talk to.
 
 - One `SELECT` per query, reading `FROM self`, with no leading `WITH`: subqueries go in
   `FROM`. At most two datasources in one query (one join).
-- Rows per query: `AI__MAX_RESULT_ROWS` (2000 by default, up to 20,000), to the model and
-  to the chat, within the engine's preview cap of 1000 rows per query.
+- Rows per query: `AI__MAX_RESULT_ROWS` (2000 by default, up to 20,000), within the engine's
+  preview cap of 1000 rows per query. The chat shows all of them. The model is given the first
+  that fit `AI__MAX_RESULT_CHARS_FOR_MODEL` (40,000 characters by default, at least five rows,
+  `0` for all) and is told how many there are: a figure about the rest it gets with an aggregate
+  in SQL.
 - Model round-trips per question: `AI__MAX_REQUESTS` (120). Per question, also a cost cap
   (`AI__MAX_COST_PER_TURN_USD`, $5) and an input-token cap (4,000,000); per day, a cap for
   the whole installation (`AI__MAX_COST_PER_DAY_TOTAL_USD`, $20, about 20 euros) and one per

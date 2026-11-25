@@ -442,6 +442,12 @@ class AiSettings(BaseModel):
     # the maximum rows an assistant query returns (to the model and to the chat)
     # (each query also stops at the engine's preview cap: ai_agent.result_rows_cap)
     max_result_rows: int = Field(default=2000, ge=1, le=20_000)
+    # How much of ONE result's rows the MODEL is given, in characters (some four to a token). The
+    # chat shows the person the whole result and keeps it; the model reads the first rows that fit,
+    # with a note of how many there are, at every request of the turn and of the turns after. A wide
+    # or long table otherwise stays in every request that follows, and a turn ends on its input cap.
+    # 0 = everything, as before. env: AI__MAX_RESULT_CHARS_FOR_MODEL
+    max_result_chars_for_model: int = Field(default=40_000, ge=0, le=2_000_000)
     # the model's rounds per message: the cap on the loop of tool calls
     max_requests: int = Field(default=120, ge=1, le=200)
     # the same for the assistants that build — the flow editor's, and the Assistant page's

@@ -30,6 +30,11 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   and `chart_y`), the Bayesian assistant's tool the slots of a node as `coef:0` and `arg:mu`
   (they are `terms[0].coef`, `args.mu`). Installations that rewrote the chat's instructions keep
   their own text.
+- The assistants no longer carry a long result whole through a conversation. The chat shows the
+  person every row of a query or a preview, and keeps it; the model is given the first rows that
+  fit a budget (`AI__MAX_RESULT_CHARS_FOR_MODEL`, 40,000 characters by default, `0` for
+  everything) and a note of how many there are, in the turn and in those after it. A wide
+  `SELECT *` used to stay in every request that followed and end the turn on its input cap.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 
