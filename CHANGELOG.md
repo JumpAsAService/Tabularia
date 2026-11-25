@@ -8,6 +8,26 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+## 1.5.1 «Augustus» — 2026-11-26
+
+The interface, the assistants, and a first version of pivot tables over the data APIs. No
+migration. The new settings are optional and keep today's behaviour when left alone; the
+chart is 2.9.1.
+
+- **A data API may answer pivot tables (XMLA), off by default.** A spreadsheet connects to a
+  data API as to an analysis server and builds pivot tables on its resources: each resource is
+  a cube, generated from its columns (numbers are measures with their aggregations, the other
+  columns are dimensions, dates have a year, quarter, month and day hierarchy). The pods answer
+  with DuckDB on the copy they already hold; the key of the data API is the password. It is
+  enabled for the installation (`DATA_API__XMLA_ENABLED`, `dataApi.xmla.enabled` in the chart)
+  and then on each data API, with caps on cells, tuples and members
+  ([data APIs](docs/data-apis.md#pivot-tables-xmla), [the spec](docs/specs/xmla.md)). **It has
+  been tested against the protocol as written, with recorded conversations, and not yet with a
+  spreadsheet program**: treat it as a preview, and expect statements a real spreadsheet writes
+  to be refused; the pod can keep those for a day to report them
+  (`DATA_API__XMLA_KEEP_REFUSED`).
+- Every kind of connection has a generic icon and a colour of its own, wherever a connection or
+  its kind is listed or chosen. No brand's logo is used.
 - One look across the pages: every page's title has the same size and place, with its description
   under it (Performance, Cluster, Scripting and the Bayesian models had a larger one, with the
   description or the refresh button out of place); the tables of Performance and of the cluster's

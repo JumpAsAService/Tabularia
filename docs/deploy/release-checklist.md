@@ -217,6 +217,10 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    off until an administrator enables each group in **Administration → Statistical models**,
    and run only on Kubernetes with scripting on ([kind.md](kind.md), step 14). The first
    preview of each step after the upgrade computes again, once.
+   **New in 1.5.1:** no migration (chart 2.9.1). The new variables are optional:
+   `AI__MAX_RESULT_CHARS_FOR_MODEL` (how much of a long result the assistants' model is given)
+   and the `DATA_API__XMLA_*` group, `dataApi.xmla` in the chart, which is off by default
+   ([data APIs](../data-apis.md#pivot-tables-xmla)). The engine's image is the code of 1.5.0.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
