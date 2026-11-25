@@ -46,7 +46,7 @@ const exists = (id: string): boolean => props.doc.nodes.some(n => n.id === id) |
 
 <template>
   <div class="probs">
-    <header class="head">
+    <header data-fin="head" class="head">
       <h2>{{ t('bayes.editor.problems.title') }}</h2>
       <p class="count">
         <span v-if="errors" class="e"><CircleAlert :size="13" aria-hidden="true" />{{ t('bayes.editor.problems.errors', { n: errors }) }}</span>

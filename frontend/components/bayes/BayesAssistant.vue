@@ -365,7 +365,7 @@ function onKey (e: KeyboardEvent) {
 <template>
   <section class="ba" :aria-label="t('bayesAssistant.title')">
     <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="accept" />
-    <header class="ba-head">
+    <header data-fin="head" class="ba-head">
       <h2><Sparkles :size="14" aria-hidden="true" /> {{ t('bayesAssistant.title') }}</h2>
       <button v-if="turns.length" class="ba-mini" type="button" :disabled="busy" :title="t('bayesAssistant.newConversation')"
               :aria-label="t('bayesAssistant.newConversation')" @click="reset"><Plus :size="13" aria-hidden="true" /></button>

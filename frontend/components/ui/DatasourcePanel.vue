@@ -68,7 +68,7 @@ const describe = (name: string) => props.ds?.column_descriptions?.[name] ?? prop
     </Transition>
     <Transition name="drawer">
       <aside v-if="ds" ref="panel" class="dsp" role="dialog" aria-modal="true" tabindex="-1" :aria-label="ds.name">
-        <header class="dsp-head">
+        <header data-fin="head" class="dsp-head">
           <Database :size="16" class="dsp-icon" />
           <div class="dsp-title">
             <h2>{{ ds.name }}</h2>

@@ -521,7 +521,7 @@ watch(draft, async () => {
 
       <!-- ── conversation ─────────────────────────────────────────────── -->
       <section class="talk">
-        <header class="talk-head">
+        <header data-fin="head" class="talk-head">
           <h1><Sparkles :size="18" /> {{ $t('chat.pageTitle') }}</h1>
           <span v-if="chatTotal && chatTotal.turns" class="total" :title="$t('chat.costHint')">
             {{ $t('chat.chatTotal', { c: money(chatTotal.cost_usd) }) }}

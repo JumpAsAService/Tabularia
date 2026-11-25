@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="code" :aria-label="t('bayes.editor.stan.title')">
-    <header class="head">
+    <header data-fin="head" class="head">
       <h2>{{ t('bayes.editor.stan.title') }}</h2>
       <p v-if="program" class="prov">{{ provenance }}</p>
       <div v-if="program && program.sha256" class="sha">

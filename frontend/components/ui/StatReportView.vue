@@ -271,7 +271,7 @@ const problemTitle = computed(() => {
 
 <template>
   <section class="sr" :aria-label="model ? $t('modelReport.region') : $t('statReport.region')">
-    <div class="sr-tools">
+    <div data-fin="bar" class="sr-tools">
       <div class="sr-group" role="group" :aria-label="$t('statReport.zoomGroup')">
         <button type="button" class="mini sr-icon" :title="$t('statReport.zoomOut')" :aria-label="$t('statReport.zoomOut')" :disabled="scale <= STAT_REPORT_ZOOMS[0] + 0.001" @click="zoomBy(-1)">
           <ZoomOut :size="14" aria-hidden="true" />

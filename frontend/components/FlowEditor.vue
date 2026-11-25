@@ -3784,7 +3784,7 @@ async function pollTask(id: string) {
         @mousedown="startPanelResize"
         @keydown="panelKeys"
       />
-      <div v-if="aiReady" v-roving class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
+      <div v-if="aiReady" v-roving data-fin="tabs" class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
         <button
           type="button"
           role="tab"
@@ -3876,7 +3876,7 @@ async function pollTask(id: string) {
         @keydown="viewKeys"
       />
       <div class="viewhead">
-      <div v-roving.main class="viewtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
+      <div v-roving.main data-fin="tabs" class="viewtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
         <button
           role="tab"
           :class="{ active: viewTab === 'table' }"

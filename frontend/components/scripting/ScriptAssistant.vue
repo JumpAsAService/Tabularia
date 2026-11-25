@@ -231,7 +231,7 @@ function onKey(e: KeyboardEvent) {
 <template>
   <section class="sa" :aria-label="$t('scriptAssistant.title')">
     <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="accept" />
-    <header class="sa-head">
+    <header data-fin="head" class="sa-head">
       <h3><Sparkles :size="14" /> {{ $t('scriptAssistant.title') }}</h3>
       <button v-if="turns.length" class="sa-mini" type="button" :disabled="busy" :title="$t('scriptAssistant.newConversation')"
               :aria-label="$t('scriptAssistant.newConversation')" @click="reset"><Plus :size="13" /></button>

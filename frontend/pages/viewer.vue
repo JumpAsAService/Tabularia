@@ -1230,7 +1230,7 @@ onMounted(async () => {
 
       <!-- result area: table or chart -->
       <section class="result">
-        <div v-roving.main class="rtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
+        <div v-roving.main data-fin="tabs" class="rtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
           <button role="tab" :class="{ active: view === 'table' }" :aria-selected="view === 'table'" @click="view = 'table'" @dragover="springTab($event, 'table')" @dragleave="springStop" @drop="springStop"><Table2 :size="14" aria-hidden="true" /> {{ $t('viewer.tableTab') }}</button>
           <button role="tab" :class="{ active: view === 'chart' }" :aria-selected="view === 'chart'" @click="view = 'chart'" @dragover="springTab($event, 'chart')" @dragleave="springStop" @drop="springStop"><PieChart :size="14" aria-hidden="true" /> {{ $t('viewer.chartTab') }}</button>
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>

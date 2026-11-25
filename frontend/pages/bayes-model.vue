@@ -876,7 +876,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             @mousedown="startPanelResize"
             @keydown="panelKeys"
           />
-          <div v-roving.main class="tabs" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
+          <div v-roving.main data-fin="tabs" class="tabs" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
             <button id="bt-inspector" type="button" role="tab" class="tab" :title="t('bayes.editor.inspector.title')" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
               <SlidersHorizontal :size="13" aria-hidden="true" /><span class="lbl">{{ t('bayes.editor.inspector.title') }}</span>
             </button>

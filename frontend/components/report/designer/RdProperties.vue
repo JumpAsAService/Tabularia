@@ -168,7 +168,7 @@ const pageLine = computed(() => {
   <aside class="rpp" :aria-label="$t('reportDesigner.props.panel')">
     <!-- an item -->
     <template v-if="item && sel">
-      <header class="rpp-head">
+      <header data-fin="head" class="rpp-head">
         <component :is="ICONS[item.type]" :size="16" class="rpp-ticon" />
         <div class="rpp-titles">
           <span class="rpp-type">{{ typeName }}</span>
@@ -257,7 +257,7 @@ const pageLine = computed(() => {
 
     <!-- a band -->
     <template v-else-if="band && !onBoard">
-      <header class="rpp-head">
+      <header data-fin="head" class="rpp-head">
         <component :is="band === 'page_header' ? PanelTop : band === 'page_footer' ? PanelBottom : FileText" :size="16" class="rpp-ticon" />
         <div class="rpp-titles"><span class="rpp-name">{{ $t(`reportDesigner.bands.${band}`) }}</span></div>
       </header>
@@ -283,7 +283,7 @@ const pageLine = computed(() => {
 
     <!-- the report -->
     <slot v-else name="nothing">
-      <header class="rpp-head">
+      <header data-fin="head" class="rpp-head">
         <FileText :size="16" class="rpp-ticon" />
         <div class="rpp-titles"><span class="rpp-name">{{ $t('reportDesigner.props.report') }}</span></div>
       </header>

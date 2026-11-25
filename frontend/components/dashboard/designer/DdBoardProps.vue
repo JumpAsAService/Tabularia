@@ -52,7 +52,7 @@ const refreshProblem = computed(() => store.problemAt(null, 'refresh_seconds') ?
 </script>
 
 <template>
-  <header class="ddb-head">
+  <header data-fin="head" class="ddb-head">
     <LayoutDashboard :size="16" class="ddb-icon" />
     <span class="ddb-name">{{ $t('dashboardDesigner.thisDashboard') }}</span>
   </header>

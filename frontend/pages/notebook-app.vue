@@ -74,7 +74,7 @@ watch(notebookId, open)
 
 <template>
   <div class="nbpage">
-    <header class="bar">
+    <header data-fin="bar" class="bar">
       <NuxtLink to="/" class="home" :aria-label="t('notebook.session.home')">
         <BrandMark :size="20" />
       </NuxtLink>

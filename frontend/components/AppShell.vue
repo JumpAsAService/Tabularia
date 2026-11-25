@@ -51,6 +51,7 @@ const { user, fetchMe, logout } = useAuth()
 const runtimeConfig = useRuntimeConfig()
 const sourceUrl = runtimeConfig.public.sourceUrl as string
 const { theme, setTheme } = useTheme()
+const { finish, sheen, setFinish, setSheen } = useFinish()
 // name and version from the gateway: it is the release really running, not the bundle's
 const { info: appInfo, load: loadAppInfo } = useAppInfo()
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
@@ -73,6 +74,12 @@ const themeOptions = computed(() => [
   // the colours of Rome: marble and Tyrian purple (a proper name, as the two above)
   { value: 'imperium', label: 'Imperium' },
 ])
+
+// finish options: the material laid over the theme («plain» is the app as it is)
+const finishOptions = computed(() => FINISHES.map((f) => ({
+  value: f,
+  label: t(`settings.finish${f[0].toUpperCase()}${f.slice(1)}`),
+})))
 
 // settings menu (gear at the top right): user name + theme + engine + logout
 const menuOpen = ref(false)
@@ -313,6 +320,31 @@ onMounted(async () => {
               @update:model-value="setTheme($event as any)"
             />
 
+            <label class="menu-label">{{ t('settings.finish') }}</label>
+            <Select
+              :model-value="finish"
+              :options="finishOptions"
+              class="engpref"
+              @update:model-value="setFinish($event as any)"
+            />
+            <div v-if="finish !== 'plain'" class="sheen-row">
+              <label class="menu-label sheen-label" for="settings-sheen">
+                {{ t('settings.sheen') }}
+                <span class="sheen-value" aria-hidden="true">{{ sheen }}%</span>
+              </label>
+              <input
+                id="settings-sheen"
+                class="sheen-range"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                :value="sheen"
+                :aria-valuetext="`${sheen}%`"
+                @input="setSheen(Number(($event.target as HTMLInputElement).value))"
+              />
+            </div>
+
             <div class="menu-sep" />
 
             <label class="menu-label">{{ t('settings.language') }}</label>
@@ -516,6 +548,11 @@ onMounted(async () => {
 .menu-label { display: block; font-size: 11px; color: var(--muted); padding: 0 6px; }
 .menu-hint { font-size: 10.5px; color: var(--muted); padding: 0 6px; line-height: 1.35; opacity: 0.85; }
 .engpref { width: 100%; }
+.sheen-row { display: flex; flex-direction: column; gap: 4px; }
+.sheen-label { display: flex; justify-content: space-between; }
+.sheen-value { font-variant-numeric: tabular-nums; color: var(--text); }
+.sheen-range { width: 100%; accent-color: var(--accent); margin: 0; }
+.sheen-range:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .engpref :deep(.sel-trigger) { width: 100%; }
 .theme-switch { display: flex; gap: 6px; }
 .theme-switch button {

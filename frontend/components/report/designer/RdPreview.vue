@@ -164,7 +164,7 @@ watch(warnings, () => { notesOpen.value = false })
 
 <template>
   <section class="rpv" :aria-label="$t('reportDesigner.preview.label')">
-    <div class="rpv-bar">
+    <div data-fin="bar" class="rpv-bar">
       <ReportParamsBar v-if="parameters.length" class="rpv-form" :parameters="parameters" :model-value="form" :busy="busy" @update:model-value="onForm" @submit="run()" />
       <form v-else class="rpv-params" @submit.prevent="run()">
         <span class="rpv-none">{{ $t('reportDesigner.preview.noParams') }}</span>

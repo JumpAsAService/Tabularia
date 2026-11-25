@@ -338,7 +338,7 @@ function stepLabel(s: Step): string {
   <section class="fa" :aria-label="$t('flowAssistant.title')">
     <!-- the gate: the assistant is not used before the user has read who answers -->
     <AiDisclosure :open="active && accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="accept" />
-    <header class="fa-head">
+    <header data-fin="head" class="fa-head">
       <h3><Sparkles :size="15" /> {{ $t('flowAssistant.title') }}</h3>
       <span class="fa-head-actions">
         <button

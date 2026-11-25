@@ -248,6 +248,16 @@ Several theme values were moved off the "official" palette to reach AA (light `a
 
 The browser's own surfaces follow the theme: text selection is the accent at 34% and native checkboxes and radios take `accent-color: var(--accent)`. The two heatmaps (run calendar, schedule load) scale `accent-2` and `accent` with alpha, read at runtime like the other charts, so they change with the theme instead of keeping the default blue and green.
 
+### Finishes
+
+A finish is a material laid over the theme: the theme gives the colours, the finish the texture and the sheen. It is the person's choice, under the theme in the settings menu, with a slider for how strong the reflections are; none is on by default, and without one the app is the flat app described here. Five exist (`assets/finishes.css`, `composables/useFinish.ts`): carbon (a twill weave), titanium (brushed grain, anodised reflections), marble (faint veining, a bronze fillet), slate (matt stone, no reflection on the page) and glass (translucent bars over soft patches of the theme's colours).
+
+- On `<html>`: `data-finish` (absent for none) and `--finish-sheen`, a number from 0 to 1. Every rule of the stylesheet hangs on `:root[data-finish…]`.
+- A finish is written from the theme's own tokens, so it follows the five themes with no palette of its own.
+- The material is for bars, the page behind the content, the headers of panels and widgets, side navigations and tab strips. **Never for data**: tables, grids, the flow canvas, charts, code editors and fields keep a plain ground.
+- The reflections are tinted by the theme's accent colours and scale with the slider, up to values where secondary text on a bar falls under 4.5:1: that is the person's call, made with the slider. With `prefers-contrast: more` or forced colours the material is not drawn at all.
+- A header or bar whose class is too generic to select safely carries `data-fin="bar"`, `"head"` or `"tabs"`.
+
 ### Operation-category encoding
 Nodes, sidebar entries and lineage use a fixed category colour as a 3px left edge plus icon tint: column operations `op-columns`, row operations `op-rows`, null handling `op-nulls`, reshape and combine (and sources) `op-shape`, foreach `op-foreach`, outputs and sinks `op-output`, control nodes and S3 `op-control`. Sequence (orchestration) edges are `edge-sequence`, dashed and static, to separate them from animated data edges. The map lives in one place, `composables/useOpIcons.ts`.
 

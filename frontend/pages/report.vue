@@ -517,7 +517,7 @@ const notesOpen = ref(false)
         />
 
         <section class="frame" :aria-label="$t('report.pagesRegion')" :aria-busy="busy ? 'true' : 'false'">
-          <div class="tools">
+          <div data-fin="bar" class="tools">
             <div class="nav" :class="{ off: !pageCount }">
               <button type="button" class="mini icon" :disabled="currentPage <= 1" :title="$t('report.prevPage')" :aria-label="$t('report.prevPage')" @click="goTo(currentPage - 1)">
                 <ChevronUp :size="14" />
