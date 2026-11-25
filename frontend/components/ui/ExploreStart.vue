@@ -132,8 +132,10 @@ const runName = (r: RunInfo) => r.flow_name || r.group_name || r.sql_script_name
   border: 1px solid var(--border-soft);
   border-radius: 10px;
   background: var(--bg-soft);
+  /* never lower than its button, which is laid over it: as the columns close under it */
+  min-height: 36px;
 }
-.start.folded { padding: 4px 6px; background: transparent; border-color: transparent; margin-bottom: 6px; }
+.start.folded { padding: 4px 6px; background: transparent; border-color: transparent; margin-bottom: 6px; min-height: 0; }
 .fold {
   position: absolute;
   top: 6px;
