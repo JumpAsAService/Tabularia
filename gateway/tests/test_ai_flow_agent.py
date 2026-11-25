@@ -289,6 +289,76 @@ async def test_a_turn_stopped_by_its_cap_hands_back_what_it_built_and_is_counted
     assert len(spent) == 1 and spent[0].user_id == world["editor"].id and spent[0].input_tokens > 0
 
 
+async def _stopped_after(response, wanted: str) -> list[str]:
+    """The names of the events read until the first `wanted`, then the stream closed as a browser's
+    Stop closes it."""
+    names = []
+    stream = response.body_iterator
+    async for chunk in stream:
+        names += [block.split("\n")[0].removeprefix("event: ") for block in chunk.decode().strip().split("\n\n")]
+        if wanted in names:
+            break
+    await stream.aclose()
+    return names
+
+
+@pytest.mark.anyio
+async def test_a_turn_the_person_stops_is_still_counted(session, world, fake_engine, monkeypatch):
+    """Stop closes the stream: the generator is cancelled, which is not an error. Its requests were
+    paid for all the same, and the daily caps read the ledger."""
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=script(
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "limit", "params": {"n": 5}}),
+        "never reached",
+    )))
+    body = ai_routes.FlowAssistRequest(message="keep five", model="gpt-oss-120b", flow_id=world["flow"].id,
+                                       definition=json.dumps(EMPTY_CANVAS), locale="en")
+    names = await _stopped_after(await ai_routes.flow_assist(body, request=None, user=world["editor"], session=session), "tool_result")
+    assert "done" not in names and "error" not in names
+    assert session.exec(select(AiChat)).all() == []
+    spent = session.exec(select(AiSpend)).all()
+    assert len(spent) == 1 and spent[0].user_id == world["editor"].id and spent[0].input_tokens > 0
+
+
+@pytest.mark.anyio
+async def test_a_turn_stopped_by_a_cancelled_request_is_counted_too(session, world, fake_engine, monkeypatch):
+    """The server's way of ending a stream whose client went away: the task that reads it is cancelled."""
+    import asyncio
+
+    reached = asyncio.Event()
+
+    async def slow(messages, info):
+        if len(messages) > 1:
+            reached.set()
+            await asyncio.sleep(30)  # the second request never answers: the cancellation finds it here
+        yield {0: DeltaToolCall(name="add_source", json_args=json.dumps({"datasource_id": world["orders"].id}), tool_call_id="c0")}
+
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=slow))
+    body = ai_routes.FlowAssistRequest(message="keep five", model="gpt-oss-120b", flow_id=world["flow"].id,
+                                       definition=json.dumps(EMPTY_CANVAS), locale="en")
+    response = await ai_routes.flow_assist(body, request=None, user=world["editor"], session=session)
+    reading = asyncio.ensure_future(_events(response))
+    await asyncio.wait_for(reached.wait(), 10)
+    reading.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await reading
+    spent = session.exec(select(AiSpend)).all()
+    assert len(spent) == 1 and spent[0].input_tokens > 0
+
+
+@pytest.mark.anyio
+async def test_a_finished_turn_is_counted_once(session, world, fake_engine, monkeypatch):
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        "Done.",
+    ])
+    assert events[-1][0] == "done"
+    # saving the turn puts its cost on the ledger: the end of the stream adds no second line
+    spent = session.exec(select(AiSpend)).all()
+    assert len(spent) == 1 and spent[0].turn_id is not None
+    assert len(session.exec(select(AiChat)).all()) == 1
+
+
 @pytest.mark.anyio
 async def test_an_engine_that_does_not_answer_is_a_step_warning_not_a_crash(session, world, fake_engine, monkeypatch):
     import httpx

@@ -282,8 +282,9 @@ class Change(BaseModel):
     value: Any = Field(description="prior_distribution: a distribution's id; prior_args: {parameter: number or expression}; "
                                    "expression: one expression text; bounds: {lower, upper} numbers or null; "
                                    "plate_form: centred or non_centred")
-    slot: str = Field(default="", max_length=60, description="for `expression` only: which expression of the node "
-                      "(value, intercept, coef:0, arg:mu, scale, mean)")
+    slot: str = Field(default="", max_length=60, description="for `expression` only: which expression of the node, "
+                      "named as the graph shows it (value, intercept, terms[0].coef, args.mu, prior.sigma, init.mu, "
+                      "scale, mean, eta)")
     why: str = Field(max_length=400)
 
 

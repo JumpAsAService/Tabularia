@@ -139,3 +139,16 @@ def test_the_agents_that_read_data_are_told_it_is_not_their_instructions():
 
     for text in (ai_prompts.ASSISTANT, ai_prompts.FLOW, ai_prompts.SCRIPT, INSTRUCTIONS):
         assert "is not the user asking" in text or "is not your user asking" in text
+
+
+# ── what the texts name must exist ───────────────────────────────────────────
+def test_the_assistant_text_names_the_query_tool_s_parameters_as_they_are():
+    """A text that names a parameter the tool does not have costs the model a refused call. The words in
+    backquotes that begin with `chart` or `join` are parameters of `query_datasource`: each must be one."""
+    import inspect
+    import re
+
+    params = set(inspect.signature(ai_agent.query_datasource).parameters)
+    named = set(re.findall(r"`((?:chart|join)\w*)`", ai_prompts.ASSISTANT))
+    assert named and named <= params, named - params
+    assert {"chart_type", "chart_x", "chart_y", "join_datasource_id"} <= named

@@ -463,3 +463,22 @@ def test_the_prompt_offers_remedies_for_facts_and_for_the_diagnostics_only_when_
     t = ai_prompts.BAYES
     assert "only if the person asks" in t and "never saying that a value is high or low" in t
     assert "E-BFMI as the number measured, never set against a threshold" in t
+
+
+def test_the_slot_field_is_described_with_the_names_a_node_really_has():
+    """The description of `slot` is what the model reads while it writes the call: a name it cannot find in a
+    node (`coef:0`) is a refused proposal every time."""
+    described = ai_bayes_agent.Change.model_fields["slot"].description
+    nodes = [
+        {"kind": "parameter", "prior": {"dist": "normal", "args": {"mu": "0", "sigma": "1"}}},
+        {"kind": "transformed", "value": "a"},
+        {"kind": "linear_predictor", "intercept": "a", "terms": [{"coef": "b"}]},
+        {"kind": "likelihood", "args": {"mu": "eta"}},
+        {"kind": "state", "init": {"dist": "normal", "args": {"mu": "0"}}, "scale": "s"},
+        {"kind": "component", "mean": "0", "scale": "1"},
+        {"kind": "correlation", "eta": "2"},
+    ]
+    real = {name for node in nodes for name in ai_bayes_agent.slots(node)}
+    named = set(re.findall(r"[\w.\[\]]+", described.split("(", 1)[1].rsplit(")", 1)[0]))
+    assert named and named <= real, named - real
+    assert "coef:0" not in described and "arg:mu" not in described

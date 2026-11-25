@@ -9,6 +9,7 @@ services/ai_prompts.py or a context function changes:
         python /out/gen_prompts.py
 """
 import json
+import secrets
 from types import SimpleNamespace
 
 from app.routes import ai
@@ -18,6 +19,9 @@ TODAY = "\x00TODAY\x00"
 ROWS = 987654321
 
 ai_prompts.today = lambda: f"Today is {TODAY}."
+# the tag of the data markers is random at every request: one fixed example here, so that writing the
+# file again changes only what a text changed
+secrets.token_hex = lambda nbytes=4: "5ca1ab1e"[: nbytes * 2]
 ai_agent.get_settings = lambda: SimpleNamespace(ai=SimpleNamespace(max_result_rows=ROWS))
 ai_agent.ENGINE_PREVIEW_MAX_ROWS = ROWS  # the number shown is the setting's, within it
 

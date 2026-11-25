@@ -483,9 +483,9 @@ async def _turn_stream(
     results, then `done` with the usage — after the turn is saved on the server (a
     new conversation is born here, at the end of its first turn) — or `error`.
 
-    A turn stopped halfway (a cap, the provider, an unexpected error) has still
-    cost what its requests cost: that goes to the spending ledger, which the daily
-    caps read. `extra_done` goes with `error` too: the flow editor applies what was
+    A turn stopped halfway (a cap, the provider, an unexpected error, the person's
+    Stop or a page that closed) has still cost what its requests cost: that goes to
+    the spending ledger, which the daily caps read. `extra_done` goes with `error` too: the flow editor applies what was
     built before the stop."""
     from pydantic_ai import (
         AgentRunResultEvent, FunctionToolCallEvent, FunctionToolResultEvent, ModelMessagesTypeAdapter,
@@ -503,14 +503,21 @@ async def _turn_stream(
     # when each tool call started: its step shows how long it took
     started: dict[str, float] = {}
 
+    def account() -> None:
+        """What an unfinished turn has spent so far, on the ledger, once."""
+        nonlocal accounted
+        if accounted or not spent.requests:
+            return
+        accounted = True
+        try:
+            with _new_session() as s:
+                ai_chats.record_spend(s, user_id=user.id, model_id=model_id, input_tokens=spent.input_tokens,
+                                        output_tokens=spent.output_tokens, cost=ai_pricing.cost_of(spent, model_id))
+        except Exception:  # noqa: BLE001 — the user already has the error: the ledger must not hide it
+            logger.exception("assistant: cost of the interrupted turn not recorded")
+
     def unfinished() -> dict[str, Any]:
-        if not accounted and spent.requests:
-            try:
-                with _new_session() as s:
-                    ai_chats.record_spend(s, user_id=user.id, model_id=model_id, input_tokens=spent.input_tokens,
-                                            output_tokens=spent.output_tokens, cost=ai_pricing.cost_of(spent, model_id))
-            except Exception:  # noqa: BLE001 — the user already has the error: the ledger must not hide it
-                logger.exception("assistant: cost of the interrupted turn not recorded")
+        account()
         try:
             return extra_done() if extra_done is not None else {}
         except Exception:  # noqa: BLE001
@@ -638,6 +645,11 @@ async def _turn_stream(
         logger.exception("assistant: error during the conversation")
         yield _sse("error", {"code": "internal", "message": "Unexpected error in the assistant.", **unfinished()})
     finally:
+        # A turn the person stopped, or whose page went away, ends here and nowhere else: closing
+        # the stream cancels this generator, which is no Exception, so none of the branches above
+        # runs. What it spent is still spent: without this line Stop would take a turn off the
+        # ledger, and the daily caps with it. (Nothing awaits before it: a cancellation cannot cut it.)
+        account()
         await ai_agent.close_model(model)
 
 

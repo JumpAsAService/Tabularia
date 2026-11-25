@@ -22,6 +22,14 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   designer, the tokens of a service account and the deliveries of a webhook, and the rest. What
   is below slides instead of jumping, a click half-way turns the movement round, the keyboard
   works as before, and nothing moves with reduced motion.
+- A turn of an assistant that the person stops, or whose page is closed, is now counted on the
+  spending ledger the daily caps read: before, only a turn that ended or failed was, so Stop took
+  what a turn had cost off the count.
+- Two texts the models read named things that do not exist, and cost them refused calls: the
+  chat's instructions a `chart` parameter of the query tool (it is `chart_type`, with `chart_x`
+  and `chart_y`), the Bayesian assistant's tool the slots of a node as `coef:0` and `arg:mu`
+  (they are `terms[0].coef`, `args.mu`). Installations that rewrote the chat's instructions keep
+  their own text.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 
