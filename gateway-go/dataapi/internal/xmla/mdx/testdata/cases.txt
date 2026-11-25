@@ -1,0 +1,51 @@
+# Recorded statements: one case per block, blocks separated by a line of ---.
+# Lines starting with # before the "=>" line are comments. The "=>" line says
+# the expected outcome; the rest of the block is the statement, newlines kept.
+#
+#   => ok                         parses, and survives parse -> print -> parse
+#   => ok print=<canonical MDX>   the same, and prints exactly this
+#   => err <code> [name=<name>] [at=<text>]
+#                                 is refused with that code; name is the
+#                                 construct; at=<text> is a snippet that starts
+#                                 where the error points (first occurrence)
+#
+# To add a statement a real client sent: copy it under a new "---".
+
+# Pivot with one field on columns and a measure in the slicer.
+=> ok
+SELECT NON EMPTY Hierarchize({DrilldownLevel({[country].[country].[All]},,,INCLUDE_CALC_MEMBERS)}) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON COLUMNS FROM [orders] WHERE ([Measures].[amount Sum]) CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS
+---
+# Two row fields crossed, measures on columns, a filter as a subselect.
+=> ok
+SELECT NON EMPTY CrossJoin(Hierarchize({DrilldownLevel({[date].[Year-Quarter-Month-Day].[All]},,,INCLUDE_CALC_MEMBERS)}), Hierarchize({DrilldownLevel({[country].[country].[All]},,,INCLUDE_CALC_MEMBERS)})) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON ROWS, {[Measures].[amount Sum],[Measures].[Rows]} DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON COLUMNS FROM (SELECT ({[channel].[channel].&[web]}) ON COLUMNS FROM [orders]) CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS
+---
+# A year expanded to its quarters.
+=> ok
+SELECT NON EMPTY Hierarchize(DrilldownMember({{DrilldownLevel({[date].[Year-Quarter-Month-Day].[All]},,,INCLUDE_CALC_MEMBERS)}}, {[date].[Year-Quarter-Month-Day].[Year].&[2026]},,,INCLUDE_CALC_MEMBERS)) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON COLUMNS FROM [orders] WHERE ([Measures].[Rows],[country].[country].&[IT]) CELL PROPERTIES VALUE, FORMAT_STRING
+---
+# Newlines, tabs, lower case and comments everywhere.
+=> ok print=SELECT {[Measures].[a]} ON COLUMNS FROM [c]
+select -- first comment
+	{ [Measures] . [a] } /* inline */
+	on // trailing
+	columns
+from [c]
+---
+=> ok print=SELECT {a.b} ON COLUMNS FROM c
+SELECT {a.b} ON 0 FROM c
+---
+# Unknown function in the middle of a statement.
+=> err unknown_function name=Generate at=Generate
+SELECT Generate({[a].[b].Members}, {[c].[d].Members}) ON COLUMNS FROM [cube]
+---
+=> err with_member name=WITH MEMBER at=WITH
+WITH MEMBER [Measures].[x] AS '1' SELECT {[Measures].[x]} ON COLUMNS FROM [cube]
+---
+=> err no_from at=WHERE
+SELECT {[a].[b].Members} ON COLUMNS WHERE ([Measures].[x])
+---
+=> err arithmetic name=+ at=+
+SELECT {[Measures].[a] + [Measures].[b]} ON COLUMNS FROM [c]
+---
+=> err syntax at=ON COLUMNS
+SELECT {[a].[b] ON COLUMNS FROM [c])
