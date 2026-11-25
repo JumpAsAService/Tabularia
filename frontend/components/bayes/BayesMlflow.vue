@@ -28,7 +28,7 @@ const servers = computed(() => (props.connections ?? []).filter((c) => c.db_type
 const options = computed(() => {
   const list: { value: number | null; label: string }[] = [
     { value: null, label: t('models.mlflow.none') },
-    ...servers.value.map((c) => ({ value: c.id, label: c.name })),
+    ...servers.value.map((c) => ({ value: c.id, label: c.name, connType: c.db_type })),
   ]
   const id = block.value?.connectionId
   // a connection the person cannot use any more stays listed: the node still holds it

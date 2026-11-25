@@ -260,7 +260,11 @@ watch(
 )
 const missingDriver = computed(() => (drivers.value[dbType.value]?.installed === false ? drivers.value[dbType.value] : null))
 const typeOptions = computed(() =>
-  DB_TYPES.map((o) => (drivers.value[o.value]?.installed === false ? { ...o, hint: t('connectionDialog.driverNotInstalledHint') } : o)),
+  DB_TYPES.map((o) => ({
+    ...o,
+    connType: o.value,
+    ...(drivers.value[o.value]?.installed === false ? { hint: t('connectionDialog.driverNotInstalledHint') } : {}),
+  })),
 )
 
 // a key seen for one address says nothing about another

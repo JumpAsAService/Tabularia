@@ -45,7 +45,7 @@ const params = computed<Record<string, any>>(() => props.data?.params ?? {})
 const connections = computed(() => (props.connections ?? []).filter((c) => c.db_type === 'mlflow'))
 const connectionOptions = computed(() => {
   const id = props.data?.connectionId
-  const options = connections.value.map((c) => ({ value: c.id, label: c.name }))
+  const options = connections.value.map((c) => ({ value: c.id, label: c.name, connType: c.db_type }))
   return typeof id === 'number' && !options.some((o) => o.value === id)
     ? [...options, { value: id, label: t('models.mlflow.unknownConnection', { id }) }]
     : options

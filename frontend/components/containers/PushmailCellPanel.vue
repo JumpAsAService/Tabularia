@@ -46,7 +46,7 @@ const dsById = computed(() => new Map(props.datasources.map((d) => [d.id, d])))
 const dsOptions = computed(() => props.datasources
   .filter((d) => !!d.key)
   .map((d) => ({ value: d.id, label: d.name, hint: folderPaths.pathOf(d.project_id) ?? undefined })))
-const connOptions = computed(() => props.connections.map((c) => ({ value: c.id, label: c.name, hint: c.host })))
+const connOptions = computed(() => props.connections.map((c) => ({ value: c.id, label: c.name, hint: c.host, connType: 'smtp' })))
 
 function splitAddresses(raw: string): string[] {
   return raw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)

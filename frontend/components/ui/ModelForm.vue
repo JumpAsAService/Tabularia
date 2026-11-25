@@ -401,7 +401,7 @@ const mlflowConnections = computed(() => (props.connections ?? []).filter((c) =>
 const mlflow = computed(() => props.data?.mlflow ?? null)
 const mlflowOptions = computed(() => [
   { value: null, label: t('models.mlflow.none') },
-  ...mlflowConnections.value.map((c) => ({ value: c.id, label: c.name })),
+  ...mlflowConnections.value.map((c) => ({ value: c.id, label: c.name, connType: c.db_type })),
 ])
 // a connection the person cannot use any more stays listed: the node still holds it
 const mlflowOptionsShown = computed(() => {

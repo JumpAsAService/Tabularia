@@ -433,6 +433,7 @@ function pickDatasource(id: number | null) {
             :model-value="node.data.mirrorConnectionId ?? null"
             :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
               value: c.id,
+              connType: c.db_type,
               label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
               hint: pathOf(c.project_id),
             }))"
@@ -469,6 +470,7 @@ function pickDatasource(id: number | null) {
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
             value: c.id,
+            connType: c.db_type,
             label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
             hint: pathOf(c.project_id),
           }))"
@@ -529,6 +531,7 @@ function pickDatasource(id: number | null) {
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => c.db_type === 'smtp').map((c) => ({
             value: c.id,
+            connType: c.db_type,
             label: c.name,
             hint: pathOf(c.project_id),
           }))"
@@ -619,6 +622,7 @@ function pickDatasource(id: number | null) {
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => c.db_type === 'sftp').map((c) => ({
             value: c.id,
+            connType: c.db_type,
             label: c.host ? `${c.name} (${c.host})` : c.name,
             hint: pathOf(c.project_id),
           }))"
@@ -669,6 +673,7 @@ function pickDatasource(id: number | null) {
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint', 'sftp', 'api', 'gsheets'].includes(c.db_type)).map((c) => ({
             value: c.id,
+            connType: c.db_type,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
             hint: pathOf(c.project_id),
           }))"

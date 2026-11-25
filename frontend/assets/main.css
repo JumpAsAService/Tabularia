@@ -268,6 +268,89 @@
   color-scheme: light;
 }
 
+/* The colour of each kind of connection's icon (components/ui/ConnIcon.vue): one per kind,
+   at least 3:1 against the background and the panels of every theme. */
+:root {
+  --conn-postgresql: #6294da;  /* 5.2:1 */
+  --conn-mysql: #da9a62;  /* 6.7:1 */
+  --conn-mariadb: #62dac6;  /* 9.5:1 */
+  --conn-clickhouse: #dac262;  /* 9.1:1 */
+  --conn-trino: #bc62da;  /* 4.5:1 */
+  --conn-oracle: #da626c;  /* 4.5:1 */
+  --conn-sqlserver: #62bcda;  /* 7.4:1 */
+  --conn-s3: #62da80;  /* 9.1:1 */
+  --conn-smtp: #da62a8;  /* 4.8:1 */
+  --conn-sharepoint: #b2da62;  /* 10.0:1 */
+  --conn-sftp: #8062da;  /* 3.6:1 */
+  --conn-api: #da7262;  /* 5.0:1 */
+  --conn-gsheets: #62da9e;  /* 9.2:1 */
+  --conn-mlflow: #6276da;  /* 3.9:1 */
+}
+:root[data-theme="light"] {
+  --conn-postgresql: #2b60ab;  /* 5.5:1 */
+  --conn-mysql: #ab672b;  /* 3.9:1 */
+  --conn-mariadb: #248f7d;  /* 3.5:1 */
+  --conn-clickhouse: #978026;  /* 3.4:1 */
+  --conn-trino: #8b2bab;  /* 6.1:1 */
+  --conn-oracle: #ab2b36;  /* 5.9:1 */
+  --conn-sqlserver: #2b8bab;  /* 3.4:1 */
+  --conn-s3: #259340;  /* 3.5:1 */
+  --conn-smtp: #ab2b76;  /* 5.6:1 */
+  --conn-sharepoint: #688b23;  /* 3.5:1 */
+  --conn-sftp: #4b2bab;  /* 8.3:1 */
+  --conn-api: #ab3c2b;  /* 5.4:1 */
+  --conn-gsheets: #25935c;  /* 3.4:1 */
+  --conn-mlflow: #2b40ab;  /* 7.7:1 */
+}
+:root[data-theme="dracula"] {
+  --conn-postgresql: #6294da;  /* 3.8:1 */
+  --conn-mysql: #da9a62;  /* 4.9:1 */
+  --conn-mariadb: #62dac6;  /* 6.9:1 */
+  --conn-clickhouse: #dac262;  /* 6.7:1 */
+  --conn-trino: #be66db;  /* 3.4:1 */
+  --conn-oracle: #db6670;  /* 3.5:1 */
+  --conn-sqlserver: #62bcda;  /* 5.5:1 */
+  --conn-s3: #62da80;  /* 6.7:1 */
+  --conn-smtp: #da62a8;  /* 3.5:1 */
+  --conn-sharepoint: #b2da62;  /* 7.4:1 */
+  --conn-sftp: #947be0;  /* 3.5:1 */
+  --conn-api: #da7262;  /* 3.7:1 */
+  --conn-gsheets: #62da9e;  /* 6.8:1 */
+  --conn-mlflow: #7384de;  /* 3.4:1 */
+}
+:root[data-theme="monokai"] {
+  --conn-postgresql: #6294da;  /* 4.1:1 */
+  --conn-mysql: #da9a62;  /* 5.3:1 */
+  --conn-mariadb: #62dac6;  /* 7.4:1 */
+  --conn-clickhouse: #dac262;  /* 7.1:1 */
+  --conn-trino: #bc62da;  /* 3.5:1 */
+  --conn-oracle: #da626c;  /* 3.6:1 */
+  --conn-sqlserver: #62bcda;  /* 5.8:1 */
+  --conn-s3: #62da80;  /* 7.1:1 */
+  --conn-smtp: #da62a8;  /* 3.8:1 */
+  --conn-sharepoint: #b2da62;  /* 7.9:1 */
+  --conn-sftp: #9177df;  /* 3.5:1 */
+  --conn-api: #da7262;  /* 3.9:1 */
+  --conn-gsheets: #62da9e;  /* 7.2:1 */
+  --conn-mlflow: #6e81dd;  /* 3.5:1 */
+}
+:root[data-theme="imperium"] {
+  --conn-postgresql: #2b60ab;  /* 5.1:1 */
+  --conn-mysql: #ab672b;  /* 3.6:1 */
+  --conn-mariadb: #228776;  /* 3.6:1 */
+  --conn-clickhouse: #8f7924;  /* 3.5:1 */
+  --conn-trino: #8b2bab;  /* 5.7:1 */
+  --conn-oracle: #ab2b36;  /* 5.5:1 */
+  --conn-sqlserver: #2985a3;  /* 3.4:1 */
+  --conn-s3: #238b3d;  /* 3.5:1 */
+  --conn-smtp: #ab2b76;  /* 5.1:1 */
+  --conn-sharepoint: #628321;  /* 3.6:1 */
+  --conn-sftp: #4b2bab;  /* 7.7:1 */
+  --conn-api: #ab3c2b;  /* 5.0:1 */
+  --conn-gsheets: #238b57;  /* 3.5:1 */
+  --conn-mlflow: #2b40ab;  /* 7.1:1 */
+}
+
 * { box-sizing: border-box; }
 
 /* The surfaces the browser draws follow the theme: the text selection and the
