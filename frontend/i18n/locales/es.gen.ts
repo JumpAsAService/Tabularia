@@ -3563,6 +3563,7 @@ export default {
       "usd": "USD",
       "tokens": "tokens",
       "messages": "mensajes",
+      "characters": "caracteres",
       "requests": "peticiones",
       "chats": "conversaciones",
       "runs": "ejecuciones",
@@ -3839,6 +3840,10 @@ export default {
       "ai_max_result_rows": {
         "label": "Filas de una consulta del asistente",
         "help": "El máximo de filas que devuelve una consulta del asistente, al modelo y al chat."
+      },
+      "ai_max_result_chars_for_model": {
+        "label": "Caracteres de un resultado dados al modelo",
+        "help": "Qué parte de las filas de un resultado lee el modelo: las primeras que caben, al menos cinco, con una nota de cuántas son. El chat muestra siempre el resultado completo. 0 = todo."
       },
       "ai_max_requests": {
         "label": "Rondas del modelo por mensaje",
@@ -5275,7 +5280,17 @@ export default {
     "runs": "ejecuta {file}",
     "apply": "Aplicar",
     "discard": "Descartar",
-    "applied": "Aplicados: Ctrl+Z en el archivo los deshace.",
+    "applied": "Aplicados.",
+    "showChanges": "Mostrar qué cambiaría",
+    "changesOf": "Cambios en {file}",
+    "unchanged": "… {n} líneas sin cambios",
+    "line": {
+      "added": "Añadida: ",
+      "removed": "Quitada: "
+    },
+    "edited": "Has editado {files} después de que se escribiera esta propuesta: aplicarla sustituye tus cambios, como muestran las diferencias.",
+    "applyAnyway": "Aplicar de todos modos",
+    "undo": "Deshacer",
     "discarded": "No aplicados.",
     "placeholder": "¿Qué debe hacer el script?",
     "inputLabel": "Su petición",

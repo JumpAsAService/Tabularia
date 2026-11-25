@@ -90,6 +90,7 @@ var Items = []Item{
 	plain("ai.metadata_only", "ai", "bool"),
 	plain("ai.default_model", "ai", "str"),
 	pitem("ai.max_result_rows", "ai", "int", "rows", i(1), i(20_000)),
+	pitem("ai.max_result_chars_for_model", "ai", "int", "characters", i(0), i(2_000_000)),
 	pitem("ai.max_requests", "ai", "int", "requests", i(1), i(200)),
 	pitem("ai.max_flow_requests", "ai", "int", "requests", i(1), i(400)),
 	pitem("ai.max_history_messages", "ai", "int", "messages", i(0), i(400)),

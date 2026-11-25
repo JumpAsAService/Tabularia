@@ -25,7 +25,7 @@ import { useTheme } from '~/composables/useTheme'
 import { languageOf, loadMonaco, type MonacoApi } from '~/composables/useMonaco'
 import { suggest, variableReference, type CompletionContext } from '~/composables/scriptCompletions'
 import { useAi, type AiStatus, type ScriptProposal } from '~/composables/useAi'
-import ScriptAssistant, { type ScriptInputColumns } from '~/components/scripting/ScriptAssistant.vue'
+import ScriptAssistant, { type ScriptFileChange, type ScriptInputColumns } from '~/components/scripting/ScriptAssistant.vue'
 
 interface ScriptFile { path: string; content: string }
 
@@ -301,36 +301,46 @@ onMounted(async () => {
   try { aiStatus.value = await aiApi.status() } catch { /* no assistant: the panel stays as it was */ }
 })
 
-// a proposal of the assistant, as ONE change: its files replaced in their models with
-// an edit (Ctrl+Z takes it back), the new ones added, the removed ones dropped
-function applyProposal(p: ScriptProposal) {
+// The files changed in one go: each path given its content, or taken away (content null). A file
+// that is open keeps its model and gets an edit (Ctrl+Z in it takes that back, and only that);
+// a new one is added, a removed one dropped with its model.
+function changeFiles(changes: ScriptFileChange[], entrypoint: string) {
   const m = monaco.value
-  for (const path of p.removed) {
-    local.value = local.value.filter((f) => f.path !== path)
-    models.get(path)?.dispose()
-    models.delete(path)
-  }
-  for (const f of p.files) {
-    if (!p.changed.includes(f.path)) continue
-    const mine = local.value.find((x) => x.path === f.path)
-    const model = models.get(f.path)
+  for (const c of changes) {
+    if (c.content === null) {
+      local.value = local.value.filter((f) => f.path !== c.path)
+      models.get(c.path)?.dispose()
+      models.delete(c.path)
+      continue
+    }
+    const mine = local.value.find((x) => x.path === c.path)
+    const model = models.get(c.path)
     if (mine && model && m) {
-      // a stop before and after: Ctrl+Z takes back the proposal, and only the proposal
+      // a stop before and after: Ctrl+Z takes back this change, and only this
       model.pushStackElement()
-      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: f.content }], () => null)
+      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: c.content }], () => null)
       model.pushStackElement()
     } else if (mine) {
-      mine.content = f.content
+      mine.content = c.content
     } else {
-      local.value.push({ path: f.path, content: f.content })
+      local.value.push({ path: c.path, content: c.content })
     }
   }
-  entry.value = local.value.some((f) => f.path === p.entrypoint) ? p.entrypoint : entry.value
+  const has = (path: string) => local.value.some((f) => f.path === path)
+  entry.value = has(entrypoint) ? entrypoint : has(entry.value) ? entry.value : (local.value[0]?.path ?? '')
   push(true)
   lintAll()
-  const first = p.changed[0]
+  const first = changes.find((c) => c.content !== null)?.path
   if (first) nextTick(() => show(first))
-  else if (!local.value.some((f) => f.path === current.value)) nextTick(() => show(entry.value))
+  else if (!has(current.value)) nextTick(() => (entry.value ? show(entry.value) : editor.value?.setModel(null)))
+}
+
+// a proposal of the assistant, as ONE change: the removed files first, then the changed and the new
+function applyProposal(p: ScriptProposal) {
+  changeFiles([
+    ...p.removed.map((path) => ({ path, content: null })),
+    ...p.files.filter((f) => p.changed.includes(f.path)),
+  ], p.entrypoint)
 }
 
 // ── what the script finds in its environment ─────────────────────────────────
@@ -557,6 +567,7 @@ onBeforeUnmount(() => {
           :last-run="lastRun ?? null"
           :read-only="readOnly"
           @apply="applyProposal"
+          @revert="changeFiles($event.files, $event.entrypoint)"
         />
       </aside>
       <!-- what the script finds -->

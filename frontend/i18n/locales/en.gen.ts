@@ -3591,6 +3591,7 @@ export default {
       "usd": "USD",
       "tokens": "tokens",
       "messages": "messages",
+      "characters": "characters",
       "requests": "requests",
       "chats": "chats",
       "runs": "runs",
@@ -3867,6 +3868,10 @@ export default {
       "ai_max_result_rows": {
         "label": "Rows of an assistant's query",
         "help": "The most rows a query of the assistant returns, to the model and to the chat."
+      },
+      "ai_max_result_chars_for_model": {
+        "label": "Characters of a result given to the model",
+        "help": "How much of one result's rows the model reads: the first that fit, at least five, with a note of how many there are. The chat always shows the whole result. 0 = everything."
       },
       "ai_max_requests": {
         "label": "Model rounds per message",
@@ -5275,7 +5280,17 @@ export default {
     "runs": "runs {file}",
     "apply": "Apply",
     "discard": "Discard",
-    "applied": "Applied: Ctrl+Z in the file takes it back.",
+    "applied": "Applied.",
+    "showChanges": "Show what would change",
+    "changesOf": "Changes to {file}",
+    "unchanged": "… {n} unchanged lines",
+    "line": {
+      "added": "Added: ",
+      "removed": "Removed: "
+    },
+    "edited": "You edited {files} after this proposal was written: applying replaces your edits, as the changes show.",
+    "applyAnyway": "Apply anyway",
+    "undo": "Undo",
     "discarded": "Not applied.",
     "placeholder": "What should the script do?",
     "inputLabel": "Your request",

@@ -53,6 +53,7 @@ var panelEnvSpecs = []panelEnvSpec{
 	{key: "ai.metadata_only", kind: "bool", def: false},
 	{key: "ai.default_model", kind: "str", def: ""},
 	{key: "ai.max_result_rows", kind: "int", def: int64(2000)},
+	{key: "ai.max_result_chars_for_model", kind: "int", def: int64(40_000)},
 	{key: "ai.max_requests", kind: "int", def: int64(120)},
 	{key: "ai.max_flow_requests", kind: "int", def: int64(300)},
 	{key: "ai.max_history_messages", kind: "int", def: int64(60)},

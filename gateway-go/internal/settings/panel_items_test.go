@@ -91,8 +91,8 @@ func TestEveryItemHasItsEnvironment(t *testing.T) {
 			t.Errorf("%s: no environment value", it.Key)
 		}
 	}
-	if len(Items) != 77 {
-		t.Errorf("%d items, overrides.ITEMS has 77", len(Items))
+	if len(Items) != 78 {
+		t.Errorf("%d items, overrides.ITEMS has 78", len(Items))
 	}
 	if env["engine.run_stale_timeout_seconds"] != int64(3900) || env["ai.dbt_export_timeout_seconds"] != int64(180) ||
 		env["oidc.timeout_seconds"] != 10.0 || env["db.pool_size"] != nil {

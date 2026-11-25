@@ -1,24 +1,34 @@
 <script setup lang="ts">
 // The script editor's assistant, beside the code. The user asks; the assistant answers
 // and may propose files (whole files): the proposal is applied only when the user
-// says so, as one change of the editor (Ctrl+Z takes it back). It never saves or runs.
+// says so, as one change of the editor. It never saves or runs.
+//
+// Before that, the card shows what applying would do to the files AS THEY ARE NOW: a true
+// difference per file, line by line, and a warning when a file it touches was edited after the
+// proposal was written (applying would replace those edits, and the difference shows them
+// going). After, «Undo» puts back every file the proposal touched, the removed ones too, for as
+// long as nobody has edited them since.
 //
 // What goes to the model: the code, the environment, the names of the variables and of
 // the inputs' columns, and the error of the last run when it failed — never a row of
 // data (the user's choice of 2026-10-24); the gateway cuts the log down to the error.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, CircleAlert, FileDiff, LoaderCircle, Plus, Send, Sparkles, Square, Wrench } from 'lucide-vue-next'
+import { Check, ChevronRight, CircleAlert, FileDiff, LoaderCircle, Plus, Send, Sparkles, Square, TriangleAlert, Undo2, Wrench } from 'lucide-vue-next'
 import { aiModelLabel, aiModelOptions, aiProviderOf, aiProviders, useAi, type AiDone, type AiStatus, type AiUsage, type ScriptProposal } from '~/composables/useAi'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useLocale } from '~/composables/useLocale'
+import { diffHunks, lineDiff, type DiffLine, type LineDiff } from '~/composables/lineDiff'
 import type { ScriptNodeRun } from '~/composables/useScripting'
 import AiDisclosure from '~/components/ui/AiDisclosure.vue'
 import MarkdownLite from '~/components/ui/MarkdownLite.vue'
 import Select from '~/components/ui/Select.vue'
 import AiSpeaker from '~/components/ui/AiSpeaker.vue'
+import ExpandBody from '~/components/ui/ExpandBody.vue'
 
 interface ScriptFile { path: string; content: string }
+/** A file given its content, or taken away (content null). */
+export interface ScriptFileChange { path: string; content: string | null }
 export interface ScriptInputColumns { variable: string; columns: { name: string; dtype: string }[] }
 
 const props = defineProps<{
@@ -33,7 +43,10 @@ const props = defineProps<{
   lastRun: ScriptNodeRun | null
   readOnly?: boolean
 }>()
-const emit = defineEmits<{ (e: 'apply', proposal: ScriptProposal): void }>()
+const emit = defineEmits<{
+  (e: 'apply', proposal: ScriptProposal): void
+  (e: 'revert', before: { files: ScriptFileChange[]; entrypoint: string }): void
+}>()
 
 const { t } = useI18n()
 const { locale } = useLocale()
@@ -49,6 +62,13 @@ interface Turn {
   usage?: AiUsage
   proposal?: ScriptProposal | null
   outcome?: 'pending' | 'applied' | 'discarded'
+  /** the files as they were sent with the question: a proposal is written against these */
+  sent?: Record<string, string>
+  /** the files whose difference is open, by path */
+  open?: Record<string, boolean>
+  /** once applied: what each file it touched was before, what each line of the card said, and the entrypoint */
+  before?: { files: ScriptFileChange[]; entrypoint: string }
+  stats?: Record<string, string>
 }
 
 const MODEL_KEY = 'tabularia.scriptAssistant.model'
@@ -81,16 +101,41 @@ function scrollDown() {
   nextTick(() => { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight })
 }
 
-// what a proposal changes, in lines, against the files now
+const contentNow = (path: string): string | null => props.files.find((f) => f.path === path)?.content ?? null
+
+// What a proposal would change in a file, against the file as it is now. Kept until the file or the
+// proposal changes: the card reads it for the count and for every line it draws.
+const diffs = new WeakMap<ScriptProposal, Map<string, { now: string; diff: LineDiff }>>()
+function diffOf(p: ScriptProposal, path: string): LineDiff {
+  const now = contentNow(path) ?? ''
+  let byPath = diffs.get(p)
+  if (!byPath) diffs.set(p, (byPath = new Map()))
+  const kept = byPath.get(path)
+  if (kept && kept.now === now) return kept.diff
+  const diff = lineDiff(now, p.files.find((f) => f.path === path)?.content ?? '')
+  byPath.set(path, { now, diff })
+  return diff
+}
 function stat(p: ScriptProposal, path: string): string {
-  const now = props.files.find((f) => f.path === path)?.content
-  const next = p.files.find((f) => f.path === path)?.content ?? ''
-  if (now == null) return t('scriptAssistant.newFile', { n: next.split('\n').length })
-  const a = new Set(now.split('\n'))
-  const b = new Set(next.split('\n'))
-  const added = [...b].filter((l) => !a.has(l)).length
-  const removed = [...a].filter((l) => !b.has(l)).length
-  return `+${added} −${removed}`
+  if (contentNow(path) === null) return t('scriptAssistant.newFile', { n: diffOf(p, path).added })
+  const d = diffOf(p, path)
+  return `+${d.added} −${d.removed}`
+}
+const hunks = (p: ScriptProposal, path: string): DiffLine[] => diffHunks(diffOf(p, path))
+const SIGN = { added: '+', removed: '−', same: ' ', gap: '' } as const
+
+// the files a proposal touches that were edited after it was written: applying replaces those edits
+function edited(turn: Turn): string[] {
+  const p = turn.proposal
+  if (!p || !turn.sent) return []
+  return [...p.changed, ...p.removed].filter((path) => (turn.sent![path] ?? null) !== contentNow(path))
+}
+// applied, and still as it left them: only then can it be taken back without losing a later edit
+function canUndo(turn: Turn): boolean {
+  const p = turn.proposal
+  if (!p || !turn.before || turn.outcome !== 'applied' || props.readOnly) return false
+  return p.changed.every((path) => contentNow(path) === (p.files.find((f) => f.path === path)?.content ?? null))
+    && p.removed.every((path) => contentNow(path) === null)
 }
 
 async function send(text?: string, withError = false) {
@@ -104,6 +149,7 @@ async function send(text?: string, withError = false) {
   controller = new AbortController()
   scrollDown()
   const run = props.lastRun
+  const sent = Object.fromEntries(props.files.map((f) => [f.path, f.content]))
   try {
     await ai.scriptAssist(
       {
@@ -126,6 +172,8 @@ async function send(text?: string, withError = false) {
           if (done.truncated) turn.error = t('aiCompliance.truncated')
           if (done.proposal) {
             turn.proposal = done.proposal
+            turn.sent = sent
+            turn.open = {}
             turn.outcome = 'pending'
           }
         },
@@ -149,9 +197,23 @@ async function send(text?: string, withError = false) {
 }
 
 function apply(turn: Turn) {
-  if (!turn.proposal) return
-  emit('apply', turn.proposal)
+  const p = turn.proposal
+  if (!p) return
+  // what the card says and what Undo puts back are read now, before the files change under them
+  turn.stats = Object.fromEntries(p.changed.map((path) => [path, stat(p, path)]))
+  turn.before = {
+    files: [...p.changed, ...p.removed].map((path) => ({ path, content: contentNow(path) })),
+    entrypoint: props.entrypoint,
+  }
+  emit('apply', p)
   turn.outcome = 'applied'
+}
+function undo(turn: Turn) {
+  if (!turn.before || !canUndo(turn)) return
+  emit('revert', turn.before)
+  turn.before = undefined
+  turn.stats = undefined
+  turn.outcome = 'pending'
 }
 function reset() {
   if (busy.value) return
@@ -199,15 +261,45 @@ function onKey(e: KeyboardEvent) {
           <div v-if="turn.proposal" class="sa-proposal" :class="turn.outcome">
             <div class="sa-ptitle"><FileDiff :size="13" /> {{ $t('scriptAssistant.proposal') }}</div>
             <ul>
-              <li v-for="p in turn.proposal.changed" :key="p"><code>{{ p }}</code> <span class="muted">{{ stat(turn.proposal, p) }}</span></li>
+              <li v-for="p in turn.proposal.changed" :key="p">
+                <template v-if="turn.outcome === 'pending' && turn.open">
+                  <button type="button" class="sa-file" :aria-expanded="!!turn.open[p]" :title="$t('scriptAssistant.showChanges')"
+                          @click="turn.open[p] = !turn.open[p]">
+                    <ChevronRight :size="12" class="sa-chev" aria-hidden="true" /> <code>{{ p }}</code>
+                    <span class="muted">{{ stat(turn.proposal, p) }}</span>
+                  </button>
+                  <ExpandBody>
+                    <ol v-if="turn.open[p]" class="sa-diff" :aria-label="$t('scriptAssistant.changesOf', { file: p })">
+                      <li v-for="(line, li) in hunks(turn.proposal, p)" :key="li" :class="line.kind">
+                        <template v-if="line.kind === 'gap'">{{ $t('scriptAssistant.unchanged', { n: line.text }) }}</template>
+                        <template v-else>
+                          <span v-if="line.kind !== 'same'" class="sr-only">{{ $t(`scriptAssistant.line.${line.kind}`) }}</span><span aria-hidden="true" class="sa-sign">{{ SIGN[line.kind] }}</span>{{ line.text }}
+                        </template>
+                      </li>
+                    </ol>
+                  </ExpandBody>
+                </template>
+                <template v-else><code>{{ p }}</code> <span class="muted">{{ turn.stats?.[p] ?? stat(turn.proposal, p) }}</span></template>
+              </li>
               <li v-for="p in turn.proposal.removed" :key="`r${p}`"><code>{{ p }}</code> <span class="muted">{{ $t('scriptAssistant.removed') }}</span></li>
               <li v-if="turn.proposal.entrypoint !== entrypoint"><span class="muted">{{ $t('scriptAssistant.runs', { file: turn.proposal.entrypoint }) }}</span></li>
             </ul>
-            <div v-if="turn.outcome === 'pending'" class="sa-pactions">
-              <button type="button" class="primary sa-mini-btn" @click="apply(turn)"><Check :size="13" /> {{ $t('scriptAssistant.apply') }}</button>
-              <button type="button" class="sa-mini-btn" @click="turn.outcome = 'discarded'">{{ $t('scriptAssistant.discard') }}</button>
+            <template v-if="turn.outcome === 'pending'">
+              <p v-if="edited(turn).length" class="sa-note warn" role="status">
+                <TriangleAlert :size="13" aria-hidden="true" />
+                <span>{{ $t('scriptAssistant.edited', { files: edited(turn).join(', ') }) }}</span>
+              </p>
+              <div class="sa-pactions">
+                <button type="button" class="sa-mini-btn" :class="{ primary: !edited(turn).length }" @click="apply(turn)">
+                  <Check :size="13" /> {{ $t(edited(turn).length ? 'scriptAssistant.applyAnyway' : 'scriptAssistant.apply') }}
+                </button>
+                <button type="button" class="sa-mini-btn" @click="turn.outcome = 'discarded'">{{ $t('scriptAssistant.discard') }}</button>
+              </div>
+            </template>
+            <div v-else-if="turn.outcome === 'applied'" class="sa-pactions">
+              <p class="sa-note ok">{{ $t('scriptAssistant.applied') }}</p>
+              <button v-if="canUndo(turn)" type="button" class="sa-mini-btn" @click="undo(turn)"><Undo2 :size="13" /> {{ $t('scriptAssistant.undo') }}</button>
             </div>
-            <p v-else-if="turn.outcome === 'applied'" class="sa-note ok">{{ $t('scriptAssistant.applied') }}</p>
             <p v-else class="sa-note">{{ $t('scriptAssistant.discarded') }}</p>
           </div>
         </div>
@@ -257,7 +349,23 @@ function onKey(e: KeyboardEvent) {
 .sa-ptitle { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .sa-proposal ul { margin: 6px 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .sa-proposal code { font-size: 11.5px; }
-.sa-pactions { display: flex; gap: 6px; }
+.sa-pactions { display: flex; align-items: center; gap: 6px; }
+.sa-pactions .sa-note { margin: 0; flex: 1; }
+.sa-note.warn { color: var(--warning); }
+/* a file of the proposal: its name opens what would change in it */
+.sa-file { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 0; padding: 2px 4px; margin: 0 -4px; border: none; background: none;
+  font-size: 12px; text-align: left; border-radius: 5px; }
+.sa-file:hover { background: var(--bg-soft); box-shadow: none; }
+.sa-chev { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
+.sa-file[aria-expanded="true"] .sa-chev { transform: rotate(90deg); }
+/* the difference: the changed lines with two unchanged around them, in the editor's own face */
+.sa-diff { list-style: none; margin: 4px 0 6px; padding: 6px 0; max-height: 280px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 6px;
+  background: var(--panel); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5; }
+.sa-diff li { padding: 0 8px; white-space: pre; min-width: max-content; }
+.sa-diff li.added { color: color-mix(in srgb, var(--accent-2) 70%, var(--text)); background: color-mix(in srgb, var(--accent-2) 10%, transparent); }
+.sa-diff li.removed { color: color-mix(in srgb, var(--danger) 70%, var(--text)); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.sa-diff li.gap { color: var(--muted); font-family: inherit; font-style: italic; padding-top: 2px; padding-bottom: 2px; }
+.sa-sign { display: inline-block; width: 1.4ch; user-select: none; }
 .sa-mini-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; font-size: 12px; }
 .sa-composer { padding-top: 8px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 4px; }
 .sa-field { display: flex; gap: 6px; align-items: flex-end; }

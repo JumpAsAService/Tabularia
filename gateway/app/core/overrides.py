@@ -42,7 +42,7 @@ class Item:
     key: str  # "<section>.<field>" of the gateway's settings
     group: str  # the box of the panel (the labels are the frontend's)
     kind: str  # int | float | bool | str | timezone | cpu | memory
-    unit: str = ""  # seconds | minutes | days | rows | bytes | usd | tokens | messages | requests | chats | runs | threads | connections | people
+    unit: str = ""  # seconds | minutes | days | rows | characters | bytes | usd | tokens | messages | requests | chats | runs | threads | connections | people
     minimum: Optional[float] = None
     maximum: Optional[float] = None
     max_length: int = 200
@@ -108,6 +108,7 @@ ITEMS: tuple[Item, ...] = (
     Item("ai.metadata_only", "ai", "bool"),
     Item("ai.default_model", "ai", "str", max_length=200),
     Item("ai.max_result_rows", "ai", "int", "rows", 1, 20_000),
+    Item("ai.max_result_chars_for_model", "ai", "int", "characters", 0, 2_000_000),
     Item("ai.max_requests", "ai", "int", "requests", 1, 200),
     Item("ai.max_flow_requests", "ai", "int", "requests", 1, 400),
     Item("ai.max_history_messages", "ai", "int", "messages", 0, 400),

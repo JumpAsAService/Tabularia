@@ -3563,6 +3563,7 @@ export default {
       "usd": "USD",
       "tokens": "jetons",
       "messages": "messages",
+      "characters": "caractères",
       "requests": "requêtes",
       "chats": "conversations",
       "runs": "exécutions",
@@ -3839,6 +3840,10 @@ export default {
       "ai_max_result_rows": {
         "label": "Lignes d'une requête de l'assistant",
         "help": "Le maximum de lignes qu'une requête de l'assistant renvoie, au modèle comme au chat."
+      },
+      "ai_max_result_chars_for_model": {
+        "label": "Caractères d'un résultat donnés au modèle",
+        "help": "Quelle part des lignes d'un résultat le modèle lit : les premières qui tiennent, au moins cinq, avec une note indiquant combien il y en a. Le chat affiche toujours le résultat entier. 0 = tout."
       },
       "ai_max_requests": {
         "label": "Tours du modèle par message",
@@ -5275,7 +5280,17 @@ export default {
     "runs": "exécute {file}",
     "apply": "Appliquer",
     "discard": "Écarter",
-    "applied": "Appliquées : Ctrl+Z dans le fichier les annule.",
+    "applied": "Appliquées.",
+    "showChanges": "Montrer ce qui changerait",
+    "changesOf": "Modifications de {file}",
+    "unchanged": "… {n} lignes inchangées",
+    "line": {
+      "added": "Ajoutée : ",
+      "removed": "Supprimée : "
+    },
+    "edited": "Vous avez modifié {files} après la rédaction de cette proposition : l'appliquer remplace vos modifications, comme le montrent les différences.",
+    "applyAnyway": "Appliquer quand même",
+    "undo": "Annuler",
     "discarded": "Non appliquées.",
     "placeholder": "Que doit faire le script ?",
     "inputLabel": "Votre demande",

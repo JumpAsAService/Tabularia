@@ -3591,6 +3591,7 @@ export default {
       "usd": "USD",
       "tokens": "token",
       "messages": "messaggi",
+      "characters": "caratteri",
       "requests": "richieste",
       "chats": "chat",
       "runs": "esecuzioni",
@@ -3867,6 +3868,10 @@ export default {
       "ai_max_result_rows": {
         "label": "Righe di una query dell'assistente",
         "help": "Le righe massime che una query dell'assistente restituisce, al modello e alla chat."
+      },
+      "ai_max_result_chars_for_model": {
+        "label": "Caratteri di un risultato dati al modello",
+        "help": "Quanta parte delle righe di un risultato legge il modello: le prime che ci stanno, almeno cinque, con una nota di quante sono. La chat mostra sempre tutto il risultato. 0 = tutto."
       },
       "ai_max_requests": {
         "label": "Giri del modello per messaggio",
@@ -5275,7 +5280,17 @@ export default {
     "runs": "esegue {file}",
     "apply": "Applica",
     "discard": "Scarta",
-    "applied": "Applicate: Ctrl+Z nel file le annulla.",
+    "applied": "Applicate.",
+    "showChanges": "Mostra che cosa cambierebbe",
+    "changesOf": "Modifiche a {file}",
+    "unchanged": "… {n} righe invariate",
+    "line": {
+      "added": "Aggiunta: ",
+      "removed": "Tolta: "
+    },
+    "edited": "Hai modificato {files} dopo che questa proposta è stata scritta: applicandola le tue modifiche vengono sostituite, come mostrano le differenze.",
+    "applyAnyway": "Applica comunque",
+    "undo": "Annulla",
     "discarded": "Non applicate.",
     "placeholder": "Cosa deve fare lo script?",
     "inputLabel": "La tua richiesta",

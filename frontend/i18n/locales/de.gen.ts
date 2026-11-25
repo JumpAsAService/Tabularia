@@ -3563,6 +3563,7 @@ export default {
       "usd": "USD",
       "tokens": "Token",
       "messages": "Nachrichten",
+      "characters": "Zeichen",
       "requests": "Anfragen",
       "chats": "Unterhaltungen",
       "runs": "Läufe",
@@ -3839,6 +3840,10 @@ export default {
       "ai_max_result_rows": {
         "label": "Zeilen einer Abfrage des Assistenten",
         "help": "Die Höchstzahl an Zeilen, die eine Abfrage des Assistenten liefert, an das Modell und an den Chat."
+      },
+      "ai_max_result_chars_for_model": {
+        "label": "Zeichen eines Ergebnisses für das Modell",
+        "help": "Wie viel von den Zeilen eines Ergebnisses das Modell liest: die ersten, die hineinpassen, mindestens fünf, mit einem Hinweis, wie viele es sind. Der Chat zeigt immer das ganze Ergebnis. 0 = alles."
       },
       "ai_max_requests": {
         "label": "Modellrunden pro Nachricht",
@@ -5275,7 +5280,17 @@ export default {
     "runs": "führt {file} aus",
     "apply": "Übernehmen",
     "discard": "Verwerfen",
-    "applied": "Übernommen: Strg+Z in der Datei macht es rückgängig.",
+    "applied": "Übernommen.",
+    "showChanges": "Zeigen, was sich ändern würde",
+    "changesOf": "Änderungen an {file}",
+    "unchanged": "… {n} unveränderte Zeilen",
+    "line": {
+      "added": "Hinzugefügt: ",
+      "removed": "Entfernt: "
+    },
+    "edited": "Du hast {files} bearbeitet, nachdem dieser Vorschlag geschrieben wurde: Übernehmen ersetzt deine Änderungen, wie die Unterschiede zeigen.",
+    "applyAnyway": "Trotzdem übernehmen",
+    "undo": "Rückgängig",
     "discarded": "Nicht übernommen.",
     "placeholder": "Was soll das Skript tun?",
     "inputLabel": "Ihre Anfrage",

@@ -43,6 +43,14 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 - When a model keeps calling one tool wrongly, the turn's error names the step that was refused
   and points at the reasons, instead of «choose another model». The flow editor's assistant may
   be refused four times in a row on one tool before its turn stops (it was two).
+- `AI__MAX_RESULT_CHARS_FOR_MODEL` is also in Administration → Settings, with the other limits
+  of the assistant.
+- The script assistant's proposal shows what applying it would change before it is applied: per
+  file, the true difference line by line against the code as it is now (the count compared two
+  sets of lines, and missed repeated and moved ones). It warns when a file it touches was edited
+  after the proposal was written, since applying replaces those edits. Once applied, «Undo» on
+  the card puts every touched file back, the removed ones too, for as long as they were not
+  edited since.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 
