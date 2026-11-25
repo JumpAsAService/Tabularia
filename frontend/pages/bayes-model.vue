@@ -757,6 +757,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             v-model="name"
             class="namein"
             type="text"
+            :data-vt-title="name ? '' : undefined"
             maxlength="200"
             spellcheck="false"
             :readonly="!editable"

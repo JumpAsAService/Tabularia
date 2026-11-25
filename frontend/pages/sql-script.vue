@@ -534,6 +534,7 @@ watch(() => route.query.id, (id) => {
             v-model="name"
             class="qname"
             type="text"
+            :data-vt-title="name ? '' : undefined"
             maxlength="200"
             :readonly="!canEdit"
             :placeholder="$t('sqlScript.namePlaceholder')"
