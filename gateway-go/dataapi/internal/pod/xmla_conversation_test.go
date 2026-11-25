@@ -86,6 +86,10 @@ func TestXMLAConversations(t *testing.T) {
 					rows, columns = len(p.rows), strings.Join(p.cols, " ")
 				}
 				next := 0
+				var ds *dataset
+				if a.status == 200 && strings.Contains(string(a.body), "mddataset") {
+					ds = parseDataset(t, string(a.body))
+				}
 				for _, e := range st.expect {
 					verb, rest, _ := strings.Cut(e, " ")
 					rest = strings.TrimSpace(rest)
@@ -116,6 +120,31 @@ func TestXMLAConversations(t *testing.T) {
 							}
 						}
 						next++
+					case "axis": // axis Axis1 All | 2025 | 2026: the captions of the tuples, in order
+						name, list, _ := strings.Cut(rest, " ")
+						want := []string{}
+						for _, x := range strings.Split(list, " | ") {
+							want = append(want, strings.TrimSpace(x))
+						}
+						if ds == nil || strings.Join(ds.labels(name), "\x00") != strings.Join(want, "\x00") {
+							t.Errorf("%s (line %d): %s is %v, want %q", st.name, st.line, name, ds != nil && ds.axes[name] != nil, want)
+						}
+					case "cells": // cells N: how many cells are not empty
+						if n, _ := strconv.Atoi(rest); ds == nil || len(ds.cells) != n {
+							t.Errorf("%s (line %d): cells, want %s", st.name, st.line, rest)
+						}
+					case "cell": // cell 0=2 | 1=15.75: the value of the cells of these ordinals
+						for _, kv := range strings.Split(rest, " | ") {
+							k, v, _ := strings.Cut(kv, "=")
+							ord, _ := strconv.Atoi(strings.TrimSpace(k))
+							if c, ok := ds.cells[ord]; ds == nil || !ok || c.value != v {
+								t.Errorf("%s (line %d): cell %d is %+v, want %q", st.name, st.line, ord, c, v)
+							}
+						}
+					case "has", "hasnot": // the body holds this text, or not
+						if has := strings.Contains(string(a.body), rest); has != (verb == "has") {
+							t.Errorf("%s (line %d): %s %q", st.name, st.line, verb, rest)
+						}
 					case "fault":
 						if a.status != 500 || !strings.Contains(string(a.body), "<soap:Fault>") || !strings.Contains(string(a.body), rest) {
 							t.Errorf("%s (line %d): want a fault with %q: %d %s", st.name, st.line, rest, a.status, a.body)

@@ -1,0 +1,73 @@
+# A pivot table on the «Sales» cube, from connecting to refreshing: the statements and the
+# answers of dragging a field to the rows, filtering, expanding a year and refreshing. Played by
+# TestXMLAConversations (xmla_conversation_test.go) on the «sales» table of xmla_discover_test.go.
+#
+# NOT RECORDED FROM A REAL CLIENT. Written from the documentation of the protocol and of what a
+# spreadsheet is documented to ask for, in the order of the gestures; the owner's trials with the
+# real client replace it (the statements a trial gets refused are kept by the pod for that: see
+# «The MDX that is understood» in docs/specs/xmla.md).
+#
+# The format is the one of connect.txt, with these expectations for an answer that is a dataset:
+#
+#   axis Axis1 All | 2025 | 2026   the captions of the tuples of an axis, in order
+#   cells N                        how many cells are not empty
+#   cell 0=2 | 1=15.75             the value of the cells with these ordinals
+#   has TEXT / hasnot TEXT         the answer holds this text, or does not
+
+=== a session begins with an empty Execute
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><BeginSession xmlns="urn:schemas-microsoft-com:xml-analysis" soap:mustUnderstand="1"/></soap:Header><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement></Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+has SessionId="
+has xml-analysis:empty
+
+=== the pivot is connected: the cube alone, with nothing dragged
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT FROM [Sales] CELL PROPERTIES VALUE</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+cells 1
+cell 0=8
+has [Measures].[Rows]
+
+=== a measure is dragged to the values
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT {[Measures].[amount]} ON COLUMNS FROM [Sales] CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+axis Axis0 amount
+cell 0=45.75
+has <FormatString>#,0.00</FormatString>
+
+=== a field is dragged to the rows
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT NON EMPTY Hierarchize({DrilldownLevel({[paid].[paid].[All]},,,INCLUDE_CALC_MEMBERS)}) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON ROWS, {[Measures].[amount]} ON COLUMNS FROM [Sales] CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+axis Axis1 All | false | true
+cells 3
+cell 0=45.75 | 1=25.00 | 2=20.75
+has <PARENT_UNIQUE_NAME>[paid].[paid].[All]</PARENT_UNIQUE_NAME>
+
+=== a filter on the country, as a subselect
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT NON EMPTY Hierarchize({DrilldownLevel({[paid].[paid].[All]},,,INCLUDE_CALC_MEMBERS)}) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON ROWS, {[Measures].[amount]} ON COLUMNS FROM (SELECT ({[country].[country].[country].&amp;[IT],[country].[country].[country].&amp;[FR]}) ON COLUMNS FROM [Sales]) CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+axis Axis1 All | false | true
+cell 0=35.75 | 1=20.00 | 2=15.75
+
+=== a year is expanded
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT NON EMPTY Hierarchize(DrilldownMember({{DrilldownLevel({[day].[Year-Quarter-Month-Day].[All]},,,INCLUDE_CALC_MEMBERS)}}, {[day].[Year-Quarter-Month-Day].[Year].&amp;[2026]},,,INCLUDE_CALC_MEMBERS)) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON ROWS, {[Measures].[amount]} ON COLUMNS FROM (SELECT ({[country].[country].[country].&amp;[IT],[country].[country].[country].&amp;[FR]}) ON COLUMNS FROM [Sales]) CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+axis Axis1 All | 2025 | 2026 | 2026-Q1
+cell 0=35.75 | 1=10.50 | 2=25.25 | 3=25.25
+
+=== the pivot is refreshed: the same statement, the same answer
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>SELECT NON EMPTY Hierarchize({DrilldownLevel({[paid].[paid].[All]},,,INCLUDE_CALC_MEMBERS)}) DIMENSION PROPERTIES PARENT_UNIQUE_NAME,HIERARCHY_UNIQUE_NAME ON ROWS, {[Measures].[amount]} ON COLUMNS FROM [Sales] CELL PROPERTIES VALUE, FORMAT_STRING, LANGUAGE, BACK_COLOR, FORE_COLOR, FONT_FLAGS</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog><Format>Multidimensional</Format><AxisFormat>TupleFormat</AxisFormat><Content>SchemaData</Content></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+axis Axis1 All | false | true
+cell 0=45.75 | 1=25.00 | 2=20.75
+
+=== a statement outside the subset is a fault that names the construct
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement>WITH MEMBER [Measures].[x] AS '1' SELECT {[Measures].[x]} ON COLUMNS FROM [Sales]</Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+status 500
+fault WITH MEMBER
+
+=== the session ends
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><EndSession xmlns="urn:schemas-microsoft-com:xml-analysis" SessionId="abc"/></soap:Header><soap:Body><Execute xmlns="urn:schemas-microsoft-com:xml-analysis"><Command><Statement></Statement></Command><Properties><PropertyList><Catalog>CRM</Catalog></PropertyList></Properties></Execute></soap:Body></soap:Envelope>
+--- expect
+has xml-analysis:empty
+hasnot <Session

@@ -2,8 +2,7 @@ package pod
 
 // POST /data/{api}/xmla: the XMLA interface (docs/specs/xmla.md), a second way a data API with
 // it switched on answers, for pivot tables. The route, its admission and the envelope are piece
-// 1, the Discover rowsets piece 2 (xmla_discover.go); Execute is answered with a fault that says
-// it is not served yet.
+// 1, the Discover rowsets piece 2 (xmla_discover.go), the statements piece 4 (xmla_execute.go).
 
 import (
 	"bytes"
@@ -53,8 +52,7 @@ func (s *Server) xmla(w http.ResponseWriter, r *http.Request) {
 		s.discover(w, r, snap, key, req)
 		return
 	}
-	recordOf(r).code = "xmla_not_served"
-	s.fault(w, r, xmla.NewFault(xmla.CodeNotServed, "Execute is not served yet by this interface"))
+	s.execute(w, r, snap, key, req)
 }
 
 // fault answers a SOAP fault with HTTP 500, as SOAP 1.1 says.

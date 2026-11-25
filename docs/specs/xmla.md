@@ -288,6 +288,67 @@ first or last. `Filter` compares a measure with a number, joined by AND and OR. 
 `CrossJoin(a, b, c)` are one form in the tree. Its long examples are written from memory of what
 a pivot sends: the first trials with the real client replace them.
 
+**Piece 4** (Execute on DuckDB), 2026-11-25: `gateway-go/dataapi/internal/xmla` (`plan.go`, `sqlgen.go`,
+`dialect.go`, `execute.go`, `dataset.go`) and `pod/xmla_execute.go`, `pod/xmla_refused.go`.
+
+- **Plan.** The parser's tree becomes, for each axis, the product of its *parts*: one hierarchy (or the
+  measures) with its members in order. The members of a level are read from the data, among the rows the
+  subselects let through; a set of several hierarchies is the cross of single-hierarchy sets. Rendered:
+  `{}`, tuples, `CrossJoin` and `*`, `Hierarchize` (PRE and POST), `DrilldownLevel` (lowest level of the set,
+  or the level named), `DrilldownMember` (also RECURSIVE), `AddCalculatedMembers`, `Except`, `Distinct`,
+  `Head`, `TopCount`, `BottomCount`, `Filter` (measure against number, AND/OR), `Order` (BASC and BDESC; ASC
+  and DESC only over one level), `.Members`, `.AllMembers`, `.Children`, `.DefaultMember`, members by unique
+  name (always the four-segment form Discover gives, `[d].[h].[level].&[key]`), a subselect (nested too) and
+  the slicer (a measure, and members: a set is the product of its hierarchies). Refused, naming the
+  construct: Head, TopCount, BottomCount, Order, Filter, Except, DrilldownLevel and DrilldownMember over a set
+  of several hierarchies; DrilldownLevel with an index; a hierarchy, dimension or level used as a set; a
+  hierarchy on two axes, or in the slicer and on an axis; measures on two axes, or in the slicer and on an
+  axis, or in a subselect; NON EMPTY in a subselect; a gap in the axes; a union of members of different
+  hierarchies; tuples that are not the product of their members; a member property or cell property outside
+  the lists. A member written by name that the data (within the subselects) does not have is a fault.
+- **Default measure** `[Measures].[Rows]`, the member `DEFAULT_MEMBER` of Discover (`Cube.Measures[0]`): the
+  cells of a statement with no measure on an axis or in the slicer.
+- **SQL.** Through `Dialect` (quoting, placeholders, date parts, text, aggregates, `GROUPING` and grouping
+  sets, ordering, limit, temporary tables); DuckDB is the only one, and `execute_test.go` shows a second toy
+  dialect changing the text. One aggregation with grouping sets over every combination of the levels used
+  (at most 512): each hierarchy gives its level and a key (a marker for All and for a null), the measures
+  `NULLIF(count(*),0)`, `sum`, `avg`, `min`, `max`. Every value of the MDX is a bound parameter; the text has
+  only names from the model. A test checks that no member key of the statement is in the text.
+- **Execution.** One connection of the table's DuckDB (a turn of the pod's gate and the query timeout for the
+  computing; the reading of the tables takes no turn). The aggregation is a temporary table; the members of
+  each part go into small temporary tables; a join gives each group its ordinal on each axis; a NON EMPTY axis
+  keeps the tuples that have a cell, numbered in order; the final table holds the non-empty cells in ordinal
+  order. The axes and the cells are streamed from them as XML. Everything that can fail (caps included) is done
+  before the first byte; the tables are dropped by `Result.Close` whatever happened (cancelled context, cap,
+  client gone), checked by tests. The temporary tables are DuckDB's own: in the buffer manager's memory, spilled
+  to its temp directory past the memory limit. Only the axes' parts (at most `MaxTuples` members each) are in
+  memory, never the cells.
+- **Caps.** `MaxTuples` on every part and every axis (after the empty tuples are dropped), `MaxCells` on the
+  product of the axes: `CodeLimit` faults that name the cap and its value. A timeout is a `CodeLimit` fault
+  too. A failure after the answer is begun ends the connection instead of closing the XML.
+- **Dataset.** `Format` Multidimensional (Native read as such) with TupleFormat axes; `Content` SchemaData
+  (default), Data, Schema or None; another `Format`, `AxisFormat` or `Content`, or another `Catalog`, is a
+  fault. Cells: only the non-empty ones, `VALUE` typed (`xsd:int` or `xsd:long` for integers and counts,
+  `xsd:decimal`, `xsd:double`), `FORMATTED_VALUE` (thousands separators, the decimals of the format), `FORMAT_STRING`;
+  with no `CELL PROPERTIES` the first two. The other standard cell properties are accepted and left out. Member
+  properties: `PARENT_UNIQUE_NAME`, `HIERARCHY_UNIQUE_NAME`, `CHILDREN_CARDINALITY`, `DIMENSION_UNIQUE_NAME`,
+  `PARENT_LEVEL`, `MEMBER_NAME`, `MEMBER_KEY`, `MEMBER_VALUE`, and the intrinsic ones; the parent of an All
+  member is omitted. The slicer axis holds the slicer's members and the measure of the cells.
+- **Sessions.** `BeginSession` gets a generated id in a `Session` header; `EndSession`, and an `Execute` with no
+  statement, answer an empty dataset (`urn:schemas-microsoft-com:xml-analysis:empty`).
+- **Refused statements.** With `KeepRefused`, the text of a statement the parser or the plan refused (also a name
+  not found), with the fault's words, is kept for a day in `xmla-refused.json` in the pod's data directory (100
+  statements of 16 KB at most), and read with `GET /data/{slug}/xmla/refused` by a key not limited to some
+  resources (404 when the switch is off). No migration, no gateway change: the gateway does not show them yet
+  (it would need a route that asks the pods). With the switch off nothing is kept; nothing of a statement or of
+  its values is ever logged.
+- **Interpretations to check with the real client**: the shape of the schema (written from memory of the
+  standard's), `DisplayInfo` (children count, 0x10000 when the next member of the part is a child, 0x20000 when
+  the parent is the previous member's, the first All member counting as such), `CellOrdinal` (columns vary
+  fastest), the types of the values, `FORMATTED_VALUE` and the default cell properties, the slicer axis, the
+  omitted parent of All, an empty axis, empty cells compared as zero in `Filter` and last in `TopCount`,
+  `BottomCount` and `Order`, a member outside a subselect being a fault, an integer as one level of members.
+
 ## Testing strategy
 
 - **Recorded conversations.** The requests a pivot table sends (connecting, listing, dragging a

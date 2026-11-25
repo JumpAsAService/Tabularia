@@ -315,6 +315,9 @@ const (
 type Fault struct {
 	Code    uint32
 	Message string
+	// Refused marks a statement the parser or the planner did not accept: the pod may keep its
+	// text (docs/specs/xmla.md, «The MDX that is understood»). Not a part of the answer.
+	Refused bool
 }
 
 // NewFault is a fault with this code and description.

@@ -53,6 +53,10 @@ type Server struct {
 	// second one at a time, 430 with three at once and 280 with eight; gated, 1,300 with eight
 	gate chan struct{}
 
+	// the statements the XMLA interface refused, when the installation keeps them
+	xrefusedOnce sync.Once
+	xrefused     *refusedStore
+
 	// what the status reports: when the pod started, the version each resource is being
 	// prepared at, the last manifest that could not be had
 	started     time.Time
@@ -417,6 +421,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/data/{api}/health", s.health)
 	mux.HandleFunc("/data/{api}/openapi.json", s.openAPI)
 	mux.HandleFunc("/data/{api}/xmla", s.xmla)
+	mux.HandleFunc("/data/{api}/xmla/refused", s.xmlaRefused)
 	mux.HandleFunc("/data/{api}/{resource}", s.data)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		problem(w, &Problem{Status: 404, Code: "not_found", Detail: "Nothing here: the data are at /data/{api}/{resource}"})
