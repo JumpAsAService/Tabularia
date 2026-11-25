@@ -1262,3 +1262,12 @@ table.data td.null { font-style: normal; } /* the ∅ in muted: upright, an ital
   html[data-page-enter] .app-shell > .content { animation: page-enter var(--dur-1) var(--ease-out); }
 }
 /* ══ end PAGE ENTRANCE ═══ */
+
+/* ══ EXPANDERS ══════════════════════════════════════════════════════════════════════
+   A `<details>` opens and closes over a moment (plugins/expand-motion.client.ts). While it
+   closes it is still open, with `data-closing`: its marker turns at once, not when it ends.
+   The curve is a soft ease-out: it starts with the click and lands without a tail, where
+   --ease-out would do most of the way in the first frames and read as a jump. */
+:root { --ease-expand: cubic-bezier(0.33, 1, 0.68, 1); }
+details[data-closing] > summary { list-style-type: disclosure-closed; }
+/* ══ end EXPANDERS ═══ */

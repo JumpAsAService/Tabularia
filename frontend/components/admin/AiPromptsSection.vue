@@ -3,10 +3,11 @@
 // text, which the administrators may rewrite or put back to the default, and under it the
 // context Tabularia adds at every request (date, engine, files, the interface's language),
 // shown with example values and not editable. The observer reads, and touches nothing.
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, LoaderCircle, Lock, MessageSquareText, RotateCcw } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { toggleExpand } from '~/composables/expandMotion'
 import { useAi, type AiAgent, type AiPrompt } from '~/composables/useAi'
 import { useFormat } from '~/composables/useFormat'
 
@@ -53,9 +54,17 @@ function isDirty(agent: AiAgent): boolean {
 
 const dirtyCount = computed(() => (prompts.value ?? []).filter((p) => isDirty(p.agent)).length)
 
-function toggle(agent: AiAgent) {
-  if (open.has(agent)) open.delete(agent)
-  else open.add(agent)
+// the row opens and closes over a moment, like every expander (composables/expandMotion.ts)
+function toggle(agent: AiAgent, event: MouseEvent) {
+  const set = async (on: boolean) => {
+    if (on) open.add(agent)
+    else open.delete(agent)
+    await nextTick()
+  }
+  const head = event.currentTarget as HTMLElement
+  const row = head.parentElement
+  if (!row || window.matchMedia('(prefers-reduced-motion: reduce)').matches) void set(!open.has(agent))
+  else void toggleExpand(row, head, open.has(agent), set)
 }
 
 async function save(p: AiPrompt) {
@@ -102,7 +111,7 @@ function tooLong(agent: AiAgent): boolean {
           class="agent-head"
           :aria-expanded="open.has(p.agent)"
           :aria-controls="`ai-prompt-${p.agent}`"
-          @click="toggle(p.agent)"
+          @click="toggle(p.agent, $event)"
         >
           <ChevronRight :size="14" class="chev" aria-hidden="true" />
           <span class="agent-name">
@@ -183,7 +192,7 @@ function tooLong(agent: AiAgent): boolean {
 .agent-head:active { transform: none; }
 .agent-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .chev { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
-.agent.open .chev { transform: rotate(90deg); }
+.agent.open:not([data-closing]) .chev { transform: rotate(90deg); }
 .agent-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .agent-name strong { font-size: 13px; font-weight: 600; }
 .tag { flex: none; font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }

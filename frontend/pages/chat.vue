@@ -482,7 +482,7 @@ watch(draft, async () => {
     <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="acceptConsent" />
     <div class="chat">
       <!-- ── catalog: what the assistant can read ───────────────── -->
-      <details class="rail" open>
+      <details class="rail" open data-expand-instant>
         <summary class="rail-head">
           <Database :size="14" />
           <span>{{ $t('chat.railTitle', { n: shown.length }) }}</span>
