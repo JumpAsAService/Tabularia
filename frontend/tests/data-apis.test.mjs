@@ -138,3 +138,20 @@ test('the page never sends the runtime with an edit: an administrator\'s, saved 
   const comp = readFileSync(new URL('../composables/useDataApis.ts', import.meta.url), 'utf8')
   assert.ok(/adminSetRuntime: .*\n.*`\/admin\/data-apis\/\$\{id\}\/runtime`, \{ method: 'PUT'/.test(comp))
 })
+
+test('the measures of a cube are grouped by folder in the model\'s order, the row count first', () => {
+  const measures = [{ name: 'Rows', folder: '' }, { name: 'amount', folder: 'amount' }, { name: 'amount (Average)', folder: 'amount' },
+    { name: 'qty', folder: 'qty' }, { name: 'qty (Max)', folder: 'qty' }]
+  assert.deepEqual(m.groupMeasures(measures).map((g) => [g.folder, g.measures.map((x) => x.name)]), [
+    ['', ['Rows']], ['amount', ['amount', 'amount (Average)']], ['qty', ['qty', 'qty (Max)']]])
+  assert.deepEqual(m.groupMeasures([]), [])
+})
+
+test('two resources with the same cube name, case apart, are told before the gateway refuses them', () => {
+  assert.equal(m.cubeNameOf({ name: 'orders' }), 'orders')
+  assert.equal(m.cubeNameOf({ name: 'orders', cube: '  Sales ' }), 'Sales')
+  assert.equal(m.cubeNameOf({ name: 'orders', cube: '  ' }), 'orders')
+  assert.deepEqual(m.cubeClashes([{ name: 'a' }, { name: 'b' }]), {})
+  assert.deepEqual(m.cubeClashes([{ name: 'customers' }, { name: 'orders', cube: 'CUSTOMERS' }]),
+    { customers: 'CUSTOMERS', orders: 'CUSTOMERS' })
+})

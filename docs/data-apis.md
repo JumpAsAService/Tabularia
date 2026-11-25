@@ -138,6 +138,10 @@ datasources as the pods type them once they read the data.
 - **The parameters** (`_columns`, `_sort`, `_limit`, `_cursor`, `_count`, `_format`, the
   filters), **the answers** (JSON, the cursor and the version, CSV and its headers, how values
   are written) and **every error** with its status and code, as below.
+- **Connect a spreadsheet** (only when the data API answers pivot tables, see
+  [Pivot tables](#pivot-tables-xmla)): the steps, the server address and the catalog with a
+  copy button, and for each cube its measures (by folder) and its dimensions with their
+  hierarchies, as the spreadsheet will show them.
 - **OpenAPI (JSON)** downloads the description, with the address filled in, to import into the
   CRM, Postman or a client generator.
 
@@ -282,6 +286,170 @@ never the key nor the query. The pod reads its environment, which Tabularia sets
 | `DATA_API__QUERY_SECONDS` | `30` | the longest a request may take |
 | `DATA_API__MANIFEST_MAX_AGE_SECONDS` | `900` | past this without a manifest the pod stops answering |
 
+## Pivot tables (XMLA)
+
+A spreadsheet can build a **pivot table on a data API, live**: drag a field, get the totals,
+with no file to export that is stale the day after. Pivot tables speak XMLA (XML for Analysis:
+SOAP over HTTP) and ask their questions in MDX. A data API can answer both ways: its resources
+stay what they are for the REST interface, and with XMLA on each one is also a **cube** a pivot
+table connects to, with the same pods, the same keys and the same administration. The design is
+in [the spec](specs/xmla.md).
+
+> **In short.** An administrator offers it for the installation (`dataApi.xmla.enabled`); whoever
+> manages a data API turns it on for that one; the spreadsheet connects to
+> `https://…/data/{address}/xmla` with a key as the password. Each resource is a cube, its
+> measures and dimensions worked out from its columns. The aggregation runs in the data API's
+> pods, on the copy of the datasource they already keep, and nothing is precomputed.
+
+### Enabling it
+
+- **The installation.** Off by default. The chart's value is `dataApi.xmla.enabled` (the
+  variable the gateway reads is `DATA_API__XMLA_ENABLED`, and it needs the data APIs on); the
+  caps and the other switch are in [Configuration](configuration.md) and shown, read only, in
+  Administration → Data APIs. While it is off the page does not offer the switch, and a data
+  API saved with XMLA on is refused (409, code `xmla_off`). A data API that had it on keeps its
+  setting, and its page says that the installation no longer offers it: switch it off in the
+  definition to save it again.
+- **A data API.** In its definition, **Answer pivot tables (XMLA)**. Next to each resource a
+  **cube caption** appears: what the spreadsheet lists the resource as (empty: the resource's
+  name). Two resources cannot be the same cube, case apart: the page says which two, next to
+  their captions, and the gateway refuses the save. `xmla` is a reserved resource name, as
+  `health` and `openapi`. A copy of a data API is made with XMLA off. Switching it on or off is
+  a version, like any change to the resources.
+- **Only published datasources are cubes**: a datasource is a cube when it is a resource of a
+  data API that has XMLA on. The resource's chosen columns are the cube's columns; its filters
+  are not parameters of the cube (a pivot filters by itself).
+
+### Connecting a spreadsheet
+
+The Documentation tab of a data API with XMLA on has a section **Connect a spreadsheet**, with
+these steps filled in with the real address, a copy button for the address and for the
+catalog, and the list of the cubes with their fields.
+
+1. In Excel: **Data → Get Data → From Database → From Analysis Services**.
+2. **Server name**: the address `https://…/data/{address}/xmla`.
+3. **Use the following user name and password**: any user name, and **a key of the data API as
+   the password**. (A key made for it is the cleanest: its name says what uses it.)
+4. Choose the **catalog** (the name of the data API) and the **cube** (a resource), and the
+   pivot table opens with the fields listed.
+
+Behind it:
+
+- The connection is **HTTPS only**. Over plain HTTP the key is refused (`403`, code
+  `https_required`) as seen by the gateway's trusted proxy; inside the cluster, plain HTTP
+  works with `Authorization: Bearer` or `X-API-Key`, as for the REST interface. The page warns
+  when the address it would show is not HTTPS.
+- A request with no key gets `401` with `WWW-Authenticate: Basic`, which is what makes the
+  spreadsheet ask. A key limited to some resources sees **those cubes only**, in every list.
+  Expiry, revocation, address limits and the per-minute rate apply as they do for the REST
+  interface, and a revoked key stops working within the pods' poll
+  (`DATA_API__POLL_SECONDS`). A pivot gesture sends several small requests in a burst: if the
+  spreadsheet is throttled (`429`), raise the key's rate.
+- The authority is the creator's, checked again at every manifest: if they lose the right to
+  read a datasource, its cube leaves the lists.
+- A pod answers `404 xmla_off` to a request of a data API that has the interface off, but only
+  after the key is checked.
+
+### The model: what the columns become
+
+Nobody writes the model. It is worked out from the resource's columns and their types, the same
+way every time, by the same code the page uses to list the fields (so the page and the pods
+cannot say different things).
+
+| The column is | It becomes |
+|---|---|
+| any | a **row count** measure of the cube, `Rows` |
+| decimal, floating point | measures: **sum** (the column's own name), `(Average)`, `(Min)`, `(Max)`, gathered in a folder named as the column |
+| whole number | the same four measures, **and** a dimension (a whole number is as often a code or a year as an amount) |
+| text, true/false, UUID, time | a dimension with one level |
+| date, date and time | a dimension with a hierarchy **Year → Quarter → Month → Day**, and the plain value as a second hierarchy; a time zone is read in UTC |
+| list, structure, map, binary, interval | left out of the cube (nothing sensible to group by or add up); the Documentation tab lists them |
+
+Every hierarchy has an **All** member. A null is a member of its own, written as the app writes
+a null. The measures are named as the columns (`amount`, `amount (Average)`, `amount (Min)`,
+`amount (Max)`) and a dimension as its column, so a pivot built today opens tomorrow: **a name
+changes only when the column does**. Names are compared without regard to case: when two columns
+would give the same name the first keeps it and the next one becomes `name (2)`, and a column
+called `Rows`, `Measures`, `All`, `(All)` or `(null)` is the one renamed. The sum of a whole
+number is a whole number, of a decimal a decimal with its decimals, and an average a floating
+point number.
+
+### Limits
+
+- **The subset of MDX.** What a pivot table writes: `SELECT` with columns, rows and pages,
+  `NON EMPTY`, a subselect (how a filter arrives), sets and tuples with `CrossJoin`,
+  `Hierarchize`, `DrilldownLevel`, `DrilldownMember`, `Except`, `Distinct`, `Head`, `TopCount`,
+  `BottomCount`, `Filter` on a measure and `Order`, and members by `.Members`, `.Children`,
+  `.DefaultMember` or their unique name. **No calculated fields and no named sets**, no DAX.
+  A statement outside the subset is answered with a fault that says which construct was not
+  understood; the cube is never guessed at.
+- **The caps** (the administrator's): cells in one answer, tuples on one axis, members in one
+  answer to a field list (a level with more is paged, not sent), and the pod's query timeout
+  and turns. Past a cap the answer is a fault that says which cap and its value: narrow the
+  pivot (fewer fields on the axes, a filter) or ask the administrator.
+- **The ceiling is the pod**: one machine's CPUs and disk, shared by the REST calls and the
+  pivots of that data API. An administrator raises it with the runtime
+  ([The runtime](#the-runtime)). A datasource too large for a pod is not served in this version.
+- The aggregation reads the pod's local copy; nothing travels to the source databases.
+
+### When the datasource is refreshed
+
+A refresh reaches the pods within the poll, as for the REST interface: they download and
+prepare the new data and switch at once, so a pivot sees the new numbers **at its next
+refresh** (Data → Refresh All), never half of each. If the resource's columns change, the
+cube changes with them: a field whose column is gone no longer exists, and a pivot that used it
+answers with an error until the field is removed from it. While a pod is still preparing a
+resource, the lists of cubes answer a fault that says it is loading, and work again when it is
+ready.
+
+### What to write down when something is wrong
+
+Every refusal is a SOAP fault with a message that names what was refused (a rowset, a construct,
+a cap, a key). Note **the message exactly as the spreadsheet shows it**, what was dragged into
+the pivot, and the time. If the administrator keeps the statements the pod refused
+(`dataApi.xmla.keepRefused`, off by default because an MDX statement carries member names, which
+are values of the data), the statement is kept for a day for whoever manages the data API: say
+so when you report.
+
+### Checklist for the trial with the real client (Windows)
+
+The automatic tests cover the protocol, the model and the answers on small tables; what they
+cannot cover is the real spreadsheet. This is what the owner tries on Windows with Excel, on a
+data API with XMLA on, over HTTPS, and a key of its own. Mark each step, and for any that fails
+write down the message and the statement as above.
+
+1. **Connect.** From Analysis Services with the address, any user name and the key as the
+   password: it accepts them and lists the catalog and the cubes (one per resource, named as
+   their captions). Try a wrong key: it must ask again, not connect.
+2. **Fields.** Open the cube: the measures appear in folders (one per numeric column, and the
+   row count), the dimensions with their hierarchies, a date with Year, Quarter, Month, Day.
+3. **One field on the rows**, with one measure: the values and the grand total are right
+   against the datasource (compare with a SQL script or the REST interface's `_count`).
+4. **Two fields crossed** on the rows: the groups and their subtotals.
+5. **A field on the columns**, with one on the rows: the cross table; an empty combination is
+   left out or shows as empty, as the spreadsheet asks.
+6. **Several measures** at once (sum, average, min, max of one column, and the row count).
+7. **A filter** (a field in the filter area, one or several values), and a **slicer** if the
+   spreadsheet offers one: the numbers change as the filter does.
+8. **Expand a year down to its days**: Year → Quarter → Month → Day with the plus signs, and
+   collapse it back.
+9. **Totals**: row and column grand totals, subtotals of each level, and that they equal the
+   sum of what is shown.
+10. **Nulls**: a column with nulls shows a member written as a null, with its own numbers, not
+    merged with an empty text or a zero.
+11. **Refresh after a datasource refresh**: refresh the datasource (or run the flow that
+    writes it), wait the poll, then Refresh All in the spreadsheet: the new numbers, and no
+    error in between.
+12. **A revoked key**: revoke the key in the data API's page; within a minute, Refresh All is
+    refused with a message about the credentials, not a silent old answer.
+13. **A key limited to one cube**: make a key for one resource only; the connection lists that
+    cube alone, and the others are not in any list.
+14. **Something outside the subset** (for instance a calculated field): the message names the
+    construct that was not understood; write it down with the statement if it was kept.
+
+Note, for each step, **Excel's version** and its language, since the field lists are written
+in that language.
+
 ## On the cluster
 
 The orchestrator keeps the data APIs in line with the database every 30 seconds, in the
@@ -419,6 +587,13 @@ Data APIs shows them. The runtime of each data API is not among them: an adminis
 | `DATA_API__POLL_SECONDS` | `20` | how often the pods ask for their manifest: a revoked key or a refresh reaches them within it |
 | `DATA_API__USAGE_RETENTION_DAYS` | `30` | how long the requests per key and minute are kept for the pages |
 | `DATA_API__MAX_DISK` | `20Gi` | the disk of one pod for its data files |
+
+The XMLA interface ([Pivot tables](#pivot-tables-xmla)) has its own, shown read only in
+Administration → Data APIs next to these: whether it is offered (`DATA_API__XMLA_ENABLED`), the
+most cells in one answer (`DATA_API__XMLA_MAX_CELLS`), tuples on one axis
+(`DATA_API__XMLA_MAX_TUPLES`), members in one answer to a field list
+(`DATA_API__XMLA_MAX_MEMBERS`), and whether the statements a pod refused are kept for a day
+(`DATA_API__XMLA_KEEP_REFUSED`). Their defaults are in [Configuration](configuration.md).
 
 How the orchestrator runs the pods (their image, namespace, Ingress and NetworkPolicy) is set
 by the chart from the `dataApi` values and `image.dataApi`: see

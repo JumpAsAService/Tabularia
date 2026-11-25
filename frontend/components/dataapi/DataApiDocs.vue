@@ -7,10 +7,10 @@
 // and no pod are needed, a draft is documented too.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BookOpen, Check, Copy, Download, KeyRound, LoaderCircle } from 'lucide-vue-next'
+import { BookOpen, Check, Copy, Download, KeyRound, LoaderCircle, Table2 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import {
-  curlLine, dataApiOrigin, filterParam, openapiForDownload, sampleValue, useDataApis,
+  curlLine, dataApiOrigin, filterParam, groupMeasures, openapiForDownload, sampleValue, useDataApis,
   type DataApiDoc, type DataApiKind, type DataApiOperator, type DataApiState,
 } from '~/composables/useDataApis'
 
@@ -38,6 +38,9 @@ watch(() => [props.apiId, props.version, props.state], load)
 
 const origin = computed(() => (doc.value ? dataApiOrigin(doc.value.base_url, doc.value.host, location) : ''))
 const base = computed(() => (doc.value ? origin.value + doc.value.path : ''))
+// pivot tables (XMLA): the address after the same origin as the REST one
+const xmlaAddress = computed(() => (doc.value?.xmla ? origin.value + doc.value.xmla.path : ''))
+const xmlaPlain = computed(() => xmlaAddress.value.startsWith('http:'))
 const first = computed(() => doc.value?.resources[0] ?? null)
 
 const kindLabel = (k: DataApiKind | '') => t(`dataApi.kind_${k || 'unknown'}`)
@@ -154,6 +157,71 @@ function download() {
         </template>
         <p v-else class="muted small">{{ $t('dataApi.docNoResources') }}</p>
       </div>
+
+      <section v-if="doc.xmla" class="card" data-test="doc-xmla" :aria-label="$t('dataApi.xmlaDocTitle')">
+        <h2><Table2 :size="15" /> {{ $t('dataApi.xmlaDocTitle') }}</h2>
+        <p class="muted small help">{{ $t('dataApi.xmlaDocLead') }}</p>
+        <ol class="plain small steps">
+          <li>{{ $t('dataApi.xmlaStepMenu') }}</li>
+          <li>{{ $t('dataApi.xmlaStepServer') }}</li>
+          <li>{{ $t('dataApi.xmlaStepLogin') }}</li>
+          <li>{{ $t('dataApi.xmlaStepCube') }}</li>
+        </ol>
+        <p class="note small" role="note">{{ $t(xmlaPlain ? 'dataApi.xmlaHttpsPlain' : 'dataApi.xmlaHttps') }}</p>
+        <div class="example">
+          <span class="muted small">{{ $t('dataApi.xmlaServer') }}</span>
+          <div class="code">
+            <pre data-test="doc-xmla-address">{{ xmlaAddress }}</pre>
+            <button type="button" class="mini copy" :aria-label="$t('dataApi.xmlaCopyAddress')" :title="$t('dataApi.xmlaCopyAddress')"
+                    @click="copy('xmla-address', xmlaAddress, $event)">
+              <Check v-if="copied === 'xmla-address'" :size="13" /><Copy v-else :size="13" />
+            </button>
+          </div>
+        </div>
+        <div class="example">
+          <span class="muted small">{{ $t('dataApi.xmlaCatalog') }}</span>
+          <div class="code">
+            <pre data-test="doc-xmla-catalog">{{ doc.xmla.catalog }}</pre>
+            <button type="button" class="mini copy" :aria-label="$t('dataApi.xmlaCopyCatalog')" :title="$t('dataApi.xmlaCopyCatalog')"
+                    @click="copy('xmla-catalog', doc.xmla.catalog, $event)">
+              <Check v-if="copied === 'xmla-catalog'" :size="13" /><Copy v-else :size="13" />
+            </button>
+          </div>
+        </div>
+        <dl class="facts small">
+          <div><dt>{{ $t('dataApi.xmlaUser') }}</dt><dd>{{ $t('dataApi.xmlaUserText') }}</dd></div>
+          <div><dt><KeyRound :size="12" /> {{ $t('dataApi.xmlaPassword') }}</dt><dd>{{ $t('dataApi.xmlaPasswordText') }}</dd></div>
+        </dl>
+        <p v-if="!doc.xmla.cubes.length" class="muted small">{{ $t('dataApi.docNoResources') }}</p>
+        <div v-for="c in doc.xmla.cubes" :key="c.resource" class="cube" :data-cube="c.resource">
+          <h3>{{ $t('dataApi.xmlaCube') }} <code class="rpath">{{ c.name }}</code></h3>
+          <div class="cubecols">
+            <div>
+              <h4>{{ $t('dataApi.xmlaMeasures') }}</h4>
+              <ul class="plain small">
+                <li v-for="g in groupMeasures(c.measures)" :key="g.folder">
+                  <strong>{{ g.folder || $t('dataApi.xmlaRowsFolder') }}</strong>
+                  <span class="muted"> · {{ g.measures.map((m) => m.name).join(', ') }}</span>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4>{{ $t('dataApi.xmlaDimensions') }}</h4>
+              <ul class="plain small">
+                <li v-for="d in c.dimensions" :key="d.name">
+                  <strong>{{ d.name }}</strong>
+                  <ul class="plain sub">
+                    <li v-for="h in d.hierarchies" :key="h.name" class="muted">
+                      <template v-if="d.hierarchies.length > 1">{{ h.name }}: </template>{{ h.levels.join(' › ') }}
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p v-if="c.skipped.length" class="muted small help">{{ $t('dataApi.xmlaSkipped', { columns: c.skipped.join(', ') }) }}</p>
+        </div>
+      </section>
 
       <section v-for="r in doc.resources" :key="r.name" class="card res" :data-resource="r.name">
         <h2><span class="verb">GET</span> <code class="rpath">{{ r.path }}</code></h2>
@@ -273,6 +341,12 @@ function download() {
 .answer pre { margin: 6px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border-soft);
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; line-height: 1.5; }
+.steps { list-style: decimal; }
+.cube { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cube h3 { margin: 4px 0 0; }
+.cube h4 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cubecols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; min-width: 0; }
+.sub { padding-left: 14px; margin-top: 2px; }
 .tablewrap { overflow-x: auto; }
 .errors td.s4 { color: var(--warning); }
 .errors td.s5 { color: var(--danger); }

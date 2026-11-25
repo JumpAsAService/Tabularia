@@ -40,6 +40,8 @@ export interface DataApiResource {
   /** columns among the filterable ones, «-» in front for descending */
   default_sort: string[]
   max_page: number
+  /** the cube's caption for pivot tables (XMLA); '' or absent: the resource's name */
+  cube?: string
 }
 
 export interface DataApiPerson { id: number; email: string; full_name: string }
@@ -71,13 +73,25 @@ export interface DataApiResourceOut extends DataApiResource {
 
 export interface DataApiDetail extends DataApi {
   runtime: DataApiRuntime
+  /** whether it also answers pivot tables (docs/specs/xmla.md) */
+  xmla: { enabled: boolean }
   resource_list: DataApiResourceOut[]
   /** why it would not answer on its creator's authority now; '' when nothing stops it */
   suspended: '' | 'creator_inactive' | 'creator_rights' | 'datasource_rights'
 }
 
+/** The XMLA interface of the installation: whether it is offered and, when it is, the caps. */
+export interface DataApiXmlaLimits {
+  enabled: boolean
+  max_cells?: number
+  max_tuples?: number
+  max_members?: number
+  keep_refused?: boolean
+}
+
 export interface DataApiLimits {
   enabled: boolean
+  xmla?: DataApiXmlaLimits
   /** why not: 'kubernetes' (Docker Compose) or 'disabled' (DATA_API__ENABLED) */
   reason: '' | 'kubernetes' | 'disabled'
   count?: number
@@ -133,6 +147,7 @@ export interface DataApiSave {
   description?: string
   project_id?: number
   resources?: DataApiResource[]
+  xmla?: { enabled: boolean }
 }
 
 /** One pod of a data API, as the cluster sees it and as it reports itself. */
@@ -208,6 +223,26 @@ export interface DataApiDoc {
   max_sort_keys: number
   errors: { status: number; code: string; meaning: string }[]
   openapi: Record<string, any>
+  /** present only when this data API answers pivot tables and the installation offers it */
+  xmla?: DataApiXmlaDoc
+}
+
+export type DataApiAggregation = 'rows' | 'sum' | 'average' | 'min' | 'max'
+
+/** How a spreadsheet connects and what it will list: the model the pods answer Discover with. */
+export interface DataApiXmlaDoc {
+  /** /data/{slug}/xmla, after the same origin as `path` */
+  path: string
+  /** the data API's name */
+  catalog: string
+  cubes: {
+    name: string
+    resource: string
+    measures: { name: string; aggregation: DataApiAggregation; folder: string; column: string }[]
+    dimensions: { name: string; column: string; kind: DataApiKind; hierarchies: { name: string; levels: string[] }[] }[]
+    /** columns left out of the cube (lists, structures, binaries) */
+    skipped: string[]
+  }[]
 }
 
 /** A data API as the administration lists it. */
@@ -235,6 +270,7 @@ export interface DataApiAdminRow {
 }
 export interface DataApiAdminList {
   enabled: boolean
+  xmla?: DataApiXmlaLimits
   reason: '' | 'kubernetes' | 'disabled'
   max_apis: number
   max_total_replicas: number
@@ -345,6 +381,37 @@ export function curlLine(url: string, query: Record<string, string> = {}, header
 export function openapiForDownload(doc: DataApiDoc, origin: string): Record<string, any> {
   const out = JSON.parse(JSON.stringify(doc.openapi))
   if (!doc.base_url) out.servers = [{ url: origin }]
+  return out
+}
+
+/** The measures of a cube as the client groups them: by display folder, in the order the model
+ *  gives them (the row count, which has no folder, first). */
+export function groupMeasures<T extends { folder: string }>(measures: T[]): { folder: string; measures: T[] }[] {
+  const out: { folder: string; measures: T[] }[] = []
+  for (const m of measures) {
+    let g = out.find((x) => x.folder === m.folder)
+    if (!g) out.push((g = { folder: m.folder, measures: [] }))
+    g.measures.push(m)
+  }
+  return out
+}
+
+/** The cube a resource is called: its caption, or its name. */
+export const cubeNameOf = (r: { name: string; cube?: string }) => (r.cube ?? '').trim() || r.name
+
+/** The resources that would be the same cube (names compare without regard to case, as MDX does):
+ *  resource name → the name of the other one. The gateway refuses these at save when XMLA is on. */
+export function cubeClashes(resources: { name: string; cube?: string }[]): Record<string, string> {
+  const seen = new Map<string, string>()
+  const out: Record<string, string> = {}
+  for (const r of resources) {
+    const key = cubeNameOf(r).toLowerCase()
+    const other = seen.get(key)
+    if (other !== undefined) {
+      out[r.name] = cubeNameOf(r)
+      out[other] = cubeNameOf(r)
+    } else seen.set(key, r.name)
+  }
   return out
 }
 

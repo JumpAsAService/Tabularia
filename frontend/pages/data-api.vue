@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   BookOpen, Braces, ChevronDown, ChevronRight, CircleAlert, Cpu, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
-  Save, Server, SlidersHorizontal, Trash2, X,
+  Save, Server, SlidersHorizontal, Table2, Trash2, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -23,7 +23,7 @@ import { versionNote } from '~/composables/useSavedScripts'
 import { useSqlScripts, type SqlCatalogItem } from '~/composables/useSqlScripts'
 import { dayAfter, endOfDay } from '~/composables/shareLinks'
 import {
-  cidrsOf, dataApiOrigin, keyAnswers, newResource, operatorsFor, runtimeProblem, slugOf, tidyResource, tidyRuntime, useDataApis, validLabel,
+  cidrsOf, cubeClashes, dataApiOrigin, keyAnswers, newResource, operatorsFor, runtimeProblem, slugOf, tidyResource, tidyRuntime, useDataApis, validLabel,
   type DataApiDetail, type DataApiKey, type DataApiLimits, type DataApiOperator, type DataApiResource, type DataApiRuntime,
   type DataApiVersion,
 } from '~/composables/useDataApis'
@@ -57,15 +57,30 @@ const slugTouched = ref(false)
 const description = ref('')
 const resources = ref<DataApiResource[]>([])
 const runtime = ref<DataApiRuntime>({ autoscale: false, replicas: 1, min_replicas: 1, max_replicas: 1, cpu: '250m', memory: '256Mi' })
+// whether it also answers pivot tables (XMLA); the cube captions are the resources' `cube`
+const xmlaEnabled = ref(false)
 const savedAs = ref('')
 // the runtime is not the page's to save (an administrator's, saved on its own): not in it
 const snapshot = () => JSON.stringify([name.value.trim(), slug.value.trim(), description.value.trim(),
-  resources.value.map(tidyResource)])
+  resources.value.map(tidyResource), xmlaEnabled.value])
 const dirty = computed(() => snapshot() !== savedAs.value)
 
 const canEdit = computed(() => (detail.value ? detail.value.can_manage : true))
 const folderPath = computed(() => folderPaths.pathOf(projectId.value) ?? '')
 const off = computed(() => !!limits.value && !limits.value.enabled)
+// XMLA: the switch is there when the installation offers it, and for a data API that has it on
+// even when the installation no longer does (then it can only be switched off)
+const xmlaOffered = computed(() => !!limits.value?.xmla?.enabled)
+const xmlaShown = computed(() => xmlaOffered.value || !!detail.value?.xmla?.enabled)
+const xmlaGone = computed(() => xmlaEnabled.value && !xmlaOffered.value)
+// the cubes that would share a name (known as typed), and what the gateway said of one
+const clashes = computed(() => (xmlaEnabled.value ? cubeClashes(resources.value) : {}))
+const cubeServerError = ref('')
+function cubeProblem(r: DataApiResource): string {
+  if (!xmlaEnabled.value) return ''
+  if (clashes.value[r.name]) return t('dataApi.cubeTwice', { name: clashes.value[r.name] })
+  return cubeServerError.value.includes(`«${r.name}»`) ? cubeServerError.value : ''
+}
 
 // the page's tabs: the definition, the pods and their traffic, the documentation (a saved data
 // API only); the tab is in the address, so a link opens on it
@@ -195,6 +210,8 @@ const problem = computed(() => {
     names.add(r.name)
     if (!r.columns.length) return t('dataApi.resourceNoColumns', { name: r.name })
   }
+  if (xmlaGone.value) return t('dataApi.xmlaGone')
+  for (const r of resources.value) if (clashes.value[r.name]) return t('dataApi.cubeTwice', { name: clashes.value[r.name] })
   return ''
 })
 
@@ -209,7 +226,9 @@ function apply(d: DataApiDetail) {
   description.value = d.description
   resources.value = d.resource_list.map((r) => ({ name: r.name, source: { kind: 'datasource', id: r.source.id },
     columns: [...r.columns], filters: r.filters.map((f) => ({ column: f.column, operators: [...f.operators] })),
-    default_sort: [...r.default_sort], max_page: r.max_page }))
+    default_sort: [...r.default_sort], max_page: r.max_page, cube: r.cube ?? '' }))
+  xmlaEnabled.value = !!d.xmla?.enabled
+  cubeServerError.value = ''
   runtime.value = { ...d.runtime }
   runtimeDraft.value = null
   savedAs.value = snapshot()
@@ -245,7 +264,8 @@ async function save() {
   saving.value = true
   // never the runtime: an administrator may have changed it since the page opened
   const body = { name: name.value.trim(), slug: slug.value.trim(), description: description.value.trim(),
-    resources: resources.value.map(tidyResource) }
+    resources: resources.value.map(tidyResource), xmla: { enabled: xmlaEnabled.value } }
+  cubeServerError.value = ''
   try {
     if (apiId.value != null) {
       apply(await api.update(apiId.value, body))
@@ -259,7 +279,10 @@ async function save() {
       toast.success(t('dataApi.created', { name: body.name }))
     }
   } catch (e) {
-    toast.error(errMessage(e))
+    const said = errMessage(e)
+    // the gateway names the two resources that are both the same cube: shown beside their fields too
+    if (/cube/i.test(said)) cubeServerError.value = said
+    toast.error(said)
   } finally {
     saving.value = false
   }
@@ -519,6 +542,19 @@ watch(() => route.query.id, (id) => {
             </label>
           </div>
 
+          <div v-if="xmlaShown" class="card" data-xmla>
+            <h2><Table2 :size="14" /> {{ $t('dataApi.xmlaTitle') }}</h2>
+            <label class="check">
+              <input v-model="xmlaEnabled" type="checkbox" role="switch" data-xmla="switch"
+                     :disabled="!canEdit || (!xmlaOffered && !xmlaEnabled)" aria-describedby="xmla-help" />
+              {{ $t('dataApi.xmlaSwitch') }}
+            </label>
+            <p id="xmla-help" class="muted small help">{{ $t('dataApi.xmlaHelp') }}</p>
+            <p v-if="xmlaGone" class="note warn small" role="status" data-xmla="gone">
+              <CircleAlert :size="14" /> {{ $t('dataApi.xmlaGone') }}
+            </p>
+          </div>
+
           <div class="card">
             <h2>{{ $t('dataApi.resources') }} <span class="muted small">{{ resources.length }}</span></h2>
             <p class="muted small help">{{ $t('dataApi.resourcesHelp') }}</p>
@@ -550,6 +586,14 @@ watch(() => route.query.id, (id) => {
                     <input v-else type="text" readonly :value="dsLabel(r)" />
                   </label>
                 </div>
+                <label v-if="xmlaEnabled" class="field" data-xmla="cube">
+                  <span>{{ $t('dataApi.cubeLabel') }}</span>
+                  <input v-model="r.cube" type="text" maxlength="200" :placeholder="r.name" :readonly="!canEdit || foreign(r)"
+                         :aria-invalid="!!cubeProblem(r)" :aria-describedby="`cube-help-${i}`" @input="cubeServerError = ''" />
+                  <span :id="`cube-help-${i}`" class="small" :class="cubeProblem(r) ? 'err' : 'muted'" :role="cubeProblem(r) ? 'alert' : undefined">
+                    {{ cubeProblem(r) || $t('dataApi.cubeHelp') }}
+                  </span>
+                </label>
                 <table class="cols">
                   <thead>
                     <tr>

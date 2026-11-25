@@ -12,6 +12,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapis"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/xmlamodel"
 )
 
 // A data API's documentation, its place in Administration and in the lineage, on a real
@@ -280,3 +281,84 @@ func TestDataAPIInTheLineage(t *testing.T) {
 }
 
 func mustJSON(v any) string { raw, _ := json.Marshal(v); return string(raw) }
+
+func TestDecimalOfPolars(t *testing.T) {
+	for typ, want := range map[string][2]int{"Decimal(precision=12, scale=2)": {12, 2}, "Decimal(10, 0)": {10, 0},
+		"Decimal(precision=38, scale=10)": {38, 10}, "Decimal": {0, 0}, "Int64": {0, 0}} {
+		if w, s := decimalOfPolars(typ); [2]int{w, s} != want {
+			t.Errorf("%s: %d, %d", typ, w, s)
+		}
+	}
+}
+
+// With XMLA on, the documentation carries the endpoint, the catalog and each resource's cube, the
+// model the pods answer Discover with (xmlamodel.Build); with it off, or off in the installation,
+// nothing of it.
+func TestDataAPIDocumentationXMLA(t *testing.T) {
+	f := newDapiFixture(t)
+	f.xmlaOn()
+	orders := f.resource("orders", f.orders)
+	orders["cube"] = "Orders of the CRM"
+	orders["columns"] = []string{"id", "name", "score", "signup"}
+	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "Pivot docs", "slug": f.slug("pvd"), "xmla": map[string]any{"enabled": true},
+		"resources": []any{f.resource("customers", f.customers), orders}}, http.StatusCreated)
+	path := map[string]string{"api_id": dapiID(a.ID)}
+	type docOut struct {
+		Xmla *dataAPIDocXmla `json:"xmla"`
+	}
+	doc := decode[docOut](t, f.call(f.viewer, dataAPIDocumentation, http.MethodGet, nil, path))
+	if doc.Xmla == nil || doc.Xmla.Path != "/data/"+a.Slug+"/xmla" || doc.Xmla.Catalog != "Pivot docs" || len(doc.Xmla.Cubes) != 2 {
+		t.Fatalf("%+v", doc.Xmla)
+	}
+	c := doc.Xmla.Cubes[0]
+	if c.Name != "customers" || c.Resource != "customers" {
+		t.Errorf("%+v", c)
+	}
+	// id is an integer: a dimension and four measures; name and region text; signup a date
+	var measures, dims []string
+	for _, m := range c.Measures {
+		measures = append(measures, m.Name+"/"+m.Agg+"/"+m.Folder)
+	}
+	for _, d := range c.Dims {
+		dims = append(dims, d.Name)
+	}
+	if !reflect.DeepEqual(measures, []string{"Rows/rows/", "id/sum/id", "id (Average)/average/id", "id (Min)/min/id", "id (Max)/max/id"}) ||
+		!reflect.DeepEqual(dims, []string{"id", "name", "region", "signup"}) {
+		t.Errorf("%v %v", measures, dims)
+	}
+	signup := c.Dims[3]
+	if len(signup.Hierarchies) != 2 || signup.Hierarchies[0].Name != "Year-Quarter-Month-Day" ||
+		!reflect.DeepEqual(signup.Hierarchies[0].Levels, []string{"Year", "Quarter", "Month", "Day"}) ||
+		!reflect.DeepEqual(signup.Hierarchies[1].Levels, []string{"signup"}) || signup.Kind != "date" {
+		t.Errorf("%+v", signup)
+	}
+	// the caption is the cube's name; a float is a measure only
+	o := doc.Xmla.Cubes[1]
+	if o.Name != "Orders of the CRM" || o.Resource != "orders" || len(o.Measures) != 1+4*2 || len(o.Dims) != 3 {
+		t.Errorf("%+v", o)
+	}
+	// the same cube the pods work out from the same columns
+	want := xmlamodel.Build("customers", "customers", []xmlamodel.Column{{Name: "id", Kind: "integer"}, {Name: "name", Kind: "string"},
+		{Name: "region", Kind: "string"}, {Name: "signup", Kind: "date"}})
+	if len(want.Measures) != len(c.Measures) || len(want.Dimensions) != len(c.Dims) {
+		t.Errorf("not the pods' model")
+	}
+	// a public host does not move the path: the page puts the origin in front, as for the REST address
+	f.d.Config.DataAPI.Pods.PublicBaseURL = "https://api.example.com"
+	defer func() { f.d.Config.DataAPI.Pods.PublicBaseURL = "" }()
+	if doc = decode[docOut](t, f.call(f.viewer, dataAPIDocumentation, http.MethodGet, nil, path)); doc.Xmla == nil || doc.Xmla.Path != "/data/"+a.Slug+"/xmla" {
+		t.Errorf("%+v", doc.Xmla)
+	}
+	// off in the installation: nothing of it, though the version still says on
+	f.d.Config.DataAPI.XMLA.Enabled = false
+	if w := f.call(f.viewer, dataAPIDocumentation, http.MethodGet, nil, path); strings.Contains(w.Body.String(), `"xmla"`) {
+		t.Errorf("%s", w.Body.String())
+	}
+	// a data API with it off
+	f.xmlaOn()
+	b, _ := f.create(f.creator, f.folder, map[string]any{"name": "No pivot", "slug": f.slug("npv"),
+		"resources": []any{f.resource("customers", f.customers)}}, http.StatusCreated)
+	if w := f.call(f.viewer, dataAPIDocumentation, http.MethodGet, nil, map[string]string{"api_id": dapiID(b.ID)}); strings.Contains(w.Body.String(), `"xmla"`) {
+		t.Errorf("%s", w.Body.String())
+	}
+}

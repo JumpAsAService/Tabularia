@@ -138,6 +138,15 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
                                                   maxMemory: list.runtime_limits.max_memory }) }}</dd></div>
         <div v-if="limits?.enabled"><dt>{{ $t('dataApiAdmin.capKeys') }}</dt>
           <dd>{{ $t('dataApiAdmin.capKeysValue', { days: limits.key_max_days, rate: fmt.count(limits.key_default_rate ?? 0) }) }}</dd></div>
+        <div v-if="list.xmla" data-xmla="state"><dt>{{ $t('dataApiAdmin.capXmla') }}</dt>
+          <dd>{{ $t(list.xmla.enabled ? 'dataApiAdmin.xmlaOffered' : 'dataApiAdmin.xmlaNotOffered') }}</dd></div>
+        <template v-if="list.xmla?.enabled">
+          <div data-xmla="cells"><dt>{{ $t('dataApiAdmin.capXmlaCells') }}</dt><dd>{{ fmt.count(list.xmla.max_cells ?? 0) }}</dd></div>
+          <div data-xmla="tuples"><dt>{{ $t('dataApiAdmin.capXmlaTuples') }}</dt><dd>{{ fmt.count(list.xmla.max_tuples ?? 0) }}</dd></div>
+          <div data-xmla="members"><dt>{{ $t('dataApiAdmin.capXmlaMembers') }}</dt><dd>{{ fmt.count(list.xmla.max_members ?? 0) }}</dd></div>
+          <div data-xmla="refused"><dt>{{ $t('dataApiAdmin.capXmlaRefused') }}</dt>
+            <dd>{{ $t(list.xmla.keep_refused ? 'dataApiAdmin.xmlaRefusedKept' : 'dataApiAdmin.xmlaRefusedNotKept') }}</dd></div>
+        </template>
         <div><dt>{{ $t('dataApiAdmin.address') }}</dt><dd class="mono">{{ origin }}/data/…</dd></div>
       </dl>
       <p class="hint">{{ $t('dataApiAdmin.capsHint') }}</p>
