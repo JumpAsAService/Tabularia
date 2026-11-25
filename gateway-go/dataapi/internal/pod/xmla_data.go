@@ -233,8 +233,10 @@ func (d *duckData) Member(ctx context.Context, cube *xmlamodel.Cube, m xmlamodel
 		rows, children, err := one("SELECT count(*), count(DISTINCT "+child+") FROM serve WHERE "+cond, args...)
 		return children, rows > 0, err
 	}
+	// by the column's text, the way Execute compares a key (xmlamodel.KeyComparedAsText); a plain
+	// text column needs no cast
 	cond := "CAST(" + n + " AS VARCHAR) = ?"
-	if c, ok := t.Column(h.Dimension.Column); ok && c.Type == "VARCHAR" {
+	if c, ok := t.Column(h.Dimension.Column); ok && c.Type == "VARCHAR" && xmlamodel.KeyComparedAsText(h.Dimension.Kind) {
 		cond = n + " = ?"
 	}
 	found, _, err := one("SELECT CAST(EXISTS(SELECT 1 FROM serve WHERE "+cond+") AS INTEGER), 0", m.Key)

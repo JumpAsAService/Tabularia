@@ -24,6 +24,11 @@ import (
 type ExecLimits struct {
 	// the most cells in an answer (DATA_API__XMLA_MAX_CELLS) and tuples on one axis (…_MAX_TUPLES)
 	MaxCells, MaxTuples int
+	// the seconds a statement may take, for the fault that names them when they pass
+	Timeout time.Duration
+	// the most members one planning query names (500 when zero) and the most bytes of member keys
+	// a statement's planning reads (DefaultMaxKeyBytes when zero); a test makes them small
+	MemberBatch, MaxKeyBytes int
 }
 
 // Source is what Execute computes on: the dialect of the engine and the table of the cube's data.
@@ -33,6 +38,9 @@ type Source struct {
 	Open    func(cube *xmlamodel.Cube) (Runner, error)
 	Dialect Dialect
 	Table   string
+	// Classify names the kind of an error of the engine (never its text, which may quote values of
+	// the data); the class goes to the log with the fault's. Optional.
+	Classify func(error) string
 }
 
 var seq atomic.Uint64
@@ -128,7 +136,7 @@ func cubeOf(st *mdx.Statement, cat *Catalog) (*xmlamodel.Cube, error) {
 // Execute plans and computes a statement. A refusal is a *Fault with Refused set; the caller may
 // keep the statement. On success the Result must be written and closed; on a failure nothing is
 // left behind.
-func Execute(ctx context.Context, src Source, req *Request, cat *Catalog, lim ExecLimits) (*Result, error) {
+func Execute(ctx context.Context, src Source, req *Request, cat *Catalog, lim ExecLimits) (res *Result, err error) {
 	props, err := checkExecProps(req, cat)
 	if err != nil {
 		return nil, err
@@ -147,36 +155,83 @@ func Execute(ctx context.Context, src Source, req *Request, cat *Catalog, lim Ex
 	if lim.MaxTuples <= 0 {
 		lim.MaxTuples = 10_000
 	}
+	if props.content == "Schema" || props.content == "None" {
+		// the answer holds no data: nothing is planned against the table, nothing computed
+		return &Result{src: src, catalog: cat.Name, props: props, name: fmt.Sprintf("xmla_%d", seq.Add(1))}, nil
+	}
+	if lim.MemberBatch <= 0 {
+		lim.MemberBatch = defaultMemberBatch
+	}
+	if lim.MaxKeyBytes <= 0 {
+		lim.MaxKeyBytes = DefaultMaxKeyBytes
+	}
 	run, err := src.Open(cube)
 	if err != nil {
-		return nil, dataFault(ctx, err)
+		return nil, dataFault(ctx, err, src, lim)
 	}
-	p := &planner{ctx: ctx, run: run, g: &gen{d: src.Dialect, table: src.Table}, cube: cube, max: lim.MaxTuples}
+	res = &Result{src: src, run: run, catalog: cat.Name, props: props, name: fmt.Sprintf("xmla_%d", seq.Add(1))}
+	// a panic anywhere below must not leave temporary tables on a connection that goes back to the
+	// pool: they are dropped, and the statement is an internal fault
+	defer func() {
+		if rec := recover(); rec != nil {
+			res.Close()
+			f := NewFault(CodeInternal, "The statement could not be computed: try again")
+			f.Class = fmt.Sprintf("panic:%T", rec)
+			res, err = nil, f
+		}
+	}()
+	p := &planner{ctx: ctx, run: run, g: &gen{d: src.Dialect, table: src.Table}, cube: cube, max: lim.MaxTuples,
+		batch: lim.MemberBatch, maxBytes: lim.MaxKeyBytes}
 	pl, err := p.build(st)
 	if err != nil {
-		return nil, dataFault(ctx, err)
+		return nil, dataFault(ctx, err, src, lim)
 	}
-	res := &Result{src: src, run: run, catalog: cat.Name, plan: pl, props: props, name: fmt.Sprintf("xmla_%d", seq.Add(1))}
+	res.plan = pl
 	if err := res.compute(ctx, p.g, lim); err != nil {
 		res.Close()
-		return nil, dataFault(ctx, err)
+		return nil, dataFault(ctx, err, src, lim)
 	}
 	return res, nil
 }
 
 // dataFault is the fault of a failed read of the data: ours pass; a timeout is the cap of seconds.
-func dataFault(ctx context.Context, err error) error {
+// An error of the engine is not told to the client, and its text is not kept (it may quote a
+// value of the data): its class is.
+func dataFault(ctx context.Context, err error, src Source, lim ExecLimits) error {
 	var f *Fault
 	if errors.As(err, &f) {
 		return f
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return NewFault(CodeLimit, "The statement took longer than the limit of seconds for a statement")
+		return timeoutFault(lim.Timeout)
 	}
 	if ctx.Err() != nil {
-		return NewFault(CodeInternal, "The request was cancelled")
+		out := NewFault(CodeInternal, "The request was cancelled")
+		out.Class, out.Cancelled = "cancelled", true
+		return out
 	}
-	return NewFault(CodeInternal, "The statement could not be computed: try again")
+	out := NewFault(CodeInternal, "The statement could not be computed: try again")
+	out.Class = ErrorClass(err, src.Classify)
+	return out
+}
+
+// timeoutFault is the cap of seconds for a statement, named with its value.
+func timeoutFault(d time.Duration) *Fault {
+	if d <= 0 {
+		return NewFault(CodeLimit, "The statement took longer than the limit of seconds for a statement (DATA_API__QUERY_SECONDS)")
+	}
+	return NewFault(CodeLimit, fmt.Sprintf("The statement took longer than %d seconds, the limit of seconds for a statement (DATA_API__QUERY_SECONDS)", int(d.Seconds())))
+}
+
+// ErrorClass names the kind of an error of the engine without its text. classify, when given,
+// knows the engine's own types; the Go type of the error is the default.
+func ErrorClass(err error, classify func(error) string) string {
+	if classify != nil {
+		if c := classify(err); c != "" {
+			return c
+		}
+	}
+	return fmt.Sprintf("%T", err)
 }
 
 // product multiplies without going past what an ordinal holds.
@@ -287,9 +342,22 @@ func (r *Result) compute(ctx context.Context, g *gen, lim ExecLimits) error {
 		r.cells = 0
 		return nil
 	}
-	// the aggregation, in one pass
+	// what the cells will be, when no axis drops its empty tuples: the cap is met before any row is read
+	if !anyNonEmpty(pl) {
+		if cells, ok := product(pre...); !ok || cells > int64(lim.MaxCells) {
+			return cellsFault(lim.MaxCells)
+		}
+	}
+	// the aggregation, in one pass, over the rows of the members the axes list: a row outside every
+	// member of a part is in no cell
 	b := &qb{d: d}
-	where := g.where(b, nil, pl.universe, pl.slicer)
+	where := g.where(b, func() []string {
+		var parts []*part
+		for _, hp := range hps {
+			parts = append(parts, hp.pt)
+		}
+		return g.restrictions(b, parts...)
+	}, pl.universe, pl.slicer)
 	sel, err := g.aggSelect(uses, pl.measures, where, false)
 	if err != nil {
 		return err
@@ -377,8 +445,7 @@ func (r *Result) compute(ctx context.Context, g *gen, lim ExecLimits) error {
 	}
 	cells, ok := product(r.counts...)
 	if !ok || cells > int64(lim.MaxCells) {
-		return NewFault(CodeLimit, fmt.Sprintf("This answer holds more than %d cells, the cap of cells in an answer (DATA_API__XMLA_MAX_CELLS). "+
-			"Put fewer fields on the axes, or filter", lim.MaxCells))
+		return cellsFault(lim.MaxCells)
 	}
 	r.cells = cells
 	// the cells in the order of their ordinal: columns vary fastest
@@ -399,6 +466,20 @@ func (r *Result) compute(ctx context.Context, g *gen, lim ExecLimits) error {
 	}
 	r.cellTable = r.name + "_f"
 	return r.make(ctx, r.cellTable, "SELECT ("+oe+") AS ord, c.mi AS mi, c.v AS v FROM "+nonEmptyCells+" c "+strings.Join(from, " ")+" ORDER BY ord")
+}
+
+func anyNonEmpty(pl *plan) bool {
+	for _, ax := range pl.axes {
+		if ax.nonEmpty {
+			return true
+		}
+	}
+	return false
+}
+
+func cellsFault(max int) *Fault {
+	return NewFault(CodeLimit, fmt.Sprintf("This answer holds more than %d cells, the cap of cells in an answer (DATA_API__XMLA_MAX_CELLS). "+
+		"Put fewer fields on the axes, or filter", max))
 }
 
 func (r *Result) count(ctx context.Context, table string) (int64, error) {

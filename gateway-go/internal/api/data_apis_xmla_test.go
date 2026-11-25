@@ -19,10 +19,12 @@ type xmlaLimitsOut struct {
 	MaxTuples   int  `json:"max_tuples"`
 	MaxMembers  int  `json:"max_members"`
 	KeepRefused bool `json:"keep_refused"`
+	// the development switch: a key as HTTP Basic over plain HTTP
+	InsecureBasic bool `json:"insecure_basic"`
 }
 
 func (f *dapiFixture) xmlaOn() {
-	f.d.Config.DataAPI.XMLA = config.XMLAConfig{Enabled: true, MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true}
+	f.d.Config.DataAPI.XMLA = config.XMLAConfig{Enabled: true, MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true, InsecureBasic: true}
 }
 
 func TestXMLAOffInTheInstallation(t *testing.T) {
@@ -80,7 +82,7 @@ func TestXMLAOnInTheInstallation(t *testing.T) {
 	limits := decode[struct {
 		Xmla xmlaLimitsOut `json:"xmla"`
 	}](t, f.call(f.viewer, dataAPILimits, http.MethodGet, nil, nil))
-	if limits.Xmla != (xmlaLimitsOut{Enabled: true, MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true}) {
+	if limits.Xmla != (xmlaLimitsOut{Enabled: true, MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true, InsecureBasic: true}) {
 		t.Errorf("%+v", limits.Xmla)
 	}
 	admin := decode[struct {
@@ -157,6 +159,15 @@ func TestXMLAOnInTheInstallation(t *testing.T) {
 	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"resources": []any{f.resource("customers", f.customers), renamed}}, path); w.Code != http.StatusConflict {
 		t.Errorf("%d %s", w.Code, w.Body.String())
 	}
+	// a version that has the switch on, restored where the installation no longer offers XMLA, is
+	// restored as the copy is made: with the switch off and the captions kept, not refused
+	w := f.call(f.creator, restoreDataAPIVersion, http.MethodPost, nil, map[string]string{"api_id": dapiID(a.ID), "version": "3"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("restore with the installation's switch off: %d %s", w.Code, w.Body.String())
+	}
+	if r := decode[dapiDetail](t, w); r.Xmla.Enabled || r.Resources[1].Cube != "Sales orders" {
+		t.Errorf("restored with the switch off: %+v", r)
+	}
 }
 
 func TestXMLAInTheManifest(t *testing.T) {
@@ -174,15 +185,15 @@ func TestXMLAInTheManifest(t *testing.T) {
 	}
 	token, _ := dataapis.RotatePodToken(f.ctx, f.db, a.ID)
 	m := f.manifest(token, a.ID)
-	if m.XMLA == nil || *m.XMLA != (dataapiwire.XMLA{MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true}) {
+	if m.XMLA == nil || *m.XMLA != (dataapiwire.XMLA{MaxCells: 300_000, MaxTuples: 4000, MaxMembers: 900, KeepRefused: true, InsecureBasic: true}) {
 		t.Fatalf("%+v", m.XMLA)
 	}
 	if len(m.Resources) != 2 || m.Resources[0].Cube != "customers" || m.Resources[1].Cube != "Sales orders" {
 		t.Errorf("cubes: %+v", m.Resources)
 	}
 	// the caps are the administrator's, read at every manifest
-	f.d.Config.DataAPI.XMLA.MaxCells, f.d.Config.DataAPI.XMLA.KeepRefused = 5000, false
-	if m = f.manifest(token, a.ID); m.XMLA == nil || m.XMLA.MaxCells != 5000 || m.XMLA.KeepRefused {
+	f.d.Config.DataAPI.XMLA.MaxCells, f.d.Config.DataAPI.XMLA.KeepRefused, f.d.Config.DataAPI.XMLA.InsecureBasic = 5000, false, false
+	if m = f.manifest(token, a.ID); m.XMLA == nil || m.XMLA.MaxCells != 5000 || m.XMLA.KeepRefused || m.XMLA.InsecureBasic {
 		t.Errorf("%+v", m.XMLA)
 	}
 	// the installation's switch off: the pod is told nothing of XMLA, so it answers 404

@@ -55,6 +55,10 @@ type XMLAConfig struct {
 	// whoever manages the data API to read (it carries member names, that is, values of the
 	// data): off by default
 	KeepRefused bool
+	// DATA_API__XMLA_INSECURE_BASIC: a development switch. The pods accept a key sent as HTTP
+	// Basic over plain HTTP too, for trials with a spreadsheet on a trusted network: the key
+	// travels in clear text. Off by default
+	InsecureBasic bool
 }
 
 // DataAPIPods is how the reconcile loop runs a data API's pods and opens them to the other
@@ -162,11 +166,12 @@ func loadDataAPI(r *reader) DataAPIConfig {
 		UsageRetentionDays: r.integer("DATA_API__USAGE_RETENTION_DAYS", 30, 1, 3650),
 	}
 	c.XMLA = XMLAConfig{
-		Enabled:     r.boolean("DATA_API__XMLA_ENABLED", false),
-		MaxCells:    r.integer("DATA_API__XMLA_MAX_CELLS", 1_000_000, 1, 100_000_000),
-		MaxTuples:   r.integer("DATA_API__XMLA_MAX_TUPLES", 10_000, 1, 10_000_000),
-		MaxMembers:  r.integer("DATA_API__XMLA_MAX_MEMBERS", 5_000, 1, 10_000_000),
-		KeepRefused: r.boolean("DATA_API__XMLA_KEEP_REFUSED", false),
+		Enabled:       r.boolean("DATA_API__XMLA_ENABLED", false),
+		MaxCells:      r.integer("DATA_API__XMLA_MAX_CELLS", 1_000_000, 1, 100_000_000),
+		MaxTuples:     r.integer("DATA_API__XMLA_MAX_TUPLES", 10_000, 1, 10_000_000),
+		MaxMembers:    r.integer("DATA_API__XMLA_MAX_MEMBERS", 5_000, 1, 10_000_000),
+		KeepRefused:   r.boolean("DATA_API__XMLA_KEEP_REFUSED", false),
+		InsecureBasic: r.boolean("DATA_API__XMLA_INSECURE_BASIC", false),
 	}
 	p := &c.Pods
 	p.Namespace = strings.TrimSpace(r.str("DATA_API__NAMESPACE", ""))

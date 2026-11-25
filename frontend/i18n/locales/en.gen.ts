@@ -6023,6 +6023,8 @@ export default {
     "capXmlaRefused": "XMLA refused statements",
     "xmlaRefusedKept": "kept for a day",
     "xmlaRefusedNotKept": "not kept",
+    "capXmlaInsecure": "XMLA keys without HTTPS",
+    "xmlaInsecureBasic": "Keys are accepted even without HTTPS: for trials only, on a trusted network, because the key travels in clear text (dataApi.xmla.insecureBasic)",
   },
   "gridKeys": {
     "moveColumn": "Move the column left or right",

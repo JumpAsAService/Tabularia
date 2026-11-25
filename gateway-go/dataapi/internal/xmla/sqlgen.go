@@ -19,7 +19,9 @@ const (
 	keyAll  = "a" // the All member
 	keyNull = "n" // the null member
 	keyHead = "v" // the value, after this letter
-	maxSets = 512 // the most grouping sets one aggregation takes
+	// MaxSets is the most grouping sets one aggregation takes: each is a pass over the rows it
+	// reads, and the levels of a few fields multiply quickly.
+	MaxSets = 64
 )
 
 // qb collects the bound values of one statement in the order their placeholders are written.
@@ -129,9 +131,9 @@ func (g *gen) memberCond(b *qb, m xmlamodel.Member) string {
 		return n + " = " + b.arg(m.Key == "true")
 	case dataapiwire.KindDate:
 		return n + " = " + d.CastParam(ParamDate, b.arg(m.Key))
-	case dataapiwire.KindTimestamp, dataapiwire.KindTimestampTZ:
-		return n + " = " + d.CastParam(ParamTimestamp, b.arg(m.Key))
 	}
+	// Everything else, timestamps too, by the column's text, as Discover looks a member up
+	// (xmlamodel.KeyComparedAsText says why).
 	return d.Text(n) + " = " + b.arg(m.Key)
 }
 
@@ -214,6 +216,26 @@ func (g *gen) where(b *qb, extra func() []string, filters ...[]hfilter) string {
 	return " WHERE " + strings.Join(conds, " AND ")
 }
 
+// restrictions are the conditions that a row belongs to one of the members of each part: a row
+// outside every member of a part is in no cell of the answer, so it is not read. A part that has the
+// All member, or too many members to name, is not narrowed (the All member stands for every row).
+func (g *gen) restrictions(b *qb, parts ...*part) []string {
+	var out []string
+	for _, pt := range parts {
+		if pt.h == nil || len(pt.items) == 0 || len(pt.items) > maxRestrict {
+			continue
+		}
+		ms := make([]xmlamodel.Member, len(pt.items))
+		for i, it := range pt.items {
+			ms[i] = it.m
+		}
+		if c := g.membersCond(b, ms); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // hUse is a hierarchy an aggregation groups by, with the levels it is grouped at (0 is All).
 type hUse struct {
 	h      *xmlamodel.Hierarchy
@@ -260,8 +282,9 @@ func (g *gen) aggSelect(uses []hUse, ms []*xmlamodel.Measure, where string, asFl
 			}
 		}
 		sets = next
-		if len(sets) > maxSets {
-			return "", refuse("the levels of this statement make more than %d totals to compute", maxSets)
+		if len(sets) > MaxSets {
+			return "", NewFault(CodeLimit, fmt.Sprintf("The levels of this statement make more than %d grouping sets (totals to compute), "+
+				"the most one answer takes. Put fewer levels on the axes", MaxSets))
 		}
 	}
 	// the inner select: the grouping expressions and the columns the measures read

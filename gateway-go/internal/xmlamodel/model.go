@@ -24,7 +24,9 @@ package xmlamodel
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
@@ -51,39 +53,12 @@ type Column struct {
 	Width, Scale int
 }
 
-// KindOfDuckDB is the kind of a column from its DuckDB type, as `duckdb_columns()` writes it.
+// KindOfDuckDB is the kind of a column from its DuckDB type: dataapiwire's table, the one the pods'
+// REST interface reads its columns with, so that a column has the same kind in every interface.
 // What is not a number, text, boolean, date, timestamp or time is KindOther and stays out of the
 // cube: a list, a struct, a map, a blob or an interval has no sensible way to be grouped on or
-// summed. A UUID, a time and an enum are text here: values a pivot may group by. A JSON column
-// is text too.
-func KindOfDuckDB(typ string) string {
-	t := strings.ToUpper(strings.TrimSpace(typ))
-	switch {
-	case t == "TINYINT", t == "SMALLINT", t == "INTEGER", t == "BIGINT", t == "HUGEINT",
-		t == "UTINYINT", t == "USMALLINT", t == "UINTEGER", t == "UBIGINT", t == "UHUGEINT",
-		t == "INT1", t == "INT2", t == "INT4", t == "INT8", t == "INT", t == "SHORT", t == "LONG":
-		return dataapiwire.KindInt
-	case t == "FLOAT", t == "DOUBLE", t == "REAL", t == "FLOAT4", t == "FLOAT8":
-		return dataapiwire.KindFloat
-	case strings.HasPrefix(t, "DECIMAL(") || strings.HasPrefix(t, "NUMERIC(") || t == "DECIMAL":
-		return dataapiwire.KindDecimal
-	case t == "BOOLEAN", t == "BOOL":
-		return dataapiwire.KindBool
-	case t == "VARCHAR", t == "TEXT", t == "STRING", t == "JSON", strings.HasPrefix(t, "ENUM("):
-		return dataapiwire.KindString
-	case t == "DATE":
-		return dataapiwire.KindDate
-	case t == "TIMESTAMP", t == "TIMESTAMP_S", t == "TIMESTAMP_MS", t == "TIMESTAMP_NS", t == "DATETIME":
-		return dataapiwire.KindTimestamp
-	case t == "TIMESTAMP WITH TIME ZONE", t == "TIMESTAMPTZ":
-		return dataapiwire.KindTimestampTZ
-	case t == "TIME", t == "TIME_NS", t == "TIME WITH TIME ZONE", t == "TIMETZ":
-		return dataapiwire.KindTime
-	case t == "UUID":
-		return dataapiwire.KindUUID
-	}
-	return dataapiwire.KindOther
-}
+// summed.
+func KindOfDuckDB(typ string) string { return dataapiwire.KindOfDuckDB(typ) }
 
 // DecimalOf reads the width and scale of a DECIMAL(w,s) type; 0, 0 for anything else.
 func DecimalOf(typ string) (width, scale int) {
@@ -349,20 +324,76 @@ func newDimension(name string, col Column, date bool) *Dimension {
 	return d
 }
 
+// KeyComparedAsText says whether a member's key is compared with the text of the column (what
+// Discover lists as the key) and not as a typed value. Only an integer, a boolean and a date are
+// bound as what they are: the others, a timestamp above all, are compared by text, because a bound
+// timestamp is cut to the microsecond and a column that holds nanoseconds would never equal the key
+// Discover gave. Discover and Execute both ask this, so that they cannot diverge.
+func KeyComparedAsText(kind string) bool {
+	switch kind {
+	case dataapiwire.KindInt, dataapiwire.KindBool, dataapiwire.KindDate:
+		return false
+	}
+	return true
+}
+
 // Bracket writes a name as MDX does: between brackets, a «]» doubled.
 func Bracket(name string) string { return "[" + strings.ReplaceAll(name, "]", "]]") + "]" }
 
+// XMLSafe says whether XML 1.0 can hold the character: the rest (control characters, U+FFFE and
+// U+FFFF) is not in any document, escaped or not.
+func XMLSafe(r rune) bool {
+	return r == 0x9 || r == 0xA || r == 0xD || (r >= 0x20 && r <= 0xD7FF) || (r >= 0xE000 && r <= 0xFFFD) || r >= 0x10000
+}
+
 // EncodeKey is the text of a member's key as it is written after «&»: the value itself, except
-// that the empty value (a bracket cannot be empty in MDX) is a single backslash and a value that
-// starts with a backslash gets another one in front. DecodeKey is its inverse.
+// that
+//   - the empty value (a bracket cannot be empty in MDX) is a single backslash;
+//   - a value that starts with a backslash gets another one in front;
+//   - a value with a character XML cannot hold (or a byte that is not UTF-8) is written as «\#»
+//     and then the value with each backslash doubled, each such character as \u{hex} and each
+//     such byte as \x{hex}: two values that differ in nothing but those characters stay two names.
+//
+// DecodeKey is its inverse.
 func EncodeKey(value string) string {
-	switch {
-	case value == "":
+	if value == "" {
 		return `\`
-	case strings.HasPrefix(value, `\`):
+	}
+	if needsEscape(value) {
+		var b strings.Builder
+		b.WriteString(`\#`)
+		for i := 0; i < len(value); {
+			r, n := utf8.DecodeRuneInString(value[i:])
+			switch {
+			case r == utf8.RuneError && n == 1:
+				fmt.Fprintf(&b, `\x{%02x}`, value[i])
+			case r == '\\':
+				b.WriteString(`\\`)
+			case !XMLSafe(r):
+				fmt.Fprintf(&b, `\u{%x}`, r)
+			default:
+				b.WriteString(value[i : i+n])
+			}
+			i += n
+		}
+		return b.String()
+	}
+	if strings.HasPrefix(value, `\`) {
 		return `\` + value
 	}
 	return value
+}
+
+func needsEscape(value string) bool {
+	if !utf8.ValidString(value) {
+		return true
+	}
+	for _, r := range value {
+		if !XMLSafe(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // DecodeKey reads a key written by EncodeKey; false for text that is not one.
@@ -372,10 +403,51 @@ func DecodeKey(key string) (string, bool) {
 		return "", true
 	case strings.HasPrefix(key, `\\`):
 		return key[1:], true
+	case strings.HasPrefix(key, `\#`):
+		return decodeEscaped(key[2:])
 	case strings.HasPrefix(key, `\`):
 		return "", false
 	}
 	return key, true
+}
+
+func decodeEscaped(body string) (string, bool) {
+	var out []byte
+	for i := 0; i < len(body); i++ {
+		if body[i] != '\\' {
+			out = append(out, body[i])
+			continue
+		}
+		if i+1 >= len(body) {
+			return "", false
+		}
+		switch body[i+1] {
+		case '\\':
+			out = append(out, '\\')
+			i++
+		case 'u', 'x':
+			end := strings.IndexByte(body[i:], '}')
+			if i+2 >= len(body) || body[i+2] != '{' || end < 0 {
+				return "", false
+			}
+			n, err := strconv.ParseUint(body[i+3:i+end], 16, 32)
+			if err != nil {
+				return "", false
+			}
+			if body[i+1] == 'x' {
+				if n > 0xff {
+					return "", false
+				}
+				out = append(out, byte(n))
+			} else {
+				out = utf8.AppendRune(out, rune(n))
+			}
+			i += end
+		default:
+			return "", false
+		}
+	}
+	return string(out), true
 }
 
 // KeySegment writes a key as MDX does: &[key].

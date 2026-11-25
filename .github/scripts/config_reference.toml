@@ -1499,6 +1499,11 @@ helm = "`dataApi.xmla.keepRefused`"
 default = "`false`"
 text = "Keeps, for a day, the MDX of a statement the pod refused, for whoever manages the data API to read and send. Off by default: an MDX statement carries member names, which are values of the data."
 
+[var.DATA_API__XMLA_INSECURE_BASIC]
+helm = "`dataApi.xmla.insecureBasic`"
+default = "`false`"
+text = "A development switch: the pods accept the key sent as HTTP Basic (the password of the spreadsheet's connection) over plain HTTP too, where they would answer `403` (`https_required`). **Only for trials on a trusted network, because the key travels in clear text** and anyone who can read the traffic can copy it. Off by default, and to be left off in production. It travels to the pods in their manifest, and each pod writes one warning in its log when it starts with it on. `GET /data-apis/limits` and Administration → Data APIs show it when it is on."
+
 [var.DATA_API__NAMESPACE]
 helm = "`dataApi.namespace`"
 default = "the scripts' namespace"

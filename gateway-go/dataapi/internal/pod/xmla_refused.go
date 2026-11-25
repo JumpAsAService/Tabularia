@@ -44,7 +44,11 @@ func (s *Server) refusals() *refusedStore {
 		if s.prep != nil && s.prep.Dir != "" {
 			dir = s.prep.Dir
 		}
-		s.xrefused = &refusedStore{path: filepath.Join(dir, refusedFile)}
+		st := &refusedStore{}
+		if dir != "" { // no directory, no file: nothing is kept (and nothing is deleted from where the pod runs)
+			st.path = filepath.Join(dir, refusedFile)
+		}
+		s.xrefused = st
 	})
 	return s.xrefused
 }
@@ -82,15 +86,27 @@ func (r *refusedStore) add(now time.Time, statement, reason string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	all := append(r.read(now), e)
+	all := append(r.read(now), e) // the old ones are left out: they leave the disk with this write
 	if len(all) > maxRefused {
 		all = all[len(all)-maxRefused:]
+	}
+	r.write(all)
+}
+
+// write replaces the file with these entries, whole or not at all: a reader never meets half a
+// file. No entry left, no file.
+func (r *refusedStore) write(all []refusedEntry) {
+	if r.path == "" {
+		return
+	}
+	if len(all) == 0 {
+		_ = os.Remove(r.path)
+		return
 	}
 	raw, err := json.Marshal(all)
 	if err != nil {
 		return
 	}
-	// whole or not at all: a reader never meets half a file
 	tmp := r.path + ".part"
 	if os.WriteFile(tmp, raw, 0o600) == nil {
 		if os.Rename(tmp, r.path) != nil {
@@ -99,10 +115,40 @@ func (r *refusedStore) add(now time.Time, statement, reason string) {
 	}
 }
 
+// list gives the entries of the last day. What is past its day is taken off the disk at a read
+// too, not only at a write.
 func (r *refusedStore) list(now time.Time) []refusedEntry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.read(now)
+	kept := r.read(now)
+	if len(kept) != r.onDisk() {
+		r.write(kept)
+	}
+	return kept
+}
+
+// onDisk is how many entries the file holds, the old ones too.
+func (r *refusedStore) onDisk() int {
+	raw, err := os.ReadFile(r.path)
+	if err != nil {
+		return 0
+	}
+	var all []refusedEntry
+	if json.Unmarshal(raw, &all) != nil {
+		return 0
+	}
+	return len(all)
+}
+
+// drop deletes the file: the installation does not keep refused statements (any more).
+func (r *refusedStore) drop() {
+	if r.path == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_ = os.Remove(r.path)
+	_ = os.Remove(r.path + ".part")
 }
 
 // GET /data/{api}/xmla/refused: the statements refused in the last day, the latest first.

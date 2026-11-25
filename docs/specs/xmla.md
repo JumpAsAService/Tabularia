@@ -91,7 +91,9 @@ resource's chosen columns are the cube's columns; its filters are not parameters
 - **The key is the password.** The client sends HTTP Basic; the user name is ignored (the
   key's name is suggested), the password is a data API key (`tdk_…`). `Authorization: Bearer`
   and `X-API-Key` keep working. A request with no key gets `401` with
-  `WWW-Authenticate: Basic realm="<data API name>"`, which is what makes the client ask.
+  `WWW-Authenticate: Basic realm="<data API slug>"`, which is what makes the client ask. The realm
+  is the slug, which the caller knows from the address: the name of a data API is not told to
+  someone who has no key.
 - A key limited to some resources sees those cubes only. CIDR limits, expiry, revocation and
   the per-minute rate apply as they do today. The default rate is checked against what one
   pivot gesture sends (a burst of `Discover`), and raised if it is too tight.
@@ -220,7 +222,7 @@ dialect, the pods' way to the engine, the administrator's choice per data API).
   definition is read from rows that have no column for them, so it takes those two from the
   current version's content: no migration, and a version saved before them reads as off.
 - With XMLA on, two cubes of the same name (case apart) are refused at save. `xmla` is a reserved
-  resource name, as `health` and `openapi`. A copy of a data API is made with XMLA off.
+  resource name, as `health` and `openapi`. A copy of a data API is made with XMLA off. A version restored where the installation no longer offers XMLA is saved with it off, captions kept, as the copy is (not a 409); one from before XMLA has it off.
 - `DATA_API__XMLA_ENABLED`, `DATA_API__XMLA_MAX_CELLS` (1,000,000), `_MAX_TUPLES` (10,000),
   `_MAX_MEMBERS` (5,000), `_KEEP_REFUSED` (false); Helm `dataApi.xmla.*`. Keeping refused
   statements is a switch of the installation, not of one data API as first written above.
@@ -231,6 +233,14 @@ dialect, the pods' way to the engine, the administrator's choice per data API).
   `Authorization: Bearer` or `X-API-Key`.
 - `DISCOVER_PROPERTIES` is answered; every other request gets a fault that names what is not
   served yet. A request body is 1 MB at most.
+- The realm of the `401` challenge is the slug of the data API, not its name (a stranger learns
+  nothing the address did not say).
+- **Development switch**: `DATA_API__XMLA_INSECURE_BASIC` (default `false`; Helm
+  `dataApi.xmla.insecureBasic`) makes the pods accept Basic over plain HTTP too, for trials with a
+  spreadsheet on a trusted network against a cluster with no TLS. The key travels in clear text.
+  It reaches the pods in the manifest (`xmla.insecure_basic`), is shown by `GET /data-apis/limits`
+  and the administration list, and each pod writes one warning in its log when it takes a manifest
+  that has it on. Off, the `403 https_required` above stands.
 
 **Piece 2** (Discover), 2026-11-25. The model is `gateway-go/internal/xmlamodel` (pure, shared by the
 pod and, later, the gateway's documentation); the rowsets are `gateway-go/dataapi/internal/xmla`
@@ -247,7 +257,11 @@ pod and, later, the gateway's documentation); the rowsets are `gateway-go/dataap
   there is one, a zone read in UTC). The null of a date is the member `…[(null)]` of the first level.
   The measures are the members of `[Measures]`, level `[Measures].[MeasuresLevel]`.
 - **Keys**: the value as it is, except that the empty text is `\` (a bracket cannot be empty in MDX) and
-  a text starting with `\` gets another one in front. An integer key is canonical (`+042` reads as
+  a text starting with `\` gets another one in front. A value with a character XML cannot hold (a
+  control character other than tab, newline and return, U+FFFE, U+FFFF) or a byte that is not UTF-8 is
+  written `\#` and then the value with each backslash doubled, each such character as `\u{hex}` and each
+  such byte as `\x{hex}`: two values that differ only by such a character are two names, and each name
+  reads back as its value (`xmlamodel.EncodeKey` and `DecodeKey`, tested round trip). An integer key is canonical (`+042` reads as
   `42`); a boolean is `true` or `false`. Names match without regard to case, keys do not.
 - **Collisions** (names are case-insensitive): in column order the first gets the plain name, the
   next `name (2)`. The sums' names (the columns') are taken before the Average, Min and Max ones,
@@ -273,7 +287,9 @@ pod and, later, the gateway's documentation); the rowsets are `gateway-go/dataap
   ancestors 32, as a sum; self when absent) gives the relations, each member once, a member the data
   does not have giving nothing. Past `MaxMembers` the answer is a fault that names the cap and its
   value, before any byte of the answer is sent: the answer is held (at most the cap's rows) until it
-  is whole, so a timeout is a clean fault too.
+  is whole, so a timeout is a clean fault too. What is held also has a cap in bytes
+  (`xmla.DefaultMaxAnswerBytes`, 32 MiB): a column of long texts makes few members a large answer, and
+  past it the fault names the cap and its value.
 - A key limited to some resources sees only those cubes, in every rowset. A resource whose table is
   still loading makes the rowsets that list cubes answer a fault («still loading»), not a short list;
   a resource with no data or whose publisher lost the right to read it is left out.
@@ -320,12 +336,41 @@ a pivot sends: the first trials with the real client replace them.
   keeps the tuples that have a cell, numbered in order; the final table holds the non-empty cells in ordinal
   order. The axes and the cells are streamed from them as XML. Everything that can fail (caps included) is done
   before the first byte; the tables are dropped by `Result.Close` whatever happened (cancelled context, cap,
-  client gone), checked by tests. The temporary tables are DuckDB's own: in the buffer manager's memory, spilled
-  to its temp directory past the memory limit. Only the axes' parts (at most `MaxTuples` members each) are in
-  memory, never the cells.
+  client gone, a panic in the planning or the computing: it drops them and the statement is an internal fault),
+  checked by tests. The temporary tables are DuckDB's own: in the buffer manager's memory, spilled past the
+  memory limit to the temp directory DuckDB gives a file database, `<table file>.tmp`, which sits beside the table's
+  file in the pod's data directory (the read-only open with `enable_external_access=false` does not change that:
+  measured, and kept by a test that fills a temporary table well past the memory limit). Only the axes' parts (at
+  most `MaxTuples` members each) are in memory, never the cells.
 - **Caps.** `MaxTuples` on every part and every axis (after the empty tuples are dropped), `MaxCells` on the
   product of the axes: `CodeLimit` faults that name the cap and its value. A timeout is a `CodeLimit` fault
-  too. A failure after the answer is begun ends the connection instead of closing the XML.
+  too, and names the seconds (`DATA_API__QUERY_SECONDS`). A failure after the answer is begun ends the
+  connection instead of closing the XML. After the review of 2026-11-25:
+  - The cap on a set is on the **sum** of its elements (`{a, b, …}`) and of the arguments of a `CrossJoin`,
+    checked after each one: the rest is not read once it is passed.
+  - The members a planning reads are never more than `MaxTuples` (and one): a `DrilldownLevel` from All, which a
+    pivot sends when a field is dragged, no longer reads a level whole. A set of members written by name is
+    checked in batches of 500 (`ExecLimits.MemberBatch`), never by reading its level; the keys read are capped in
+    bytes too (`DefaultMaxKeyBytes`, 16 MiB, a fault that names it). `TopCount`, `Order` and `Filter` aggregate
+    only the rows of the members of their set.
+  - The aggregation reads only the rows of the members of each part of an axis that has no All member (a row
+    outside every member of a part is in no cell; with the All member in the part nothing is narrowed, so a
+    total is the true total; a part of more than 1,000 members is not narrowed). The grouping sets of one
+    aggregation are at most 64 (`xmla.MaxSets`, a `CodeLimit` fault that names them: each is a pass over the
+    rows and a hash table, and 64 already need tens of MB). With no `NON EMPTY` axis, the product of the tuples
+    is checked against `MaxCells` before a row is read.
+  - `Content` `Schema` and `None` compute nothing (no connection, no planning against the table); a statement is
+    still parsed and its cube found.
+  - An Execute holds a place among four per pod (`xmlaPlaces`) from the computing to the last byte written, and
+    waits for it within the query timeout, a fault that names it: a few slow clients cannot take the 16
+    connections of the table's pool.
+  - An error of the engine is not told and its text is not logged (it may quote a value of the data): the log has
+    its class (`duckdb:<type>` or the Go type). A wait that ends because the client left is `xmla_cancelled`,
+    not a cap. A key is compared with a column by its text, as Discover looks a member up, for everything but
+    an integer, a boolean and a date (`xmlamodel.KeyComparedAsText`): a bound timestamp is cut to the microsecond.
+  - One table maps a DuckDB type to a kind (`dataapiwire.KindOfDuckDB`), read by the pods' REST interface and the
+    XMLA model; a test of the pods checks it, with `KindOfPolars`, against the types Polars writes and DuckDB
+    reads back (a Duration is a BIGINT there, a 128-bit integer a BLOB).
 - **Dataset.** `Format` Multidimensional (Native read as such) with TupleFormat axes; `Content` SchemaData
   (default), Data, Schema or None; another `Format`, `AxisFormat` or `Content`, or another `Catalog`, is a
   fault. Cells: only the non-empty ones, `VALUE` typed (`xsd:int` or `xsd:long` for integers and counts,
@@ -338,7 +383,8 @@ a pivot sends: the first trials with the real client replace them.
   statement, answer an empty dataset (`urn:schemas-microsoft-com:xml-analysis:empty`).
 - **Refused statements.** With `KeepRefused`, the text of a statement the parser or the plan refused (also a name
   not found), with the fault's words, is kept for a day in `xmla-refused.json` in the pod's data directory (100
-  statements of 16 KB at most), and read with `GET /data/{slug}/xmla/refused` by a key not limited to some
+  statements of 16 KB at most; the ones past their day leave the file at the next write or read, and the file
+  is deleted when a manifest says they are not kept), and read with `GET /data/{slug}/xmla/refused` by a key not limited to some
   resources (404 when the switch is off). No migration, no gateway change: the gateway does not show them yet
   (it would need a route that asks the pods). With the switch off nothing is kept; nothing of a statement or of
   its values is ever logged.

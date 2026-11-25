@@ -6023,6 +6023,8 @@ export default {
     "capXmlaRefused": "Istruzioni XMLA rifiutate",
     "xmlaRefusedKept": "conservate per un giorno",
     "xmlaRefusedNotKept": "non conservate",
+    "capXmlaInsecure": "Chiavi XMLA senza HTTPS",
+    "xmlaInsecureBasic": "Le chiavi sono accettate anche senza HTTPS: solo per le prove, su una rete fidata, perché la chiave viaggia in chiaro (dataApi.xmla.insecureBasic)",
   },
   "gridKeys": {
     "moveColumn": "Sposta la colonna a sinistra o a destra",

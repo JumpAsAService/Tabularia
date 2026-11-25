@@ -156,18 +156,27 @@ func TestTooManyLevelsAreRefused(t *testing.T) {
 			uses[len(uses)-1].levels = []int{0, 1, 2, 3, 4}
 		}
 	}
-	// 2 × 2 × 2 × 5 = 40 sets: fine; ten hierarchies of ten levels are not
+	// 2 × 2 × 2 × 5 = 40 sets: fine; the levels of a few fields multiplied are not
 	if _, err := g.aggSelect(uses, cube.Measures[:1], "", false); err != nil {
 		t.Fatal(err)
 	}
+	// 5 × 5 × 5 = 125 sets are past the cap of 64 (each is a pass over the rows): a fault that names
+	// the cap and its value, a limit and not a refusal of the statement
 	many := []hUse{}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		many = append(many, hUse{cube.Hierarchy("[day].[Year-Quarter-Month-Day]"), []int{0, 1, 2, 3, 4}})
 	}
 	_, err := g.aggSelect(many, cube.Measures[:1], "", false)
 	var f *Fault
-	if !errors.As(err, &f) || !f.Refused || !strings.Contains(f.Message, "more than 512 totals") {
+	if !errors.As(err, &f) || f.Refused || f.Code != CodeLimit || !strings.Contains(f.Message, "more than 64 grouping sets") {
 		t.Errorf("%v", err)
+	}
+	// 4 × 4 × 4 = 64 is at the cap, and fits
+	for i := range many {
+		many[i].levels = []int{0, 1, 2, 3}
+	}
+	if _, err := g.aggSelect(many, cube.Measures[:1], "", false); err != nil {
+		t.Errorf("at the cap: %v", err)
 	}
 }
 

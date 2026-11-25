@@ -6023,6 +6023,8 @@ export default {
     "capXmlaRefused": "Abgelehnte XMLA-Anweisungen",
     "xmlaRefusedKept": "einen Tag aufbewahrt",
     "xmlaRefusedNotKept": "nicht aufbewahrt",
+    "capXmlaInsecure": "XMLA-Schlüssel ohne HTTPS",
+    "xmlaInsecureBasic": "Schlüssel werden auch ohne HTTPS akzeptiert: nur für Tests in einem vertrauenswürdigen Netz, denn der Schlüssel wird im Klartext übertragen (dataApi.xmla.insecureBasic)",
   },
   "gridKeys": {
     "moveColumn": "Spalte nach links oder rechts verschieben",

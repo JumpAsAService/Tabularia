@@ -65,6 +65,43 @@ func KindOfPolars(dtype string) string {
 	return KindOther
 }
 
+// KindOfDuckDB is the kind of a column from its DuckDB type, as `duckdb_columns()` writes it: the
+// one table the pods' REST answers and the XMLA model both read their columns with, so that a column
+// has one kind in every interface. A test of the pods checks it, with KindOfPolars, against the
+// types Polars writes and DuckDB reads back.
+// What is not a number, text, boolean, date, timestamp or time is KindOther and stays out of the
+// cube: a list, a struct, a map, a blob or an interval has no sensible way to be grouped on or
+// summed. A UUID, a time and an enum are text here: values a pivot may group by. A JSON column
+// is text too.
+func KindOfDuckDB(typ string) string {
+	t := strings.ToUpper(strings.TrimSpace(typ))
+	switch {
+	case t == "TINYINT", t == "SMALLINT", t == "INTEGER", t == "BIGINT", t == "HUGEINT",
+		t == "UTINYINT", t == "USMALLINT", t == "UINTEGER", t == "UBIGINT", t == "UHUGEINT",
+		t == "INT1", t == "INT2", t == "INT4", t == "INT8", t == "INT", t == "SHORT", t == "LONG":
+		return KindInt
+	case t == "FLOAT", t == "DOUBLE", t == "REAL", t == "FLOAT4", t == "FLOAT8":
+		return KindFloat
+	case strings.HasPrefix(t, "DECIMAL(") || strings.HasPrefix(t, "NUMERIC(") || t == "DECIMAL":
+		return KindDecimal
+	case t == "BOOLEAN", t == "BOOL":
+		return KindBool
+	case t == "VARCHAR", t == "TEXT", t == "STRING", t == "JSON", strings.HasPrefix(t, "ENUM("):
+		return KindString
+	case t == "DATE":
+		return KindDate
+	case t == "TIMESTAMP", t == "TIMESTAMP_S", t == "TIMESTAMP_MS", t == "TIMESTAMP_NS", t == "DATETIME":
+		return KindTimestamp
+	case t == "TIMESTAMP WITH TIME ZONE", t == "TIMESTAMPTZ":
+		return KindTimestampTZ
+	case t == "TIME", t == "TIME_NS", t == "TIME WITH TIME ZONE", t == "TIMETZ":
+		return KindTime
+	case t == "UUID":
+		return KindUUID
+	}
+	return KindOther
+}
+
 // Doc is what a description is made of: the data API's name, address and definition's version,
 // and its resources.
 type Doc struct {

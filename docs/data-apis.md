@@ -339,8 +339,15 @@ Behind it:
   `https_required`) as seen by the gateway's trusted proxy; inside the cluster, plain HTTP
   works with `Authorization: Bearer` or `X-API-Key`, as for the REST interface. The page warns
   when the address it would show is not HTTPS.
-- A request with no key gets `401` with `WWW-Authenticate: Basic`, which is what makes the
-  spreadsheet ask. A key limited to some resources sees **those cubes only**, in every list.
+- **For trials only: a key without HTTPS.** To try a spreadsheet on another computer of a trusted
+  local network against a test cluster that has no TLS, the administrator can turn on
+  `dataApi.xmla.insecureBasic` (`DATA_API__XMLA_INSECURE_BASIC`, off by default). The pods then
+  accept the key sent as HTTP Basic over plain HTTP as well. **The key travels in clear text**:
+  anyone who can read the traffic can copy it, so use a key made for the trial, revoke it
+  afterwards, and leave the switch off in production. Administration → Data APIs shows a
+  highlighted line while it is on, and each pod writes a warning in its log when it starts with it.
+- A request with no key gets `401` with `WWW-Authenticate: Basic realm="…"` (the address of the
+  data API, not its name), which is what makes the spreadsheet ask. A key limited to some resources sees **those cubes only**, in every list.
   Expiry, revocation, address limits and the per-minute rate apply as they do for the REST
   interface, and a revoked key stops working within the pods' poll
   (`DATA_API__POLL_SECONDS`). A pivot gesture sends several small requests in a burst: if the
@@ -593,7 +600,9 @@ Administration → Data APIs next to these: whether it is offered (`DATA_API__XM
 most cells in one answer (`DATA_API__XMLA_MAX_CELLS`), tuples on one axis
 (`DATA_API__XMLA_MAX_TUPLES`), members in one answer to a field list
 (`DATA_API__XMLA_MAX_MEMBERS`), and whether the statements a pod refused are kept for a day
-(`DATA_API__XMLA_KEEP_REFUSED`). Their defaults are in [Configuration](configuration.md).
+(`DATA_API__XMLA_KEEP_REFUSED`), and, only when it is on, the development switch that lets a key
+travel as HTTP Basic over plain HTTP (`DATA_API__XMLA_INSECURE_BASIC`). Their defaults are in
+[Configuration](configuration.md).
 
 How the orchestrator runs the pods (their image, namespace, Ingress and NetworkPolicy) is set
 by the chart from the `dataApi` values and `image.dataApi`: see

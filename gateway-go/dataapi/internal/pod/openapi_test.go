@@ -17,6 +17,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/xmlamodel"
 )
 
 // The description validates against OpenAPI 3.1's own schema (testdata: the OpenAPI
@@ -175,11 +176,19 @@ func TestPolarsKindsAreThePods(t *testing.T) {
 		{"Date", "DATE"}, {"Datetime(time_unit='us', time_zone=None)", "TIMESTAMP"},
 		{"Datetime(time_unit='ns', time_zone=None)", "TIMESTAMP_NS"}, {"Datetime(time_unit='ms', time_zone=None)", "TIMESTAMP"},
 		{"Datetime(time_unit='us', time_zone='Europe/Rome')", "TIMESTAMP WITH TIME ZONE"},
-		{"Time", "TIME"}, // TIME_NS in the parquet, made TIME when prepared
-		{"Duration(time_unit='us')", "BIGINT"}, {"Binary", "BLOB"}, {"List(Int64)", "BIGINT[]"}, {"Struct({'a': Int64})", "STRUCT(a BIGINT)"},
+		{"Time", "TIME"}, {"Time", "TIME_NS"}, // TIME_NS in the parquet, made TIME when prepared
+		// a duration is its count of time units: BIGINT, measured with Polars 1.41 and DuckDB 1 (never an INTERVAL)
+		{"Duration(time_unit='us')", "BIGINT"}, {"Duration(time_unit='ns')", "BIGINT"},
+		{"Binary", "BLOB"}, {"List(Int64)", "BIGINT[]"}, {"Struct({'a': Int64})", "STRUCT(a BIGINT)"},
 	} {
-		if got, want := dataapiwire.KindOfPolars(c[0]), NewColumn("c", c[1]).Kind; got != want {
+		got, want := dataapiwire.KindOfPolars(c[0]), NewColumn("c", c[1]).Kind
+		if got != want {
 			t.Errorf("%s is %s for the gateway, %s (%s) for the pods", c[0], got, c[1], want)
+		}
+		// and the XMLA model, which the pods build from the same DuckDB types, has the same kind:
+		// the documentation and the pod describe the same cube
+		if x := xmlamodel.KindOfDuckDB(c[1]); x != got {
+			t.Errorf("%s is %s for the gateway, %s (%s) for the XMLA model", c[0], got, c[1], x)
 		}
 	}
 }

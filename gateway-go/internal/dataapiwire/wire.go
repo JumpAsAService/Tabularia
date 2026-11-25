@@ -57,6 +57,9 @@ type XMLA struct {
 	MaxMembers int `json:"max_members"`
 	// keep the MDX of a refused statement for a day
 	KeepRefused bool `json:"keep_refused"`
+	// accept a key sent as HTTP Basic over plain HTTP (a development switch of the installation:
+	// the key travels in clear text)
+	InsecureBasic bool `json:"insecure_basic"`
 }
 
 // Filter is a column one may filter on and the operators allowed on it.

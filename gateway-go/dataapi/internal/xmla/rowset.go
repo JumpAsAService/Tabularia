@@ -84,6 +84,9 @@ func (rw *RowsetWriter) Row(values ...string) {
 	rw.rows++
 }
 
+// Err is the error that stopped the writing, if any (the writer then drops what it is given).
+func (rw *RowsetWriter) Err() error { return rw.err }
+
 // Rows is how many rows were written.
 func (rw *RowsetWriter) Rows() int { return rw.rows }
 

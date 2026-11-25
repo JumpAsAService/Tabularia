@@ -39,6 +39,23 @@ func badName(format string, args ...any) *Fault {
 	return f
 }
 
+// DefaultMaxKeyBytes is the most bytes of member keys one statement's planning holds: a column of
+// long texts must not fill the pod's memory with the members of its levels, whatever the number of
+// tuples the cap allows.
+const DefaultMaxKeyBytes = 16 << 20
+
+// defaultMemberBatch is how many members one query of the planning names at most.
+const defaultMemberBatch = 500
+
+// maxRestrict is the most members of a part that are written in the WHERE of a query: a part with
+// more is nearly the whole of its level, and a condition that long does not narrow what is read.
+const maxRestrict = 1000
+
+func keyBytesFault(max int) *Fault {
+	return NewFault(CodeLimit, fmt.Sprintf("The members of this statement hold more than %d bytes of keys, the cap of bytes for the members of a statement. "+
+		"Put fewer fields on the axes, or filter", max))
+}
+
 func tuplesFault(max int) *Fault {
 	return NewFault(CodeLimit, fmt.Sprintf("This answer holds more than %d tuples on one axis, the cap of tuples per axis (DATA_API__XMLA_MAX_TUPLES). "+
 		"Put fewer fields on the axis, or filter", max))
@@ -117,13 +134,13 @@ type planner struct {
 	g    *gen
 	cube *xmlamodel.Cube
 	max  int // the most members a part may hold
+	// the most members one query names, and the most bytes of keys the planning reads
+	batch, maxBytes int
+	keyBytes        int
 
 	universe []hfilter
 	slicer   []hfilter
 }
-
-// maxScan is how many members of a level a planning read takes at most.
-const maxScan = 1_000_000
 
 // ── reading the data ──────────────────────────────────────────────────────────
 
@@ -181,6 +198,9 @@ func (p *planner) scan(l *xmlamodel.Level, only []xmlamodel.Member, limit int) (
 		if len(out) >= limit {
 			return nil, errTooMany
 		}
+		if p.keyBytes += len(k.String); p.keyBytes > p.maxBytes {
+			return nil, errKeyBytes
+		}
 		m := xmlamodel.Member{Level: l, Kind: xmlamodel.MemberKey, Key: k.String}
 		if !k.Valid {
 			m.Kind = xmlamodel.MemberNull
@@ -190,14 +210,36 @@ func (p *planner) scan(l *xmlamodel.Level, only []xmlamodel.Member, limit int) (
 	return out, rows.Err()
 }
 
-// errTooMany is a read of members that went past what a set may hold.
-var errTooMany = fmt.Errorf("too many members")
+// errTooMany is a read of members that went past what a set may hold, errKeyBytes one that went
+// past the bytes of keys.
+var (
+	errTooMany  = fmt.Errorf("too many members")
+	errKeyBytes = fmt.Errorf("too many bytes of keys")
+)
 
 func (p *planner) tooMany(err error) error {
-	if err == errTooMany {
+	switch err {
+	case errTooMany:
 		return tuplesFault(p.max)
+	case errKeyBytes:
+		return keyBytesFault(p.maxBytes)
 	}
 	return err
+}
+
+// scanOf is scan for the rows of `ms`, with their conditions in batches: the members named are
+// never more than a batch in one query, and the level is never read whole. At most `limit`
+// members come back in all.
+func (p *planner) scanOf(l *xmlamodel.Level, ms []xmlamodel.Member, limit int) ([]entry, error) {
+	var out []entry
+	for from := 0; from < len(ms); from += p.batch {
+		es, err := p.scan(l, ms[from:min(from+p.batch, len(ms))], limit-len(out))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, es...)
+	}
+	return out, nil
 }
 
 // countFirst is how many members the first level has: the children of the All member.
@@ -248,11 +290,14 @@ func (p *planner) childrenOf(parents []xmlamodel.Member) (map[string][]entry, er
 			wanted[m.UniqueName()] = true
 			hasAll = hasAll || m.Kind == xmlamodel.MemberAll
 		}
-		var only []xmlamodel.Member
-		if !hasAll && len(ps) <= 50 {
-			only = ps
+		// the limit is the cap of tuples: past it the part is refused whatever else is read
+		var es []entry
+		var err error
+		if hasAll {
+			es, err = p.scan(child, nil, p.max)
+		} else {
+			es, err = p.scanOf(child, ps, p.max)
 		}
-		es, err := p.scan(child, only, maxScan)
 		if err != nil {
 			return nil, p.tooMany(err)
 		}
@@ -280,7 +325,8 @@ func (p *planner) values(pt *part, ms []*xmlamodel.Measure) ([][]*float64, error
 	}
 	sort.Ints(levels)
 	b := &qb{d: g.d}
-	where := g.where(b, nil, p.universe, p.slicer)
+	// only the rows of the members read: an aggregation of the whole level reads what it will not use
+	where := g.where(b, func() []string { return g.restrictions(b, pt) }, p.universe, p.slicer)
 	q, err := g.aggSelect([]hUse{{pt.h, levels}}, ms, where, true)
 	if err != nil {
 		return nil, err
@@ -354,13 +400,11 @@ func (p *planner) complete(pt *part) error {
 	}
 	for _, l := range levels {
 		idx := byLevel[l]
-		var only []xmlamodel.Member
-		if len(idx) <= 50 {
-			for _, i := range idx {
-				only = append(only, pt.items[i].m)
-			}
+		only := make([]xmlamodel.Member, len(idx))
+		for k, i := range idx {
+			only[k] = pt.items[i].m
 		}
-		es, err := p.scan(l, only, maxScan)
+		es, err := p.scanOf(l, only, len(only))
 		if err != nil {
 			return p.tooMany(err)
 		}
@@ -479,10 +523,16 @@ func (p *planner) eval1(e mdx.Expr) (*setVal, error) {
 	switch n := e.(type) {
 	case *mdx.SetLit:
 		var vals []*setVal
+		held := 0 // the members of every element so far: the cap is on their sum
 		for _, it := range n.Items {
 			v, err := p.eval(it)
 			if err != nil {
 				return nil, err
+			}
+			if !v.empty() {
+				if held += v.size(); held > p.max {
+					return nil, tuplesFault(p.max)
+				}
 			}
 			vals = append(vals, v)
 		}
@@ -756,10 +806,16 @@ func (p *planner) evalCall(c *mdx.Call) (*setVal, error) {
 	switch c.Name {
 	case "CrossJoin":
 		var vals []*setVal
+		held := 0 // the members of every argument so far: the cap is on their sum
 		for i := range c.Args {
 			v, err := arg(i)
 			if err != nil {
 				return nil, err
+			}
+			for _, pt := range v.parts {
+				if held += len(pt.items); held > p.max {
+					return nil, tuplesFault(p.max)
+				}
 			}
 			vals = append(vals, v)
 		}

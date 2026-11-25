@@ -87,6 +87,8 @@ export interface DataApiXmlaLimits {
   max_tuples?: number
   max_members?: number
   keep_refused?: boolean
+  /** the development switch: keys are accepted as HTTP Basic over plain HTTP (DATA_API__XMLA_INSECURE_BASIC) */
+  insecure_basic?: boolean
 }
 
 export interface DataApiLimits {

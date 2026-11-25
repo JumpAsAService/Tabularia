@@ -34,23 +34,27 @@ func (s *Server) discover(w http.ResponseWriter, r *http.Request, snap *snapshot
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
 	defer cancel()
 	if req.RequestType == xmla.RowsetMembers {
-		// a turn among the queries running now, as the REST interface takes
-		select {
-		case s.gate <- struct{}{}:
-			defer func() { <-s.gate }()
-		case <-ctx.Done():
-			s.fault(w, r, xmla.NewFault(xmla.CodeLimit, fmt.Sprintf("The statement waited longer than %d seconds for its turn", int(s.cfg.QueryTimeout.Seconds()))))
+		// a turn among the queries running now, as the REST interface takes (the name is canonical:
+		// ReadRequest wrote it so, whatever the case the client used)
+		if !s.take(w, r, ctx, s.gate, "its turn") {
 			return
 		}
+		defer func() { <-s.gate }()
 	}
 	var out bytes.Buffer
-	rows, err := xmla.Discover(ctx, &out, req, cat, data, xmla.Limits{MaxMembers: snap.m.XMLA.MaxMembers})
+	rows, err := xmla.Discover(ctx, &out, req, cat, data, xmla.Limits{MaxMembers: snap.m.XMLA.MaxMembers, MaxBytes: s.xmlaMaxBytes,
+		Timeout: s.cfg.QueryTimeout, Classify: engineClass})
 	if err != nil {
-		if f, ok := err.(*xmla.Fault); ok && f.Code == xmla.CodeInternal {
-			s.log.Error("xmla discover", "rowset", req.RequestType, "err", f.Message)
-		}
-		if f, ok := err.(*xmla.Fault); ok && f.Code == xmla.CodeLimit {
-			recordOf(r).code = "xmla_limit"
+		if f, ok := err.(*xmla.Fault); ok {
+			switch {
+			case f.Code == xmla.CodeInternal && f.Cancelled:
+				recordOf(r).code = "xmla_cancelled"
+			case f.Code == xmla.CodeInternal:
+				// the class of the engine's error: its text may quote a value of the data
+				s.log.Error("xmla discover", "rowset", req.RequestType, "class", f.Class)
+			case f.Code == xmla.CodeLimit:
+				recordOf(r).code = "xmla_limit"
+			}
 		}
 		s.fault(w, r, err)
 		return

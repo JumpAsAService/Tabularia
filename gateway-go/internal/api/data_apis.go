@@ -92,6 +92,7 @@ func xmlaLimits(d *Deps) map[string]any {
 	if xmlaOn(d) {
 		out["max_cells"], out["max_tuples"], out["max_members"] = c.MaxCells, c.MaxTuples, c.MaxMembers
 		out["keep_refused"] = c.KeepRefused
+		out["insecure_basic"] = c.InsecureBasic
 	}
 	return out
 }
@@ -1146,7 +1147,11 @@ func restoreDataAPIVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 		sendDataAPIDetail(d, w, r, p, a.ID, http.StatusOK)
 		return
 	}
-	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources, Xmla: &def.Xmla},
+	xmla := def.Xmla
+	if !xmlaOn(d) {
+		xmla.Enabled = false // as a copy: a version is not refused for what the installation no longer offers
+	}
+	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources, Xmla: &xmla},
 		"restored from v"+strconv.FormatInt(v, 10), v)
 }
 

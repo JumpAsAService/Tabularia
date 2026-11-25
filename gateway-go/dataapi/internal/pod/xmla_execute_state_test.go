@@ -90,9 +90,26 @@ func (r *recorder) QueryContext(ctx context.Context, q string, args ...any) (*sq
 // direct runs Execute on the sales table, bypassing HTTP, through a recording connection
 func direct(t *testing.T, f *fixture, ctx context.Context, mdx string, edit func(*recorder)) (*xmla.Result, *recorder, error) {
 	t.Helper()
-	tb := f.s.table("sales")
+	return directWith(t, f, ctx, mdx, edit, xmla.ExecLimits{MaxCells: 1000, MaxTuples: 100})
+}
+
+// directWith is direct with the caps of the test's own, and the properties of the request if given.
+func directWith(t *testing.T, f *fixture, ctx context.Context, mdx string, edit func(*recorder), lim xmla.ExecLimits, props ...string) (*xmla.Result, *recorder, error) {
+	t.Helper()
+	return directRes(t, f, "sales", ctx, mdx, edit, lim, props...)
+}
+
+// directOn is direct on another resource of the fixture.
+func directOn(t *testing.T, f *fixture, resource string, ctx context.Context, mdx string, lim xmla.ExecLimits) (*xmla.Result, *recorder, error) {
+	t.Helper()
+	return directRes(t, f, resource, ctx, mdx, nil, lim)
+}
+
+func directRes(t *testing.T, f *fixture, resource string, ctx context.Context, mdx string, edit func(*recorder), lim xmla.ExecLimits, props ...string) (*xmla.Result, *recorder, error) {
+	t.Helper()
+	tb := f.s.table(resource)
 	t.Cleanup(tb.release)
-	res := f.s.snap.Load().resources["sales"]
+	res := f.s.snap.Load().resources[resource]
 	cat := &xmla.Catalog{Name: "CRM", Cubes: []*xmlamodel.Cube{cubeOf(res, tb)}}
 	rec := &recorder{}
 	src := xmla.Source{Dialect: xmla.DuckDB{}, Table: serveTable, Open: func(*xmlamodel.Cube) (xmla.Runner, error) {
@@ -108,11 +125,11 @@ func direct(t *testing.T, f *fixture, ctx context.Context, mdx string, edit func
 		}
 		return rec, nil
 	}}
-	req, err := xmla.ReadRequest(strings.NewReader(executeBody(mdx)))
+	req, err := xmla.ReadRequest(strings.NewReader(executeBody(mdx, props...)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := xmla.Execute(ctx, src, req, cat, xmla.ExecLimits{MaxCells: 1000, MaxTuples: 100})
+	r, err := xmla.Execute(ctx, src, req, cat, lim)
 	return r, rec, err
 }
 

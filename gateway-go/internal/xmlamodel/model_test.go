@@ -3,6 +3,7 @@ package xmlamodel
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
@@ -244,6 +245,56 @@ func TestKeysRoundTrip(t *testing.T) {
 	}
 	if _, ok := DecodeKey(`\x`); ok {
 		t.Error(`a backslash and a letter is not a key`)
+	}
+}
+
+// Characters XML cannot hold are not dropped from a name: two values that differ only by one keep
+// two names, and each name reads back as its value.
+func TestKeysWithCharactersXMLCannotHold(t *testing.T) {
+	values := []string{"a\x01b", "a\x02b", "ab", "a\x00b", "\x1f", "tab\tnewline\ncr\r", "a\ufffeb", "a\uffffb", "bad\xffbyte", "bad\xc3(", "\\\x01",
+		`\#`, `\#x`, "\x01\\", "x\\u{1}y\x01", "ok \U0001F600 \x01"}
+	names := map[string]string{}
+	for _, v := range values {
+		key := EncodeKey(v)
+		for _, r := range key {
+			if !XMLSafe(r) || r == utf8.RuneError {
+				t.Errorf("%q: the key %q still holds %U", v, key, r)
+			}
+		}
+		if got, ok := DecodeKey(key); !ok || got != v {
+			t.Errorf("%q: encoded %q decoded %q %v", v, key, got, ok)
+		}
+		if other, twice := names[key]; twice {
+			t.Errorf("%q and %q have the same key %q", v, other, key)
+		}
+		names[key] = v
+		un := Member{Level: Build("c", "c", cols("x", dataapiwire.KindString)).Dimensions[0].Hierarchies[0].Levels[1], Kind: MemberKey, Key: v}.UniqueName()
+		for _, r := range un {
+			if !XMLSafe(r) {
+				t.Errorf("%q: the unique name holds %U", v, r)
+			}
+		}
+	}
+	// a key that is not a key
+	for _, bad := range []string{`\#\`, `\#\q`, `\#\u{zz}`, `\#\u{1`, `\#\x{100}`, `\#\u{110000000}`} {
+		if got, ok := DecodeKey(bad); ok {
+			t.Errorf("%q read as %q", bad, got)
+		}
+	}
+	// what had no escape keeps its form (the names a client saved)
+	for v, want := range map[string]string{"IT": "IT", "": `\`, `\x`: `\\x`, "Città": "Città"} {
+		if got := EncodeKey(v); got != want {
+			t.Errorf("%q: %q, want %q", v, got, want)
+		}
+	}
+}
+
+func TestKeyComparedAsText(t *testing.T) {
+	for kind, want := range map[string]bool{dataapiwire.KindInt: false, dataapiwire.KindBool: false, dataapiwire.KindDate: false,
+		dataapiwire.KindString: true, dataapiwire.KindTimestamp: true, dataapiwire.KindTimestampTZ: true, dataapiwire.KindTime: true, dataapiwire.KindUUID: true} {
+		if got := KeyComparedAsText(kind); got != want {
+			t.Errorf("%s: %v", kind, got)
+		}
 	}
 }
 

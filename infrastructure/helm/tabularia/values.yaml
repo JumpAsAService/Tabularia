@@ -795,6 +795,9 @@ dataApi:
     maxTuples: 10000     # the most tuples on one axis of an answer
     maxMembers: 5000     # the most members in one answer to a Discover (a larger level is paged)
     keepRefused: false   # keep, for a day, the MDX of a refused statement (it carries values of the data)
+    # A development switch: the pods accept a key sent as HTTP Basic over plain HTTP too. Only for
+    # trials on a trusted network, because the key travels in clear text. Leave it off in production.
+    insecureBasic: false
   # where the pods and their objects go; empty: the scripts' namespace (scripts.namespace).
   # Another one is created with scripts.createNamespaces, at the `restricted` Pod Security
   # level; it needs the image pull secrets of image.pullSecrets.

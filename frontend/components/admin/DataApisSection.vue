@@ -146,6 +146,8 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
           <div data-xmla="members"><dt>{{ $t('dataApiAdmin.capXmlaMembers') }}</dt><dd>{{ fmt.count(list.xmla.max_members ?? 0) }}</dd></div>
           <div data-xmla="refused"><dt>{{ $t('dataApiAdmin.capXmlaRefused') }}</dt>
             <dd>{{ $t(list.xmla.keep_refused ? 'dataApiAdmin.xmlaRefusedKept' : 'dataApiAdmin.xmlaRefusedNotKept') }}</dd></div>
+          <div v-if="list.xmla.insecure_basic" class="warn" role="note" data-xmla="insecure-basic"><dt>{{ $t('dataApiAdmin.capXmlaInsecure') }}</dt>
+            <dd>{{ $t('dataApiAdmin.xmlaInsecureBasic') }}</dd></div>
         </template>
         <div><dt>{{ $t('dataApiAdmin.address') }}</dt><dd class="mono">{{ origin }}/data/…</dd></div>
       </dl>
@@ -261,6 +263,9 @@ table.rows th { white-space: nowrap; }
 .caps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 0; max-width: 900px; }
 .caps > div { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 10px; background: var(--panel); min-width: 0; }
 .caps dt { font-size: 11.5px; color: var(--muted); }
+/* the development switch that lets keys travel in clear text: a whole row, in the warning colour */
+.caps > div.warn { grid-column: 1 / -1; border-color: var(--warning); background: color-mix(in srgb, var(--warning) 10%, var(--panel)); }
+.caps > div.warn dt { color: var(--warning); font-weight: 600; }
 .caps dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .hint { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.45; max-width: 80ch; }
 .list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

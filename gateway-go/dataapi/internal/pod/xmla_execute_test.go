@@ -788,18 +788,29 @@ func TestExecuteCaps(t *testing.T) {
 		`SELECT [paid].[paid].[paid].Members * [code].[code].[code].Members ON COLUMNS FROM [Sales]`,
 		// the tuples that are left once the empty ones are out
 		`SELECT NON EMPTY [paid].[paid].[paid].Members * [code].[code].[code].Members ON COLUMNS FROM [Sales]`,
-		// a slicer that is a product of members
-		`SELECT FROM [Sales] WHERE ({` + strings.Join([]string{"1", "2", "3", "4", "5", "6", "7"}, ",") + `})`,
 	} {
-		if strings.Contains(mdx, "WHERE") {
-			continue
-		}
 		body := f.refused(mdx)
 		for _, want := range []string{"more than 5 tuples on one axis", "DATA_API__XMLA_MAX_TUPLES", "0xc10e0003"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: want %q in %s", mdx, want, body)
 			}
 		}
+	}
+	// a slicer that is a product of members: each of its sets is under the cap and their sum is,
+	// but the three paid values by the three countries are nine tuples
+	f.m.XMLA.MaxTuples = 7
+	f.s.Apply(f.m)
+	const slicer = `SELECT {[Measures].[Rows]} ON COLUMNS FROM [Sales] WHERE ([paid].[paid].[paid].Members * {[country].[country].[country].&[IT],[country].[country].[country].&[FR],[country].[country].[country].&[Città]})`
+	body = f.refused(slicer)
+	for _, want := range []string{"more than 7 tuples on one axis", "DATA_API__XMLA_MAX_TUPLES", "0xc10e0003"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the slicer: want %q in %s", want, body)
+		}
+	}
+	f.m.XMLA.MaxTuples = 9
+	f.s.Apply(f.m)
+	if a := f.post(executeBody(slicer), "main"); a.status != 200 {
+		t.Errorf("a slicer of nine tuples at a cap of nine: %d %s", a.status, a.body)
 	}
 	f.m.XMLA.MaxTuples = 100
 	f.s.Apply(f.m)

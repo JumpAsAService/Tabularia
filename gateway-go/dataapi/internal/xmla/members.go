@@ -70,26 +70,33 @@ func members(ctx context.Context, rw *RowsetWriter, r restr, cat *Catalog, data 
 		if errors.Is(err, errMembersCap) {
 			return limitFault(lim.MaxMembers)
 		}
+		if errors.Is(err, errBytesCap) {
+			return bytesFault(lim.MaxBytes)
+		}
 		if err != nil {
-			return asDataFault(ctx, err)
+			return asDataFault(ctx, err, lim)
 		}
 	}
 	return nil
 }
 
 // asDataFault is the fault of a failed read of the data: the caller's own faults pass.
-func asDataFault(ctx context.Context, err error) error {
+func asDataFault(ctx context.Context, err error, lim Limits) error {
 	var f *Fault
 	if errors.As(err, &f) {
 		return err
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return NewFault(CodeLimit, "The query took longer than the limit of seconds for a statement")
+		return timeoutFault(lim.Timeout)
 	}
 	if ctx.Err() != nil {
-		return NewFault(CodeInternal, "The request was cancelled")
+		out := NewFault(CodeInternal, "The request was cancelled")
+		out.Class, out.Cancelled = "cancelled", true
+		return out
 	}
-	return NewFault(CodeInternal, "The members could not be read: try again")
+	out := NewFault(CodeInternal, "The members could not be read: try again")
+	out.Class = ErrorClass(err, lim.Classify)
+	return out
 }
 
 // levels writes the members of the levels the restrictions name, no member being asked for.
@@ -243,6 +250,9 @@ func (mw *memberWriter) one(ctx context.Context, data Data, m xmlamodel.Member) 
 
 // emit writes a member that meets the restrictions, once.
 func (mw *memberWriter) emit(m xmlamodel.Member, children int) error {
+	if err := mw.rw.Err(); err != nil {
+		return err // the answer is past its bytes: no more rows are made for it
+	}
 	r, h := mw.r, m.Hierarchy()
 	typ := memberRegular
 	if m.Kind == xmlamodel.MemberAll {

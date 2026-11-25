@@ -148,8 +148,9 @@ func TestTheXMLASwitchAndCaps(t *testing.T) {
 	}
 	base["DATA_API__XMLA_ENABLED"], base["DATA_API__XMLA_MAX_CELLS"], base["DATA_API__XMLA_MAX_TUPLES"] = "true", "250000", "2000"
 	base["DATA_API__XMLA_MAX_MEMBERS"], base["DATA_API__XMLA_KEEP_REFUSED"] = "800", "true"
+	base["DATA_API__XMLA_INSECURE_BASIC"] = "true" // the development switch: off unless it is said
 	c, err = Load(env(base))
-	if err != nil || c.DataAPI.XMLA != (XMLAConfig{Enabled: true, MaxCells: 250000, MaxTuples: 2000, MaxMembers: 800, KeepRefused: true}) {
+	if err != nil || c.DataAPI.XMLA != (XMLAConfig{Enabled: true, MaxCells: 250000, MaxTuples: 2000, MaxMembers: 800, KeepRefused: true, InsecureBasic: true}) {
 		t.Fatalf("%v %+v", err, c.DataAPI.XMLA)
 	}
 	for _, name := range []string{"DATA_API__XMLA_MAX_CELLS", "DATA_API__XMLA_MAX_TUPLES", "DATA_API__XMLA_MAX_MEMBERS"} {

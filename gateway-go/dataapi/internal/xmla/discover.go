@@ -13,6 +13,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/xmlamodel"
 )
@@ -235,6 +236,36 @@ type Data interface {
 type Limits struct {
 	// the most members one answer holds (DATA_API__XMLA_MAX_MEMBERS)
 	MaxMembers int
+	// the most bytes an answer holds in memory (DefaultMaxAnswerBytes when zero): a column of long
+	// texts makes few members a very large answer
+	MaxBytes int
+	// the seconds a statement may take, for the fault that names them when they pass
+	Timeout time.Duration
+	// Classify names the kind of an error of the engine, for the log. Optional.
+	Classify func(error) string
+}
+
+// DefaultMaxAnswerBytes is the most a Discover answer may weigh: it is held whole until it is
+// known to be whole, so that a fault never follows a byte of it.
+const DefaultMaxAnswerBytes = 32 << 20
+
+var errBytesCap = errors.New("answer bytes cap")
+
+func bytesFault(max int) *Fault {
+	return NewFault(CodeLimit, fmt.Sprintf("This answer is larger than %d bytes, the cap of bytes for an answer of Discover. Restrict the request to fewer members", max))
+}
+
+// capBuffer is a buffer that takes no more than max bytes.
+type capBuffer struct {
+	bytes.Buffer
+	max int
+}
+
+func (b *capBuffer) Write(p []byte) (int, error) {
+	if b.Len()+len(p) > b.max {
+		return 0, errBytesCap
+	}
+	return b.Buffer.Write(p)
 }
 
 // Discover answers a Discover request: the whole envelope is written to w only if the answer can
@@ -248,11 +279,14 @@ func Discover(ctx context.Context, w io.Writer, req *Request, cat *Catalog, data
 	if lim.MaxMembers <= 0 {
 		lim.MaxMembers = 5_000
 	}
+	if lim.MaxBytes <= 0 {
+		lim.MaxBytes = DefaultMaxAnswerBytes
+	}
 	r := restrictions(req.Restrictions)
 	// the answer is held until it is whole: a fault must not follow a byte (it is at most the cap of
 	// members' rows, and the other rowsets are small)
-	var buf bytes.Buffer
-	rw := NewRowsetWriter(&buf, sp.cols)
+	buf := &capBuffer{max: lim.MaxBytes}
+	rw := NewRowsetWriter(buf, sp.cols)
 	// the rowsets are written by one function each, which puts its rows in the writer
 	var err error
 	switch sp.name {
@@ -285,6 +319,9 @@ func Discover(ctx context.Context, w io.Writer, req *Request, cat *Catalog, data
 		return 0, err
 	}
 	if err := rw.Close(); err != nil {
+		if errors.Is(err, errBytesCap) {
+			return 0, bytesFault(lim.MaxBytes)
+		}
 		return 0, NewFault(CodeInternal, "The answer could not be written")
 	}
 	if _, err := w.Write(buf.Bytes()); err != nil {

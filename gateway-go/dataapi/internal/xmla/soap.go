@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/xmlamodel"
 )
 
 // The namespaces of the protocol.
@@ -121,6 +123,11 @@ func ReadRequest(in io.Reader) (*Request, error) {
 	}
 	if req.Method == MethodDiscover && req.RequestType == "" {
 		return nil, NewFault(CodeBadRequest, "A Discover needs its RequestType")
+	}
+	// the rowset by its canonical name, whatever the case the client wrote: every comparison after
+	// this one can then be exact
+	if sp := specOf(req.RequestType); sp != nil {
+		req.RequestType = sp.name
 	}
 	// an Execute with no statement is what a client sends to open, keep or end a session: the
 	// caller decides what to answer
@@ -318,6 +325,11 @@ type Fault struct {
 	// Refused marks a statement the parser or the planner did not accept: the pod may keep its
 	// text (docs/specs/xmla.md, «The MDX that is understood»). Not a part of the answer.
 	Refused bool
+	// Class names the kind of error behind an internal fault, for the log (never the engine's text,
+	// which may quote values of the data); Cancelled marks a request the client gave up. Not a part
+	// of the answer.
+	Class     string
+	Cancelled bool
 }
 
 // NewFault is a fault with this code and description.
@@ -346,7 +358,7 @@ func WriteFault(w io.Writer, f *Fault) error {
 func escape(s string) string {
 	var b bytes.Buffer
 	_ = xml.EscapeText(&b, []byte(strings.Map(func(r rune) rune {
-		if r == 0x9 || r == 0xA || r == 0xD || (r >= 0x20 && r <= 0xD7FF) || (r >= 0xE000 && r <= 0xFFFD) || r >= 0x10000 {
+		if xmlamodel.XMLSafe(r) {
 			return r
 		}
 		return -1

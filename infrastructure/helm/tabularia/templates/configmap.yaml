@@ -61,6 +61,7 @@ DATA_API__XMLA_MAX_CELLS: {{ include "tabularia.env" (.maxCells | default 100000
 DATA_API__XMLA_MAX_TUPLES: {{ include "tabularia.env" (.maxTuples | default 10000) }}
 DATA_API__XMLA_MAX_MEMBERS: {{ include "tabularia.env" (.maxMembers | default 5000) }}
 DATA_API__XMLA_KEEP_REFUSED: {{ .keepRefused | default false | quote }}
+DATA_API__XMLA_INSECURE_BASIC: {{ .insecureBasic | default false | quote }}
 {{- end }}
 
 JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}

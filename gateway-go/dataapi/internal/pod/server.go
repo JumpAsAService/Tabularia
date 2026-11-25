@@ -56,6 +56,13 @@ type Server struct {
 	// the statements the XMLA interface refused, when the installation keeps them
 	xrefusedOnce sync.Once
 	xrefused     *refusedStore
+	// the places to compute and write an Execute answer: each holds a connection of a table's pool
+	// and its temporary tables until the last byte, so a few slow clients must not take them all
+	xmlaPlaces chan struct{}
+	// the most bytes a Discover answer holds (xmla.DefaultMaxAnswerBytes when zero); a test makes it small
+	xmlaMaxBytes int
+	// the warning of the insecure Basic switch, given once
+	insecureWarned atomic.Bool
 
 	// what the status reports: when the pod started, the version each resource is being
 	// prepared at, the last manifest that could not be had
@@ -82,7 +89,7 @@ type failure struct {
 func NewServer(cfg Config, log *slog.Logger, gateway *Gateway, prep *Preparer) *Server {
 	return &Server{cfg: cfg, log: log, gateway: gateway, prep: prep, limiter: NewLimiter(time.Now), usage: NewUsage(),
 		clientIP: clientip.New(cfg.ForwardedAllowIPs), now: time.Now, tables: map[string]*Table{}, failed: map[string]failure{},
-		wake: make(chan struct{}, 1), reportNow: make(chan struct{}, 1), gate: make(chan struct{}, max(cfg.Threads, 1)), started: time.Now().UTC(), preparing: map[string]string{}}
+		wake: make(chan struct{}, 1), reportNow: make(chan struct{}, 1), gate: make(chan struct{}, max(cfg.Threads, 1)), xmlaPlaces: make(chan struct{}, xmlaPlaces), started: time.Now().UTC(), preparing: map[string]string{}}
 }
 
 // ── the manifest ──────────────────────────────────────────────────────────────
@@ -95,6 +102,12 @@ func (s *Server) Apply(m *dataapiwire.Manifest) {
 	}
 	s.snap.Store(snap)
 	s.refused.Store(false)
+	if x := m.XMLA; x != nil && x.InsecureBasic && s.insecureWarned.CompareAndSwap(false, true) {
+		s.log.Warn("DATA_API__XMLA_INSECURE_BASIC is on: a key sent as HTTP Basic is accepted over plain HTTP and travels in clear text. For trials on a trusted network only")
+	}
+	if x := m.XMLA; x == nil || !x.KeepRefused {
+		s.refusals().drop() // what is not kept is not left on the disk
+	}
 	// what is no longer published, or no longer readable on the creator's authority, stops now
 	s.mu.Lock()
 	for name, t := range s.tables {
@@ -508,10 +521,12 @@ func problem(w http.ResponseWriter, p *Problem) {
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, p *Problem) {
 	recordOf(r).code = p.Code
 	if p.Status == 401 && p.Challenge == "" && isXMLAPath(r.URL.Path) {
-		// the client asks the person for a password only when it is told to use Basic
+		// the client asks the person for a password only when it is told to use Basic. The realm is the
+		// slug, which the caller knows from the address: the name of the data API is not told to
+		// someone who has no key
 		realm := "data API"
-		if snap := s.snap.Load(); snap != nil && snap.m.Name != "" {
-			realm = snap.m.Name
+		if snap := s.snap.Load(); snap != nil && snap.m.Slug != "" {
+			realm = snap.m.Slug
 		}
 		q := *p
 		q.Challenge = `Basic realm="` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(realm) + `"`
@@ -577,7 +592,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request) (*snapshot, *KeyR
 		return nil, nil, false
 	}
 	sent := KeyOf(r)
-	if sent != "" && UsesBasic(r) && s.clientIP.Scheme(r) != "https" {
+	if sent != "" && UsesBasic(r) && s.clientIP.Scheme(r) != "https" && !(snap.m.XMLA != nil && snap.m.XMLA.InsecureBasic) {
 		// Basic is the key in clear text: only where TLS ends at a proxy that says so
 		s.fail(w, r, &Problem{Status: 403, Code: "https_required",
 			Detail: "A key sent as HTTP Basic is accepted over HTTPS only: use the https address of the data API"})

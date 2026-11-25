@@ -116,24 +116,26 @@ func TestXMLAAsksForBasic(t *testing.T) {
 	f.withXMLA()
 	a := f.post(discoverProperties, "")
 	f.want(a, 401, "key_missing")
-	if got := a.header.Get("WWW-Authenticate"); got != `Basic realm="CRM"` {
+	// the realm is the slug, which the caller knows from the address: the name of the data API is
+	// not told to someone who has no key
+	if got := a.header.Get("WWW-Authenticate"); got != `Basic realm="crm"` {
 		t.Errorf("challenge: %q", got)
 	}
 	// a wrong key is challenged as well: the client asks the person again
 	a = f.post(discoverProperties, "tdk_short")
 	f.want(a, 401, "key_invalid")
-	if got := a.header.Get("WWW-Authenticate"); got != `Basic realm="CRM"` {
+	if got := a.header.Get("WWW-Authenticate"); got != `Basic realm="crm"` {
 		t.Errorf("challenge: %q", got)
 	}
 	// the REST routes keep their Bearer challenge
 	if got := f.get("/data/crm/customers?id=1", "").header.Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer") {
 		t.Errorf("REST challenge: %q", got)
 	}
-	// the realm is quoted
+	// whatever the name is, it is not in the challenge
 	f.m.Name = `The "CRM" \ data`
 	f.s.Apply(f.m)
-	if got := f.post(discoverProperties, "").header.Get("WWW-Authenticate"); got != `Basic realm="The \"CRM\" \\ data"` {
-		t.Errorf("quoted realm: %q", got)
+	if got := f.post(discoverProperties, "").header.Get("WWW-Authenticate"); got != `Basic realm="crm"` || strings.Contains(got, "CRM") {
+		t.Errorf("the name in the realm: %q", got)
 	}
 }
 

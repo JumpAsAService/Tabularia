@@ -69,31 +69,15 @@ func init() {
 
 // NewColumn reads DuckDB's type of a column.
 func NewColumn(name, typ string) Column {
-	c := Column{Name: name, Type: typ, Kind: KindOther}
-	switch {
-	case intRanges[typ] != [2]*big.Int{}:
-		c.Kind = KindInt
-	case typ == "FLOAT" || typ == "DOUBLE":
-		c.Kind = KindFloat
-	case decimalType.MatchString(typ):
+	c := Column{Name: name, Type: typ, Kind: dataapiwire.KindOfDuckDB(typ)}
+	if c.Kind == KindDecimal {
 		m := decimalType.FindStringSubmatch(typ)
-		c.Kind = KindDecimal
+		if m == nil {
+			c.Kind = KindOther // a width and a scale that are not read are not served as a number
+			return c
+		}
 		c.Width, _ = strconv.Atoi(m[1])
 		c.Scale, _ = strconv.Atoi(m[2])
-	case typ == "BOOLEAN":
-		c.Kind = KindBool
-	case typ == "VARCHAR":
-		c.Kind = KindString
-	case typ == "DATE":
-		c.Kind = KindDate
-	case typ == "TIMESTAMP" || typ == "TIMESTAMP_S" || typ == "TIMESTAMP_MS" || typ == "TIMESTAMP_NS":
-		c.Kind = KindTimestamp
-	case typ == "TIMESTAMP WITH TIME ZONE":
-		c.Kind = KindTimestampTZ
-	case typ == "TIME":
-		c.Kind = KindTime
-	case typ == "UUID":
-		c.Kind = KindUUID
 	}
 	return c
 }

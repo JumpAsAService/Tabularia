@@ -61,8 +61,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 176 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 51 |
-| **Total** | **344** |
+| [Compose and Helm only](#compose-and-helm-only) | 52 |
+| **Total** | **345** |
 
 ## Before production
 
@@ -721,6 +721,7 @@ containers.
 | `DATA_API__XMLA_MAX_TUPLES` | `10000` | Helm chart | The most tuples on one axis of an XMLA `Execute` answer, 1 to 10,000,000. |
 | `DATA_API__XMLA_MAX_MEMBERS` | `5000` | Helm chart | The most members in one answer to an XMLA `Discover`, 1 to 10,000,000; a level with more is paged, not sent whole. |
 | `DATA_API__XMLA_KEEP_REFUSED` | `false` | Helm chart | Keeps, for a day, the MDX of a statement the pod refused, for whoever manages the data API to read and send. Off by default: an MDX statement carries member names, which are values of the data. |
+| `DATA_API__XMLA_INSECURE_BASIC` | `false` | Helm chart | A development switch: the pods accept the key sent as HTTP Basic (the password of the spreadsheet's connection) over plain HTTP too, where they would answer `403` (`https_required`). **Only for trials on a trusted network, because the key travels in clear text** and anyone who can read the traffic can copy it. Off by default, and to be left off in production. It travels to the pods in their manifest, and each pod writes one warning in its log when it starts with it on. `GET /data-apis/limits` and Administration → Data APIs show it when it is on. |
 | `EGRESS__LISTEN` | `:3128` | Helm chart | Where the egress proxy listens as a forward proxy (CONNECT for HTTPS, absolute-form for HTTP): the address the scripts and notebooks without internet access get as `HTTPS_PROXY`. Read only by the `egress-proxy` role. |
 | `EGRESS__TRANSPARENT` | *(set by the chart)* | Helm chart | The egress proxy's transparent ports, `listening port=storage port` pairs (20000=443, 20001=80…): for the libraries that ignore `HTTPS_PROXY` (Arrow, in Python and R), the bucket's names point to the proxy's Service, which reads the name asked (TLS SNI or HTTP Host) and passes the bytes on unchanged to an allowed storage host. |
 | `EGRESS__MAX_CONNECTIONS` | `1024` | Helm chart | The most connections the egress proxy holds at once, all clients together. |

@@ -166,7 +166,8 @@ func buildManifest(ctx context.Context, d *Deps, a *dataapis.API) (*dataapiwire.
 	}
 	if def.Xmla.Enabled && xmlaOn(d) {
 		c := d.Config.DataAPI.XMLA
-		m.XMLA = &dataapiwire.XMLA{MaxCells: c.MaxCells, MaxTuples: c.MaxTuples, MaxMembers: c.MaxMembers, KeepRefused: c.KeepRefused}
+		m.XMLA = &dataapiwire.XMLA{MaxCells: c.MaxCells, MaxTuples: c.MaxTuples, MaxMembers: c.MaxMembers, KeepRefused: c.KeepRefused,
+			InsecureBasic: c.InsecureBasic}
 	}
 	return m, nil
 }
