@@ -7,7 +7,7 @@
 // and one click goes back to it. Observers read; with ENGINE__SETTINGS_PANEL=false nobody
 // changes them from here. The server checks ranges and the constraints between settings;
 // a refusal comes back as a code written here in the reader's language.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import {
@@ -49,7 +49,8 @@ const text = ref<Record<string, string>>({})
 const toReset = ref<Set<string>>(new Set())
 // the server's refusals at the last save, per setting
 const refusals = ref<Record<string, SettingError>>({})
-const openOnes = ref<Set<string>>(new Set())
+// shallow: a box the person opens or closes is noted in place and draws nothing (toggleOpen)
+const openOnes = shallowRef<Set<string>>(new Set())
 const search = ref('')
 
 const ICONS: Record<string, any> = {
@@ -122,10 +123,11 @@ const isOpen = (id: string) => !!search.value.trim() || openOnes.value.has(id)
 function toggleOpen(id: string, ev: Event) {
   const open = (ev.target as HTMLDetailsElement).open
   if (search.value.trim()) return
-  const s = new Set(openOnes.value)
-  if (open) s.add(id)
-  else s.delete(id)
-  openOnes.value = s
+  // Noted in place, with no render: the box has opened or closed itself already, and drawing
+  // the whole page again for it (every field of every group) is a pause one sees while it moves.
+  // The next render reads the set as it is.
+  if (open) openOnes.value.add(id)
+  else openOnes.value.delete(id)
 }
 const inGroupFromPanel = (list: PanelSetting[]) => list.filter((v) => v.value !== null).length
 const inGroupToSave = (list: PanelSetting[]) => list.filter((v) => toSave(v)).length

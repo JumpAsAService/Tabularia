@@ -16,6 +16,8 @@ export const EXPAND_INSTANT = 'data-expand-instant'
 
 const MIN_MS = 200
 const MAX_MS = 340
+/** The most one frame moves the travel on: two frames of a 60 Hz screen. */
+const MAX_STEP_MS = 34
 
 /**
  * How long a travel of `distance` px takes: a short box is quick, a tall one takes a little more
@@ -33,7 +35,6 @@ function halt(box: HTMLElement): void {
   const run = runs.get(box)
   if (!run) return
   runs.delete(box)
-  run.animation.onfinish = null
   run.animation.cancel()
   box.removeAttribute(EXPAND_CLOSING)
 }
@@ -49,27 +50,37 @@ function closedHeight(box: HTMLElement, head: HTMLElement): number {
 function slide(box: HTMLElement, from: number, to: number, closing: boolean, done: () => void | Promise<void>): void {
   if (Math.abs(to - from) < 1) { void done(); return }
   const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-expand').trim() || 'ease-out'
+  const duration = expandDuration(to - from, closing)
   const animation = box.animate(
     { height: [`${from}px`, `${to}px`], overflow: ['hidden', 'hidden'] },
     // the last frame is held until `done` has taken the body away: no frame at full height
-    { duration: expandDuration(to - from, closing), easing, fill: 'forwards' },
+    { duration, easing, fill: 'forwards' },
   )
-  runs.set(box, { animation, closing })
+  // The animation never runs on its own clock: it stays paused and each frame moves it on by
+  // the time that frame took, and by no more than MAX_STEP_MS. A page that is busy for a
+  // moment (the body of a box laid out and painted for the first time, the page's own answer
+  // to the toggle) then holds the travel still and lets it go on from there; on the clock, the
+  // time spent busy would be travel skipped, and the box would jump.
+  animation.pause()
+  const run: Run = { animation, closing }
+  runs.set(box, run)
   if (closing) box.setAttribute(EXPAND_CLOSING, '')
-  else {
-    // Opening costs the browser a long frame or two before anything can move: the body is laid
-    // out and painted for the first time, and the page answers the toggle. The clock is held
-    // on the first frame until that is spent, so the travel is whole and even; started at
-    // once, its first half would be gone by the time a frame reached the screen (a jump).
-    animation.pause()
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (runs.get(box)?.animation === animation) animation.play()
-    }))
-  }
-  animation.onfinish = async () => {
+  let at = 0
+  let last = 0
+  const frame = async (now: number) => {
+    if (runs.get(box) !== run) return // turned round, or taken over
+    if (last) at += Math.min(now - last, MAX_STEP_MS)
+    last = now
+    if (at < duration) {
+      animation.currentTime = at
+      requestAnimationFrame(frame)
+      return
+    }
+    animation.currentTime = duration
     await done()
-    if (runs.get(box)?.animation === animation) halt(box)
+    if (runs.get(box) === run) halt(box)
   }
+  requestAnimationFrame(frame)
 }
 
 /**

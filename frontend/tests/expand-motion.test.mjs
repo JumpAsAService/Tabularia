@@ -28,13 +28,21 @@ test('closing is quicker than opening, and the direction of the travel does not 
 test('the last frame is held until the body is gone, and a click turns the travel round', () => {
   const code = read('composables/expandMotion.ts')
   assert.match(code, /fill: 'forwards'/)
-  assert.match(code, /await done\(\)\s+if \(runs\.get\(box\)\?\.animation === animation\) halt\(box\)/)
+  assert.match(code, /animation\.currentTime = duration\s+await done\(\)\s+if \(runs\.get\(box\) === run\) halt\(box\)/)
   assert.match(code, /const close = run \? !run\.closing : isOpen/)
 })
 
-test('opening holds the clock until the body has been drawn, closing starts at once', () => {
+test('a busy page holds the travel still instead of skipping it: paused, moved on frame by frame', () => {
   const code = read('composables/expandMotion.ts')
-  assert.match(code, /if \(closing\) box\.setAttribute\(EXPAND_CLOSING, ''\)\s+else \{[^}]*animation\.pause\(\)\s+requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{\s+if \(runs\.get\(box\)\?\.animation === animation\) animation\.play\(\)/)
+  assert.match(code, /animation\.pause\(\)/)
+  assert.doesNotMatch(code, /animation\.play\(\)/)
+  assert.match(code, /if \(last\) at \+= Math\.min\(now - last, MAX_STEP_MS\)/)
+})
+
+test('opening or closing a settings group draws nothing again', () => {
+  const page = read('components/admin/SettingsSection.vue')
+  assert.match(page, /const openOnes = shallowRef<Set<string>>\(new Set\(\)\)/)
+  assert.match(page, /if \(open\) openOnes\.value\.add\(id\)\s+else openOnes\.value\.delete\(id\)/)
 })
 
 test('the plugin leaves the browser alone with reduced motion and on what is not an expander', () => {
