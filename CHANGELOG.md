@@ -51,6 +51,12 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   after the proposal was written, since applying replaces those edits. Once applied, «Undo» on
   the card puts every touched file back, the removed ones too, for as long as they were not
   edited since.
+- A turn of the chat or of the flow editor's assistant that does not reach its end (a cap, the
+  provider, a tool refused too often) is kept as far as it went, and shown as stopped: the next
+  message goes on from what it had done, instead of starting again and, in the chat, opening a
+  new draft. The same for a turn stopped with Stop in a chat conversation that already exists.
+  A turn the model declined, one overtaken by metadata-only mode, and the script and Bayesian
+  assistants' turns are counted and not kept, as before.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 

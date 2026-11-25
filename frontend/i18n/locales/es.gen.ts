@@ -727,6 +727,7 @@ export default {
     "exportNotice": "Conversación con un asistente de IA. Las respuestas se generaron automáticamente con un modelo de lenguaje y pueden contener errores: comprueba los resultados antes de usarlos.",
     "sentTo": "Tus mensajes, y lo que el asistente lee para ellos, van a {provider}.",
     "truncated": "El modelo se quedó sin espacio: la respuesta termina aquí. Pide el resto, o menos cada vez.",
+    "unfinished": "Este turno se detuvo antes de terminar. Lo que había hecho se conserva: pide que continúe desde ahí.",
   },
   "flowAssistant": {
     "title": "Asistente del flujo",

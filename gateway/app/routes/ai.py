@@ -505,7 +505,7 @@ async def _turn_stream(
     the spending ledger, which the daily caps read. `extra_done` goes with `error` too: the flow editor applies what was
     built before the stop."""
     from pydantic_ai import (
-        AgentRunResultEvent, FunctionToolCallEvent, FunctionToolResultEvent, ModelMessagesTypeAdapter,
+        AgentRunResultEvent, capture_run_messages, FunctionToolCallEvent, FunctionToolResultEvent, ModelMessagesTypeAdapter,
         PartDeltaEvent, PartStartEvent, TextPart, TextPartDelta,
     )
     from pydantic_ai.exceptions import (
@@ -520,26 +520,55 @@ async def _turn_stream(
     # when each tool call started: its step shows how long it took
     started: dict[str, float] = {}
 
-    def account() -> None:
-        """What an unfinished turn has spent so far, on the ledger, once."""
-        nonlocal accounted
+    # the run's messages as they are made: what a turn that does not end had done (the library keeps a
+    # response or a tool call it was stopped in, marked as interrupted, and mends it when it is replayed)
+    run_messages: list[Any] = []
+    # A turn that did not end is worth remembering when what it did still stands: the chat's drafts and
+    # plans live on the server, and the flow editor is handed the canvas with the error. A proposal of
+    # the script or Bayesian assistant that never reached the person is not something to build on.
+    keeps_unfinished = kind in ("assistant", "flow") and not ephemeral
+
+    def settle(*, remember: bool = True) -> dict[str, Any]:
+        """An unfinished turn, once: saved as far as it went when there is something to remember, and
+        what it spent on the ledger either way. What it returns goes with the error: the conversation."""
+        nonlocal accounted, chat_id
         if accounted or not spent.requests:
-            return
+            return {}
         accounted = True
+        cost = ai_pricing.cost_of(spent, model_id)
+        new = run_messages[len(history):] if remember and keeps_unfinished else []
+        # a question the model never began to answer leaves nothing: only its request
+        if not any(type(m).__name__ == "ModelResponse" and m.parts for m in new):
+            new = []
         try:
             with _new_session() as s:
+                if new:
+                    if chat_id is None:
+                        chat_id = getattr(deps, "chat_id", None)
+                    if chat_id is None:
+                        chat_id = ai_chats.create(s, user, message, model_id, engine, kind=kind, flow_id=flow_id).id
+                    ai_chats.save_turn(
+                        s, chat_id, question=message, messages=ModelMessagesTypeAdapter.dump_python(new, mode="json"),
+                        model_id=model_id, input_tokens=spent.input_tokens, output_tokens=spent.output_tokens,
+                        requests=spent.requests, cost=cost,
+                        metadata_only=bool(getattr(deps, "metadata_turn", False)), unfinished=True,
+                    )
+                    return {"chat_id": chat_id}
                 ai_chats.record_spend(s, user_id=user.id, model_id=model_id, input_tokens=spent.input_tokens,
-                                        output_tokens=spent.output_tokens, cost=ai_pricing.cost_of(spent, model_id))
+                                      output_tokens=spent.output_tokens, cost=cost)
         except Exception:  # noqa: BLE001 — the user already has the error: the ledger must not hide it
-            logger.exception("assistant: cost of the interrupted turn not recorded")
+            logger.exception("assistant: the interrupted turn was not saved or counted (chat %s)", chat_id)
+        return {}
 
-    def unfinished() -> dict[str, Any]:
-        account()
+    def unfinished(*, remember: bool = True) -> dict[str, Any]:
+        kept = settle(remember=remember)
         try:
-            return extra_done() if extra_done is not None else {}
+            return {**kept, **(extra_done() if extra_done is not None else {})}
         except Exception:  # noqa: BLE001
-            return {}
+            return kept
 
+    captured = capture_run_messages()
+    run_messages = captured.__enter__()
     try:
         async with agent.run_stream_events(
             message, message_history=history, deps=deps, model=model, usage=spent,
@@ -637,7 +666,8 @@ async def _turn_stream(
                         ))
     except metadata_only.TurnOutdated:
         logger.info("assistant: metadata-only mode came on during a turn (chat %s): it stops", chat_id)
-        yield _sse("error", {"code": "metadata_only", "message": metadata_only.TURN_OUTDATED, **unfinished()})
+        # what the turn read was read outside the mode: not something a later turn may be given
+        yield _sse("error", {"code": "metadata_only", "message": metadata_only.TURN_OUTDATED, **unfinished(remember=False)})
     except UsageLimitExceeded as e:
         # the same event for steps, tokens and cost: the user needs to know the question was
         # too big, not which counter stopped it
@@ -646,7 +676,7 @@ async def _turn_stream(
     except (ai_agent.ModelRefused, ContentFilterError):
         # an answer of the API, not a failure. `discard`: what was written before it is not an answer
         logger.info("assistant: the model declined the turn (chat %s, model %s)", chat_id, model_id)
-        yield _sse("error", {"code": "refused", "discard": True, "message": REFUSED, **unfinished()})
+        yield _sse("error", {"code": "refused", "discard": True, "message": REFUSED, **unfinished(remember=False)})
     except IncompleteToolCall:
         logger.warning("assistant: a tool call went over the length allowed (chat %s, model %s)", chat_id, model_id)
         yield _sse("error", {"code": "too_long", "message": TOO_LONG, **unfinished()})
@@ -664,11 +694,18 @@ async def _turn_stream(
         logger.exception("assistant: error during the conversation")
         yield _sse("error", {"code": "internal", "message": "Unexpected error in the assistant.", **unfinished()})
     finally:
+        try:
+            captured.__exit__(None, None, None)
+        except (ValueError, RuntimeError):  # ended from another context than it began in: nothing to put back there
+            pass
         # A turn the person stopped, or whose page went away, ends here and nowhere else: closing
         # the stream cancels this generator, which is no Exception, so none of the branches above
         # runs. What it spent is still spent: without this line Stop would take a turn off the
         # ledger, and the daily caps with it. (Nothing awaits before it: a cancellation cannot cut it.)
-        account()
+        # It is remembered only in a conversation the page already knows, and only the chat's: a new
+        # one would be a conversation nobody can find again, and the flow editor never got the canvas
+        # this turn built, so a later turn would be told of nodes that are not there.
+        settle(remember=kind == "assistant" and chat_id is not None)
         await ai_agent.close_model(model)
 
 

@@ -727,6 +727,7 @@ export default {
     "exportNotice": "Conversation with an AI assistant. The answers were generated automatically by a language model and can contain mistakes: check the results before relying on them.",
     "sentTo": "Your messages, and what the assistant reads for them, go to {provider}.",
     "truncated": "The model ran out of room: this answer stops here. Ask for the rest, or for less at a time.",
+    "unfinished": "This turn stopped before its end. What it had done is kept: ask to go on from there.",
   },
   "flowAssistant": {
     "title": "Flow assistant",

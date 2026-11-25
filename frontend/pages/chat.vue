@@ -338,16 +338,17 @@ async function openChat(id: number) {
   if (busy.value) return
   try {
     const d = await ai.openChat(id)
-    turns.value = d.messages.flatMap((t) => ([
-      { role: 'user', text: t.question } as Turn,
+    turns.value = d.messages.flatMap((saved) => ([
+      { role: 'user', text: saved.question } as Turn,
       {
-        role: 'assistant', text: t.answer, streaming: false, usage: t.usage, seq: t.seq, model: t.model_id,
-        steps: t.steps.map((p, i): Step => ({
-          id: p.id ?? `${t.seq}-${i}`, name: p.name, title: p.title, args: argsOf(p.args),
+        role: 'assistant', text: saved.answer, streaming: false, usage: saved.usage, seq: saved.seq, model: saved.model_id,
+        steps: saved.steps.map((p, i): Step => ({
+          id: p.id ?? `${saved.seq}-${i}`, name: p.name, title: p.title, args: argsOf(p.args),
           state: p.ok === false ? 'error' : 'ok', error: p.error, table: p.table, chart: p.chart, node: p.node, count: p.count,
           subject: p.subject, planId: p.plan_id, durationMs: p.duration_ms,
         })),
-        questions: t.questions, answers: t.answers, plan: t.plan,
+        questions: saved.questions, answers: saved.answers, plan: saved.plan,
+        error: saved.unfinished ? t('aiCompliance.unfinished') : undefined,
       } as Turn,
     ]))
     chatId.value = d.id

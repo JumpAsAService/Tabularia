@@ -277,6 +277,8 @@ export interface AiTurn {
   answers?: (string | null)[] | null
   plan_id?: number
   plan?: AgentPlan
+  // the turn did not reach its end (a cap, the provider, Stop): it is kept as far as it went
+  unfinished?: boolean
 }
 
 export interface AiChatSummary extends AiChatTotal {

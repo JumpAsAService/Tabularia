@@ -338,6 +338,46 @@ def test_a_long_result_reaches_the_model_in_part_and_the_person_whole(app, world
     assert script.got["query_datasource"]["rows"] == rows and "reaches you in part" not in script.instructions[0]
 
 
+def test_a_turn_stopped_in_a_conversation_is_kept_as_far_as_it_went(app, world, session, monkeypatch, fake_engine):
+    """Stop in a conversation the page knows: what the turn had done (here, a query and its table) stays,
+    marked as unfinished, and the next message goes on from it. In a NEW conversation nothing is kept: the
+    page never learns of it, so it would be a conversation nobody can find again."""
+    import asyncio
+
+    from app.models import User
+    from app.models.ai_chat import AiChat
+
+    fake_engine.preview_response = (200, {"columns": [{"name": "n", "dtype": "Int64"}], "rows": [{"n": 3}],
+                                          "row_count": 1, "truncated": False})
+    anna = signed_in(app, "anna@x.local")
+    query = [("query_datasource", {"datasource_id": world["orders"], "sql": "SELECT COUNT(*) AS n FROM self"})]
+
+    async def stopped(chat_id):
+        monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=Script(query, "never reached")))
+        body = ai_routes.ChatRequest(message="how many orders?", model=MODEL, chat_id=chat_id, locale="en")
+        response = await ai_routes.chat(body, request=None, user=session.get(User, world["anna"]), session=session)
+        stream = response.body_iterator
+        # Stop while the model writes its answer, the query done and read
+        async for chunk in stream:
+            if b"event: text" in chunk:
+                break
+        await stream.aclose()
+
+    asyncio.run(stopped(None))
+    assert session.exec(select(AiChat)).all() == []
+
+    chat_id = done_of(turn(anna, monkeypatch, Script("Hello."), "hi"))["chat_id"]
+    asyncio.run(stopped(chat_id))
+    messages = anna.get(f"/ai/chats/{chat_id}").json()["messages"]
+    assert [m.get("unfinished", False) for m in messages] == [False, True]
+    assert messages[1]["question"] == "how many orders?"
+    assert messages[1]["steps"][0]["ok"] is True and messages[1]["steps"][0]["table"]["rows"] == [{"n": 3}]
+
+    script = Script("Three, as the query said.")
+    done_of(turn(anna, monkeypatch, script, "go on", chat_id=chat_id))
+    assert [m.get("unfinished", False) for m in anna.get(f"/ai/chats/{chat_id}").json()["messages"]] == [False, True, False]
+
+
 def test_a_card_is_checked_and_its_answers_are_read_back_by_question():
     from app.services.agent.questions import AskUserArgs, answers_of, card
     from app.services.agent.registry import ToolError

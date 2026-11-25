@@ -35,6 +35,9 @@ _OLD_DEFAULT_TITLE = "Nuova conversazione"
 # on the first message of a turn made in metadata-only mode (services/metadata_only.py): the
 # only turns that mode sends back to the model
 _METADATA_ONLY_MARK = "tabularia_metadata_only"
+# on the first message of a turn that did not reach its end (a cap, the provider, the person's Stop):
+# saved for what it had done, and shown as stopped
+_UNFINISHED_MARK = "tabularia_unfinished"
 
 
 def _made_in_metadata_only(items: list[Any]) -> bool:
@@ -163,9 +166,12 @@ def turns_withheld(session: Session, chat: AiChat) -> bool:
 def save_turn(
     session: Session, chat_id: int, *, question: str, messages: list[Any], model_id: str,
     input_tokens: int, output_tokens: int, requests: int, cost: Optional[Decimal], metadata_only: bool = False,
+    unfinished: bool = False,
 ) -> AiChatTurn:
     if metadata_only and messages:
         messages[0]["metadata"] = {**(messages[0].get("metadata") or {}), _METADATA_ONLY_MARK: True}
+    if unfinished and messages:
+        messages[0]["metadata"] = {**(messages[0].get("metadata") or {}), _UNFINISHED_MARK: True}
     owned_chat = session.get(AiChat, chat_id)
     user_id_ = owned_chat.user_id if owned_chat is not None else 0
     next_ = session.exec(
@@ -391,6 +397,12 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
                 known = REGISTRY.get(str(step.get("name")))
                 if isinstance(content.get("plan_id"), int) and known is not None and known.level == "write":
                     plan_id = step["plan_id"] = content["plan_id"]
+    first = messages[0] if messages else None
+    unfinished = isinstance(first, dict) and bool((first.get("metadata") or {}).get(_UNFINISHED_MARK))
+    if unfinished:
+        # a step the turn was stopped in has no result: it did not succeed, and it is not still running
+        for step in steps:
+            step.setdefault("ok", False)
     out = {
         "seq": turn.seq,
         "question": turn.question,
@@ -411,6 +423,8 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
         out["questions"] = questions
     if plan_id is not None:
         out["plan_id"] = plan_id
+    if unfinished:
+        out["unfinished"] = True
     return out
 
 

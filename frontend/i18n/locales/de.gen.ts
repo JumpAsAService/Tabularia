@@ -727,6 +727,7 @@ export default {
     "exportNotice": "Unterhaltung mit einem KI-Assistenten. Die Antworten wurden automatisch von einem Sprachmodell erzeugt und können Fehler enthalten: Prüfe die Ergebnisse, bevor du dich darauf verlässt.",
     "sentTo": "Ihre Nachrichten und was der Assistent dafür liest, gehen an {provider}.",
     "truncated": "Dem Modell ist der Platz ausgegangen: Die Antwort endet hier. Fragen Sie nach dem Rest oder nach weniger auf einmal.",
+    "unfinished": "Diese Runde endete vorzeitig. Was sie getan hat, bleibt erhalten: Bitte darum, von dort weiterzumachen.",
   },
   "flowAssistant": {
     "title": "Flow-Assistent",

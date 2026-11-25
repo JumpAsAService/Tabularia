@@ -283,10 +283,53 @@ async def test_a_turn_stopped_by_its_cap_hands_back_what_it_built_and_is_counted
     assert name == "error" and error["code"] == "too_many_steps"
     built = json.loads(error["definition"])
     assert [n["id"] for n in built["nodes"]] == ["source", "op-1", "op-2"] and error["touched"] == ["source", "op-1", "op-2"]
-    # not saved as a turn, but what it cost is on the ledger the daily caps read
-    assert session.exec(select(AiChat)).all() == []
+    # kept as far as it went, in a conversation the editor is told of: the canvas it built went back with the error
+    from app.models.ai_chat import AiChatTurn
+
+    chat = session.exec(select(AiChat)).one()
+    assert error["chat_id"] == chat.id
+    kept = session.exec(select(AiChatTurn)).one()
+    assert ai_chats._turn_for_ui(kept)["unfinished"] is True
+    assert [s["name"] for s in ai_chats._turn_for_ui(kept)["steps"]][:3] == ["add_source", "add_step", "add_step"]
+    # and what it cost is on the ledger the daily caps read, once, with the turn
     spent = session.exec(select(AiSpend)).all()
-    assert len(spent) == 1 and spent[0].user_id == world["editor"].id and spent[0].input_tokens > 0
+    assert len(spent) == 1 and spent[0].user_id == world["editor"].id and spent[0].input_tokens > 0 and spent[0].turn_id == kept.id
+
+
+@pytest.mark.anyio
+async def test_the_turn_after_a_stopped_one_goes_on_from_what_it_did(session, world, fake_engine, monkeypatch, ai_on):
+    """«Go on» after a turn that hit its cap: the model is given what that turn did (its calls and their
+    results, a call it was stopped in mended by the library), on the canvas the editor got back."""
+    ai_on.ai.max_flow_requests = 2
+    first = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "limit", "params": {"n": 5}}),
+        ("add_step", {"after": "op-1", "operation": "limit", "params": {"n": 3}}),
+        "never reached",
+    ])
+    name, error = first[-1]
+    assert name == "error" and error["code"] == "too_many_steps"
+    ai_on.ai.max_flow_requests = 50
+    seen = []
+
+    async def play(messages, info):
+        seen.append(messages)
+        yield "Two steps so far: a source and a limit."
+
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=play))
+    body = ai_routes.FlowAssistRequest(message="go on", model="gpt-oss-120b", flow_id=world["flow"].id, chat_id=error["chat_id"],
+                                       definition=error["definition"], locale="en")
+    events = await _events(await ai_routes.flow_assist(body, request=None, user=world["editor"], session=session))
+    assert events[-1][0] == "done", events[-1]
+    kinds = [getattr(p, "part_kind", "") for m in seen[0] for p in m.parts]
+    calls = [p.tool_name for m in seen[0] for p in m.parts if getattr(p, "part_kind", "") == "tool-call"]
+    assert calls[:2] == ["add_source", "add_step"]
+    # every call the model is shown has its result: a provider refuses a history that leaves one open
+    assert kinds.count("tool-call") == kinds.count("tool-return") + kinds.count("retry-prompt")
+    from app.models.ai_chat import AiChatTurn
+
+    turns = session.exec(select(AiChatTurn).order_by(AiChatTurn.seq)).all()
+    assert [ai_chats._turn_for_ui(x).get("unfinished", False) for x in turns] == [True, False]
 
 
 async def _stopped_after(response, wanted: str) -> list[str]:
@@ -1570,9 +1613,9 @@ async def test_a_tool_refused_again_and_again_ends_the_turn_naming_the_step(sess
     # each refusal is a step with its own reason, which is where the message sends the person
     refused = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
     assert len(refused) == 4 and not any(d["ok"] for d in refused) and all(d["error"] for d in refused)
-    # what was built before stays, and the turn is counted
+    # what was built before stays, the turn is kept as far as it went, and it is counted once
     assert [n["id"] for n in json.loads(error["definition"])["nodes"]] == ["source"]
-    assert len(session.exec(select(AiSpend)).all()) == 1
+    assert len(session.exec(select(AiSpend)).all()) == 1 and error["chat_id"] == session.exec(select(AiChat)).one().id
 
 
 def test_only_a_tool_s_exhausted_retries_are_told_as_such():

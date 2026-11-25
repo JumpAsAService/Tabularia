@@ -130,8 +130,10 @@ async function loadLatest() {
       streaming: false,
       usage: m.usage,
       steps: m.steps.map((s, i) => ({
-        id: s.id ?? `h${i}`, name: s.name, args: args(s.args), state: 'ok' as const, table: s.table, node: s.node,
+        id: s.id ?? `h${i}`, name: s.name, args: args(s.args), state: s.ok === false ? 'error' as const : 'ok' as const,
+        error: s.error, table: s.table, node: s.node,
       })),
+      error: m.unfinished ? t('aiCompliance.unfinished') : undefined,
     }))
     scrollDown()
   } catch {
@@ -203,6 +205,8 @@ async function send(text?: string) {
           turn.error = msg
           // the model declined: what it wrote before that is not an answer
           if (extra?.discard) turn.text = ''
+          // a turn stopped halfway is kept as far as it went: the next message goes on in its conversation
+          if (extra?.chat_id) chatId.value = extra.chat_id
           // a turn stopped halfway still hands back what it built
           if (extra?.definition) {
             turn.settings = extra.settings_changed ?? []
