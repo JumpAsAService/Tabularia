@@ -420,6 +420,11 @@ so when you report.
 
 ### Checklist for the trial with the real client (Windows)
 
+To try a spreadsheet from another computer of a trusted local network, in plain HTTP, there is
+a disposable stack: `gateway-go/dataapi/scripts/xmla-trial.sh` (two small datasources, one data
+API with two cubes, a key written to a file). It is for trials only and **not a way to expose a
+data API**: the key travels in clear text.
+
 The automatic tests cover the protocol, the model and the answers on small tables; what they
 cannot cover is the real spreadsheet. This is what the owner tries on Windows with Excel, on a
 data API with XMLA on, over HTTPS, and a key of its own. Mark each step, and for any that fails

@@ -1,7 +1,7 @@
 # The data APIs' pods (docs/specs/data-apis.md, «Runtime»): a Go program with DuckDB linked in,
 # so cgo and a build stage of its own; the gateway's image stays without. Built from the
-# repository root's gateway-go/ (the program shares the gateway's internal/dataapiwire and
-# internal/clientip through its go.mod's replace):
+# repository root's gateway-go/ (the program shares the gateway's internal/dataapiwire,
+# internal/clientip and internal/xmlamodel through its go.mod's replace):
 #   docker build -t tabularia-data-api:dev -f gateway-go/dataapi/Dockerfile gateway-go
 FROM golang:1.27.3-bookworm AS build
 # the release's version (the release workflow gives it), printed by `/dataapi version`
@@ -10,6 +10,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 COPY internal/dataapiwire internal/dataapiwire
 COPY internal/clientip internal/clientip
+COPY internal/xmlamodel internal/xmlamodel
 COPY dataapi dataapi
 WORKDIR /src/dataapi
 # `go build` fetches only the modules this platform links (`go mod download` would fetch
