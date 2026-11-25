@@ -329,7 +329,7 @@
 /* Data never has the texture behind it: a table laid straight on the page gets the page
    colour, a table in a box (card, widget, dialog, panel, grid) the box's own. */
 :root[data-finish] table { background-color: var(--fin-data-bg, var(--bg)); }
-:root[data-finish] :is(.card, .hw, .modal-card, .panel, .sidebar, .menu, .sel-panel, [role="dialog"], .tile) { --fin-data-bg: var(--panel); }
+:root[data-finish] :is(.card, .hw, .modal-card, .panel, .sidebar, .menu, .sel-panel, [role="dialog"], .tile, [data-fin="box"]) { --fin-data-bg: var(--panel); }
 :root[data-finish] .datagrid { --fin-data-bg: var(--dg-bg, var(--panel)); }
 
 /* Primary button: the theme's gradient stays the fill (its contrast is measured); the
@@ -401,7 +401,7 @@
     --shadow-2: 4px 4px 0 var(--text);
     --control-border: var(--text);
   }
-  :root[data-finish="brutal"] :is(.card, .hw, .modal-card, .menu, .sel-panel, [role="dialog"], .tile) {
+  :root[data-finish="brutal"] :is(.card, .hw, .modal-card, .menu, .sel-panel, [role="dialog"], .tile, [data-fin="box"]) {
     border: 2px solid var(--text);
     border-radius: 0;
     box-shadow: 3px 3px 0 var(--text);

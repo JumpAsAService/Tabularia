@@ -1840,189 +1840,193 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       ><Settings2 :size="13" /></button>
     </div>
 
-    <!-- kind filter: the numbers say what is inside, before looking -->
-    <div v-if="state !== 'loading' && segments.length > 1" v-roving.main class="segs" role="radiogroup" :aria-label="$t('exploreKeys.kindFilter')">
-      <button class="seg" role="radio" :aria-checked="kindFilter === null" :class="{ on: kindFilter === null }" @click="kindFilter = null">
-        {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
-      </button>
-      <button
-        v-for="s in segments"
-        :key="s.kind"
-        class="seg"
-        role="radio"
-        :aria-checked="kindFilter === s.kind"
-        :class="{ on: kindFilter === s.kind }"
-        @click="kindFilter = kindFilter === s.kind ? null : s.kind"
-      >
-        {{ $t(`projectBrowser.kind_${s.kind}`) }} <span class="n">{{ s.n }}</span>
-      </button>
-    </div>
-
     <p v-if="error" class="err">{{ error }}</p>
 
     <!-- the top level is where one lands: what one changed last and what failed, above the folders -->
     <ExploreStart v-if="currentId === null" ref="startBand" :projects="projects" :user-id="user?.id ?? null" />
 
-    <SkeletonRows v-if="state === 'loading'" :rows="6" />
-
-    <div v-else-if="state === 'empty'" class="emptybox">
-      <p class="muted">{{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}</p>
-      <!-- what can be made here, by whoever may: the same rights as the New menu -->
-      <div class="empty-acts">
-        <!-- an observer reads only; an administrator is one by definition too, and may create -->
-        <template v-if="currentId !== null && target !== null && !(user?.is_observer && !user?.is_superuser)">
-          <button @click="newFlowHere"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</button>
-          <button @click="openDbDsDialog"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
-          <button @click="createView"><Bookmark :size="14" /> {{ $t('projectBrowser.newViewButton') }}</button>
-        </template>
-        <button v-if="isSuper || canManage" @click="newFolderHere"><FolderPlus :size="14" /> {{ $t('projectBrowser.newFolderButton') }}</button>
+    <!-- the folder's content: one sheet, rounded as the list tables of the other pages, with a ground of its
+         own whatever the page behind it is -->
+    <section class="sheet" data-fin="box" :aria-label="current?.name ?? $t('projectBrowser.rootCrumb')">
+      <!-- kind filter: the numbers say what is inside, before looking. The sheet's heading -->
+      <div v-if="state !== 'loading' && segments.length > 1" v-roving.main class="segs" data-fin="head" role="radiogroup" :aria-label="$t('exploreKeys.kindFilter')">
+        <button class="seg" role="radio" :aria-checked="kindFilter === null" :class="{ on: kindFilter === null }" @click="kindFilter = null">
+          {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
+        </button>
+        <button
+          v-for="s in segments"
+          :key="s.kind"
+          class="seg"
+          role="radio"
+          :aria-checked="kindFilter === s.kind"
+          :class="{ on: kindFilter === s.kind }"
+          @click="kindFilter = kindFilter === s.kind ? null : s.kind"
+        >
+          {{ $t(`projectBrowser.kind_${s.kind}`) }} <span class="n">{{ s.n }}</span>
+        </button>
       </div>
-    </div>
-    <!-- the filter looks in this folder only: the way on, to every folder, with the same words -->
-    <button v-else-if="state === 'nomatch'" class="everywhere solo" @click="searchEverywhere(q)">
-      <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
-    </button>
 
-    <table v-else class="rows" @focusin="onRowsFocus">
-      <!-- rows fade in and out only when created, duplicated or deleted here (animateRows):
-           never when the folder, the filter or a segment changes the list -->
-      <TransitionGroup tag="tbody" name="row" :css="animateRows">
-        <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
-          <tr
-            :data-key="rowKey(r)"
-            tabindex="-1"
-            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked, active: activeKey === rowKey(r), fresh: freshKey === rowKey(r) }"
-            :title="r.locked || undefined"
-            :aria-disabled="r.locked ? 'true' : undefined"
-            @click="rowClick($event, r)"
-            @auxclick="rowClick($event, r)"
-            @contextmenu="onRowContext($event, r)"
-          >
-            <td class="rname">
-              <span v-if="renaming === rowKey(r)" class="asname renaming">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" />
-                <input
-                  v-model="renameDraft"
-                  class="rename-input"
-                  maxlength="200"
-                  :aria-label="$t('projectBrowser.renameLabel', { name: r.name })"
-                  :disabled="renameBusy"
-                  @keydown.enter.prevent="commitRename(r)"
-                  @keydown.esc.prevent="cancelRename"
-                  @blur="commitRename(r)"
-                />
-              </span>
-              <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id, $event.detail === 0 ? 'first' : null)">
-                <FolderKey v-if="r.raw.personal_of != null" :size="15" class="kicon" />
-                <component :is="KIND_ICON[r.kind]" v-else :size="15" class="kicon" /> {{ r.name }}
-              </button>
-              <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
-                <ConnIcon :type="r.raw.db_type" :size="15" class="kicon" /> {{ r.name }}
-              </button>
-              <a v-else-if="r.kind === 'datasource'" :href="r.to" class="asname" @click="onDsLinkClick($event, r)">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
-              </a>
-              <NuxtLink v-else-if="r.to" :to="r.to" class="asname">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
-              </NuxtLink>
-              <span v-else class="asname plain">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
-                <Lock v-if="r.locked" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
-              </span>
-              <span v-if="r.kind === 'folder' && r.raw.personal_of != null" class="tag"
-                    :class="{ mine: r.raw.personal_of === user?.id }" :title="personalLabel(r.raw)">
-                {{ r.raw.personal_of === user?.id ? $t('projectBrowser.myFolderTag') : $t('projectBrowser.personalTag') }}
-              </span>
-              <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
-              <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
-              <!-- on a phone the meta's column is gone: the meta goes under the name -->
-              <span v-if="r.meta || r.progressRun" class="rmeta-sub muted">
-                <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
-                <template v-else>{{ r.meta }}</template>
-              </span>
-            </td>
-            <td class="rmeta muted">
-              <span class="rmeta-text" :title="r.progressRun ? undefined : r.meta">
-                <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
-                <template v-else>{{ r.meta }}</template>
-              </span>
-            </td>
-            <td v-if="r.locked" class="racts" />
-            <td v-else class="racts">
-              <Select
-                v-if="moving === rowKey(r)"
-                class="movesel"
-                :model-value="null"
-                :options="moveTargets(r)"
-                searchable
-                auto-open
-                :placeholder="$t('projectBrowser.moveToPlaceholder')"
-                @update:model-value="(v: any) => moveRow(r, v)"
-                @close="endMove(r)"
-              />
-              <template v-else>
-                <!-- the kind's main command stays in the row; the others are in «⋯» -->
-                <button
-                  v-if="primaryAction(rowFacts(r)) === 'history'"
-                  class="mini rprimary"
-                  :class="{ activebtn: expandedFlowId === r.id }"
-                  :title="$t('projectBrowser.runHistoryTitle')"
-                  :aria-label="$t('projectBrowser.runHistoryTitle')"
-                  :aria-expanded="expandedFlowId === r.id"
-                  @click="runsByKey = $event.detail === 0; toggleRuns(r.raw)"
-                ><History :size="13" /></button>
-                <button
-                  v-else-if="primaryAction(rowFacts(r)) === 'refresh'"
-                  class="mini rprimary"
-                  :title="$t('projectBrowser.refreshSnapshotTitle')"
-                  :aria-label="$t('projectBrowser.refreshSnapshotTitle')"
-                  :disabled="ingestBusy(r)"
-                  @click="refreshDatasource(r.raw)"
-                ><RefreshCw :size="13" /></button>
-                <button
-                  class="mini rmore"
-                  :data-more="rowKey(r)"
-                  :class="{ activebtn: rowMenu?.key === rowKey(r) }"
-                  :title="$t('projectBrowser.moreActions')"
-                  :aria-label="$t('projectBrowser.moreActionsFor', { name: r.name })"
-                  aria-haspopup="menu"
-                  :aria-expanded="rowMenu?.key === rowKey(r)"
-                  :aria-busy="duplicating === rowKey(r)"
-                  @click="onMoreClick($event, r)"
-                >
-                  <LoaderCircle v-if="duplicating === rowKey(r)" :size="13" class="spin" />
-                  <Ellipsis v-else :size="14" />
+      <SkeletonRows v-if="state === 'loading'" :rows="6" />
+
+      <div v-else-if="state === 'empty'" class="emptybox">
+        <p class="muted">{{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}</p>
+        <!-- what can be made here, by whoever may: the same rights as the New menu -->
+        <div class="empty-acts">
+          <!-- an observer reads only; an administrator is one by definition too, and may create -->
+          <template v-if="currentId !== null && target !== null && !(user?.is_observer && !user?.is_superuser)">
+            <button @click="newFlowHere"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</button>
+            <button @click="openDbDsDialog"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
+            <button @click="createView"><Bookmark :size="14" /> {{ $t('projectBrowser.newViewButton') }}</button>
+          </template>
+          <button v-if="isSuper || canManage" @click="newFolderHere"><FolderPlus :size="14" /> {{ $t('projectBrowser.newFolderButton') }}</button>
+        </div>
+      </div>
+      <!-- the filter looks in this folder only: the way on, to every folder, with the same words -->
+      <button v-else-if="state === 'nomatch'" class="everywhere solo" @click="searchEverywhere(q)">
+        <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
+      </button>
+
+      <table v-else class="rows" @focusin="onRowsFocus">
+        <!-- rows fade in and out only when created, duplicated or deleted here (animateRows):
+             never when the folder, the filter or a segment changes the list -->
+        <TransitionGroup tag="tbody" name="row" :css="animateRows">
+          <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
+            <tr
+              :data-key="rowKey(r)"
+              tabindex="-1"
+              :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked, active: activeKey === rowKey(r), fresh: freshKey === rowKey(r) }"
+              :title="r.locked || undefined"
+              :aria-disabled="r.locked ? 'true' : undefined"
+              @click="rowClick($event, r)"
+              @auxclick="rowClick($event, r)"
+              @contextmenu="onRowContext($event, r)"
+            >
+              <td class="rname">
+                <span v-if="renaming === rowKey(r)" class="asname renaming">
+                  <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" />
+                  <input
+                    v-model="renameDraft"
+                    class="rename-input"
+                    maxlength="200"
+                    :aria-label="$t('projectBrowser.renameLabel', { name: r.name })"
+                    :disabled="renameBusy"
+                    @keydown.enter.prevent="commitRename(r)"
+                    @keydown.esc.prevent="cancelRename"
+                    @blur="commitRename(r)"
+                  />
+                </span>
+                <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id, $event.detail === 0 ? 'first' : null)">
+                  <FolderKey v-if="r.raw.personal_of != null" :size="15" class="kicon" />
+                  <component :is="KIND_ICON[r.kind]" v-else :size="15" class="kicon" /> {{ r.name }}
                 </button>
-              </template>
-            </td>
-          </tr>
+                <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
+                  <ConnIcon :type="r.raw.db_type" :size="15" class="kicon" /> {{ r.name }}
+                </button>
+                <a v-else-if="r.kind === 'datasource'" :href="r.to" class="asname" @click="onDsLinkClick($event, r)">
+                  <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                </a>
+                <NuxtLink v-else-if="r.to" :to="r.to" class="asname">
+                  <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                </NuxtLink>
+                <span v-else class="asname plain">
+                  <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                  <Lock v-if="r.locked" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
+                </span>
+                <span v-if="r.kind === 'folder' && r.raw.personal_of != null" class="tag"
+                      :class="{ mine: r.raw.personal_of === user?.id }" :title="personalLabel(r.raw)">
+                  {{ r.raw.personal_of === user?.id ? $t('projectBrowser.myFolderTag') : $t('projectBrowser.personalTag') }}
+                </span>
+                <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
+                <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
+                <!-- on a phone the meta's column is gone: the meta goes under the name -->
+                <span v-if="r.meta || r.progressRun" class="rmeta-sub muted">
+                  <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
+                  <template v-else>{{ r.meta }}</template>
+                </span>
+              </td>
+              <td class="rmeta muted">
+                <span class="rmeta-text" :title="r.progressRun ? undefined : r.meta">
+                  <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
+                  <template v-else>{{ r.meta }}</template>
+                </span>
+              </td>
+              <td v-if="r.locked" class="racts" />
+              <td v-else class="racts">
+                <Select
+                  v-if="moving === rowKey(r)"
+                  class="movesel"
+                  :model-value="null"
+                  :options="moveTargets(r)"
+                  searchable
+                  auto-open
+                  :placeholder="$t('projectBrowser.moveToPlaceholder')"
+                  @update:model-value="(v: any) => moveRow(r, v)"
+                  @close="endMove(r)"
+                />
+                <template v-else>
+                  <!-- the kind's main command stays in the row; the others are in «⋯» -->
+                  <button
+                    v-if="primaryAction(rowFacts(r)) === 'history'"
+                    class="mini rprimary"
+                    :class="{ activebtn: expandedFlowId === r.id }"
+                    :title="$t('projectBrowser.runHistoryTitle')"
+                    :aria-label="$t('projectBrowser.runHistoryTitle')"
+                    :aria-expanded="expandedFlowId === r.id"
+                    @click="runsByKey = $event.detail === 0; toggleRuns(r.raw)"
+                  ><History :size="13" /></button>
+                  <button
+                    v-else-if="primaryAction(rowFacts(r)) === 'refresh'"
+                    class="mini rprimary"
+                    :title="$t('projectBrowser.refreshSnapshotTitle')"
+                    :aria-label="$t('projectBrowser.refreshSnapshotTitle')"
+                    :disabled="ingestBusy(r)"
+                    @click="refreshDatasource(r.raw)"
+                  ><RefreshCw :size="13" /></button>
+                  <button
+                    class="mini rmore"
+                    :data-more="rowKey(r)"
+                    :class="{ activebtn: rowMenu?.key === rowKey(r) }"
+                    :title="$t('projectBrowser.moreActions')"
+                    :aria-label="$t('projectBrowser.moreActionsFor', { name: r.name })"
+                    aria-haspopup="menu"
+                    :aria-expanded="rowMenu?.key === rowKey(r)"
+                    :aria-busy="duplicating === rowKey(r)"
+                    @click="onMoreClick($event, r)"
+                  >
+                    <LoaderCircle v-if="duplicating === rowKey(r)" :size="13" class="spin" />
+                    <Ellipsis v-else :size="14" />
+                  </button>
+                </template>
+              </td>
+            </tr>
 
-          <tr v-if="r.kind === 'flow' && expandedFlowId === r.id" class="runsrow" :class="{ arrive: !runsByKey }">
-            <td colspan="3">
-              <p v-if="runsLoading" class="muted runmeta">
-                <LoaderCircle :size="13" class="spin" /> {{ $t('projectBrowser.loadingHistory') }}
-              </p>
-              <p v-else-if="!flowRuns.length" class="muted runmeta">{{ $t('projectBrowser.noRunsForFlow') }}</p>
-              <ul v-else class="runlist">
-                <li v-for="run in flowRuns" :key="run.id" class="runitem">
-                  <CheckCircle2 v-if="run.status === 'SUCCESS'" :size="14" class="rok" />
-                  <XCircle v-else-if="run.status === 'FAILURE'" :size="14" class="rko" />
-                  <LoaderCircle v-else :size="14" class="spin rwip" />
-                  <span class="rwhen">{{ fmtDate(run.started_at) }}</span>
-                  <span class="muted">{{ fmtDuration(run) }}</span>
-                  <span v-if="run.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: fmtx.count(run.rows_written) }) }}</span>
-                  <span v-if="run.publish_name" class="rpub"><Database :size="12" /> {{ run.publish_name }}</span>
-                  <span v-if="run.error" class="rerr" :title="knownError(run.error, t)">{{ knownError(run.error, t).slice(0, 80) }}</span>
-                </li>
-              </ul>
-            </td>
-          </tr>
-        </template>
-      </TransitionGroup>
-    </table>
-    <button v-if="state === 'rows' && q.trim()" class="everywhere" @click="searchEverywhere(q)">
-      <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
-    </button>
+            <tr v-if="r.kind === 'flow' && expandedFlowId === r.id" class="runsrow" :class="{ arrive: !runsByKey }">
+              <td colspan="3">
+                <p v-if="runsLoading" class="muted runmeta">
+                  <LoaderCircle :size="13" class="spin" /> {{ $t('projectBrowser.loadingHistory') }}
+                </p>
+                <p v-else-if="!flowRuns.length" class="muted runmeta">{{ $t('projectBrowser.noRunsForFlow') }}</p>
+                <ul v-else class="runlist">
+                  <li v-for="run in flowRuns" :key="run.id" class="runitem">
+                    <CheckCircle2 v-if="run.status === 'SUCCESS'" :size="14" class="rok" />
+                    <XCircle v-else-if="run.status === 'FAILURE'" :size="14" class="rko" />
+                    <LoaderCircle v-else :size="14" class="spin rwip" />
+                    <span class="rwhen">{{ fmtDate(run.started_at) }}</span>
+                    <span class="muted">{{ fmtDuration(run) }}</span>
+                    <span v-if="run.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: fmtx.count(run.rows_written) }) }}</span>
+                    <span v-if="run.publish_name" class="rpub"><Database :size="12" /> {{ run.publish_name }}</span>
+                    <span v-if="run.error" class="rerr" :title="knownError(run.error, t)">{{ knownError(run.error, t).slice(0, 80) }}</span>
+                  </li>
+                </ul>
+              </td>
+            </tr>
+          </template>
+        </TransitionGroup>
+      </table>
+      <button v-if="state === 'rows' && q.trim()" class="everywhere" @click="searchEverywhere(q)">
+        <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
+      </button>
+    </section>
 
     <RowMenu
       :open="!!rowMenu"
@@ -2262,8 +2266,32 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 .mi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 .pref, .soon { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
-/* ── kind filter ───────────────────────────────────────────────────────── */
-.segs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+/* ── the sheet: the folder's content on one surface ────────────────────── */
+/* As the list tables of Flows and Datasources: a panel with its border and the containers' radius. The list was
+   laid straight on the page, which a finish (assets/finishes.css) could only back with a square slab. */
+.sheet {
+  --pad: 6px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.sheet :deep(.skrows) { padding: 10px 8px; }
+
+/* ── kind filter: the sheet's heading ──────────────────────────────────── */
+.segs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: calc(-1 * var(--pad)) calc(-1 * var(--pad)) var(--pad);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  /* inside the sheet's curve: it has a ground of its own under a finish */
+  border-radius: max(0px, calc(var(--radius) - 1px)) max(0px, calc(var(--radius) - 1px)) 0 0;
+}
 .seg {
   padding: 4px 11px;
   font-size: 12.5px;
@@ -2283,8 +2311,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 table.rows { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 table.rows td { padding: 7px 8px; transition: background 0.12s; }
 table.rows tr:hover td { background: var(--row-hover); }
-table.rows tr > td:first-child { border-radius: 8px 0 0 8px; }
-table.rows tr > td:last-child { border-radius: 0 8px 8px 0; }
+/* never rounder than the sheet they are in (a finish may square it) */
+table.rows tr > td:first-child { border-radius: min(8px, var(--radius)) 0 0 min(8px, var(--radius)); }
+table.rows tr > td:last-child { border-radius: 0 min(8px, var(--radius)) min(8px, var(--radius)) 0; }
 /* the row that opens something: taken whole, it answers the click and the focus */
 table.rows tr.openable { cursor: pointer; }
 table.rows tr.blocked { opacity: 0.45; cursor: not-allowed; }
@@ -2365,7 +2394,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
 }
 .personal-note { font-size: 12px; margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 .empty { padding: 28px 4px; }
-.emptybox { padding: 28px 4px; display: flex; flex-direction: column; gap: 14px; }
+.emptybox { padding: 22px 10px; display: flex; flex-direction: column; gap: 14px; }
 .emptybox p { margin: 0; }
 .empty-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .empty-acts:empty { display: none; }
@@ -2385,7 +2414,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
   border-radius: 8px;
 }
 .everywhere:hover { background: var(--tint-accent); box-shadow: none; }
-.everywhere.solo { margin-top: 22px; }
+.everywhere.solo { margin: 14px 2px; }
 /* as `.btn-link`: it lives in listpage.css, not imported here. Without it, the error
    message would come out in the normal text's colour, that is it would not look like an
    error. */
@@ -2470,5 +2499,6 @@ button.mini { padding: 2px 8px; min-height: 24px; }
   .rmeta-sub { display: block; margin: 2px 0 0 23px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62vw; }
   .rprimary { display: none; }
   .rname { width: auto; }
+  .sheet { --pad: 3px; }
 }
 </style>

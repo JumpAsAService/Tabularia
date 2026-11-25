@@ -8,6 +8,9 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- Explore shows a folder's content on one rounded sheet, with the kind filter as its heading, and
+  the band of recent items above it is the same surface: with a finish on, the list was a square
+  slab against the page.
 - Every question the app asks before a deletion, a revocation or a discarded draft is now the
   app's own dialog instead of the browser's: the button names the action, a destructive one is
   red with the focus on Cancel, Esc and a click outside cancel. The browser's warning on closing

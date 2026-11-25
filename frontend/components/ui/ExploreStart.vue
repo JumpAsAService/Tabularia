@@ -129,13 +129,15 @@ const runName = (r: RunInfo) => r.flow_name || r.group_name || r.sql_script_name
   position: relative;
   margin: 0 0 14px;
   padding: 10px 12px 8px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: var(--bg-soft);
+  /* the same surface as the sheet of the folder's content under it (ProjectBrowser.vue) */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow-1);
   /* never lower than its button, which is laid over it: as the columns close under it */
   min-height: 36px;
 }
-.start.folded { padding: 4px 6px; background: transparent; border-color: transparent; margin-bottom: 6px; min-height: 0; }
+.start.folded { padding: 4px 6px; background: transparent; border-color: transparent; box-shadow: none; margin-bottom: 6px; min-height: 0; }
 .fold {
   position: absolute;
   top: 6px;
