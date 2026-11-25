@@ -15,7 +15,7 @@ export const EXPAND_CLOSING = 'data-closing'
 export const EXPAND_INSTANT = 'data-expand-instant'
 
 const MIN_MS = 200
-const MAX_MS = 340
+const MAX_MS = 420
 /** The most one frame moves the travel on: two frames of a 60 Hz screen. */
 const MAX_STEP_MS = 34
 
@@ -24,7 +24,7 @@ const MAX_STEP_MS = 34
  * and never long, and closing is quicker than opening (what leaves is not what one looks at).
  */
 export function expandDuration(distance: number, closing: boolean): number {
-  const opening = Math.min(MAX_MS, Math.max(MIN_MS, 180 + Math.abs(distance) / 8))
+  const opening = Math.min(MAX_MS, Math.max(MIN_MS, 180 + Math.abs(distance) / 6))
   return Math.round(closing ? opening * 0.8 : opening)
 }
 

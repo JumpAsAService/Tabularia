@@ -13,8 +13,8 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 test('a short box is quick, a tall one takes a little more and never long', () => {
   assert.equal(expandDuration(40, false), 200)
-  assert.equal(expandDuration(400, false), 230)
-  assert.equal(expandDuration(5000, false), 340)
+  assert.equal(expandDuration(400, false), 247)
+  assert.equal(expandDuration(5000, false), 420)
   assert.ok(expandDuration(800, false) > expandDuration(300, false))
 })
 
