@@ -99,7 +99,7 @@ export default defineNuxtConfig({
       script: [
         {
           innerHTML:
-            "try{var t=localStorage.getItem('tabularia-theme');if(t&&['light','dracula','monokai','imperium'].indexOf(t)>=0)document.documentElement.setAttribute('data-theme',t);var f=localStorage.getItem('tabularia-finish');if(f&&['carbon','titanium','marble','slate','glass'].indexOf(f)>=0)document.documentElement.setAttribute('data-finish',f);var r=localStorage.getItem('tabularia-sheen'),s=r==null||r.trim()===''?50:Number(r);if(!isFinite(s))s=50;document.documentElement.style.setProperty('--finish-sheen',String(Math.min(100,Math.max(0,Math.round(s/5)*5))/100))}catch(e){}",
+            "try{var t=localStorage.getItem('tabularia-theme');if(t&&['light','dracula','monokai','imperium'].indexOf(t)>=0)document.documentElement.setAttribute('data-theme',t);var f=localStorage.getItem('tabularia-finish');if(f&&['carbon','titanium','marble','slate','glass','aurora','glow','grain','honeycomb','brutal','retro'].indexOf(f)>=0)document.documentElement.setAttribute('data-finish',f);var r=localStorage.getItem('tabularia-sheen'),s=r==null||r.trim()===''?50:Number(r);if(!isFinite(s))s=50;document.documentElement.style.setProperty('--finish-sheen',String(Math.min(100,Math.max(0,Math.round(s/5)*5))/100))}catch(e){}",
           tagPosition: 'head',
         },
       ],

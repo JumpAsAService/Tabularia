@@ -13,9 +13,9 @@ const m = await import('../composables/useFinish.ts')
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
 test('finishOf accepts the known finishes and falls back to plain', () => {
-  for (const f of ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass']) assert.equal(m.finishOf(f), f)
+  for (const f of ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass', 'aurora', 'glow', 'grain', 'honeycomb', 'brutal', 'retro']) assert.equal(m.finishOf(f), f)
   for (const bad of [null, undefined, '', 'wood', 'CARBON', 3, {}]) assert.equal(m.finishOf(bad), 'plain')
-  assert.deepEqual(m.FINISHES, ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass'])
+  assert.deepEqual(m.FINISHES, ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass', 'aurora', 'glow', 'grain', 'honeycomb', 'brutal', 'retro'])
 })
 
 test('sheenOf clamps to 0-100, rounds to the step of 5, and defaults to 50', () => {
@@ -47,7 +47,7 @@ test('the anti-flash script and the composable give the same finish and sheen fo
   // composable sets at boot, or the reflections jump between the two
   const code = read('nuxt.config.ts').split('\n').find((l) => l.includes('tabularia-finish')).trim().replace(/^"|",?$/g, '')
   const stored = [null, '', '  ', 'abc', '0', '5', '50', '73', '100', '250', '-20', '1e2', 'NaN']
-  const finishes = [null, '', 'plain', 'wood', 'carbon', 'titanium', 'marble', 'slate', 'glass', 'GLASS']
+  const finishes = [null, '', 'plain', 'wood', 'carbon', 'titanium', 'marble', 'slate', 'glass', 'aurora', 'glow', 'grain', 'honeycomb', 'brutal', 'retro', 'GLASS']
   for (const sheen of stored) {
     for (const finish of finishes) {
       const attrs = {}

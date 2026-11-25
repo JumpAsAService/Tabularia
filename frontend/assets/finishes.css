@@ -3,7 +3,7 @@
    texture and the sheen. It is chosen under the theme in the settings menu
    (composables/useFinish.ts) and lives on <html>:
 
-     data-finish="carbon | titanium | marble | slate | glass"   (absent = plain, the app as it was)
+     data-finish="carbon | titanium | marble | slate | glass | aurora | glow | grain | honeycomb | brutal | retro"   (absent = plain, the app as it was)
      --finish-sheen: a number from 0 to 1, how strong the reflections are (set inline, 0.5 by default)
 
    Every finish is written from the theme's own tokens, so it follows the five themes with no
@@ -150,10 +150,148 @@
   --fin-filet: linear-gradient(90deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 100%), transparent), color-mix(in srgb, var(--fin-c3) calc(var(--fin-k) * 100%), transparent) 55%, transparent) 0 100% / 100% 2px no-repeat;
 }
 
+/* ── Aurora ───────────────────────────────────────────────────────────────────
+   Glass without the glass: big, very soft blobs of the theme's colours on the page and
+   across the bars, on opaque bases. No texture, no transparency, no blur: only gradients,
+   so it is the most colourful of the nine and costs nothing to paint. */
+:root[data-finish="aurora"] {
+  --fin-a-page: calc(var(--fin-page-a) * 1.35);
+  --fin-a-bar: calc(var(--fin-bar-a) * 1.2);
+  --fin-a-head: calc(var(--fin-head-a) * 1.2);
+  --fin-base: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  --fin-line: var(--border-soft);
+  --fin-bar-reflect:
+    radial-gradient(34% 260% at 6% 0%, color-mix(in srgb, var(--fin-c1) var(--fin-a-bar), transparent), transparent 70%),
+    radial-gradient(30% 240% at 52% 120%, color-mix(in srgb, var(--fin-c3) calc(var(--fin-a-bar) * 0.8), transparent), transparent 70%),
+    radial-gradient(34% 260% at 96% 0%, color-mix(in srgb, var(--fin-c2) var(--fin-a-bar), transparent), transparent 70%);
+  --fin-head-reflect:
+    radial-gradient(40% 280% at 8% 0%, color-mix(in srgb, var(--fin-c1) var(--fin-a-head), transparent), transparent 70%),
+    radial-gradient(38% 280% at 94% 100%, color-mix(in srgb, var(--fin-c2) var(--fin-a-head), transparent), transparent 70%);
+  --fin-page-reflect:
+    radial-gradient(52% 46% at 4% 2%, color-mix(in srgb, var(--fin-c1) var(--fin-a-page), transparent), transparent 72%),
+    radial-gradient(46% 50% at 98% 10%, color-mix(in srgb, var(--fin-c2) calc(var(--fin-a-page) * 0.9), transparent), transparent 72%),
+    radial-gradient(54% 52% at 58% 104%, color-mix(in srgb, var(--fin-c3) calc(var(--fin-a-page) * 0.8), transparent), transparent 72%),
+    radial-gradient(40% 44% at 0% 78%, color-mix(in srgb, var(--fin-c2) calc(var(--fin-a-page) * 0.55), transparent), transparent 72%),
+    radial-gradient(38% 42% at 100% 82%, color-mix(in srgb, var(--fin-c1) calc(var(--fin-a-page) * 0.5), transparent), transparent 72%);
+}
+
+/* ── Glow ─────────────────────────────────────────────────────────────────────
+   Flat dark surfaces; the gradient is gathered in a thin thread on the edge of the bars,
+   headings and active controls, like a raking light. The page is left almost bare. */
+:root[data-finish="glow"] {
+  --fin-lift: none;
+  --fin-base: color-mix(in srgb, var(--bg) 35%, var(--panel));
+  --fin-line: color-mix(in srgb, var(--fin-c2) calc(var(--fin-k) * 35%), var(--border));
+  --fin-edge: color-mix(in srgb, var(--fin-c1) calc(12% + var(--fin-k) * 55%), transparent);
+  --fin-glow-lo: linear-gradient(0deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-bar-a) * 0.9), transparent), transparent 55%);
+  --fin-bar-reflect: var(--fin-glow-lo);
+  --fin-head-reflect: linear-gradient(0deg, color-mix(in srgb, var(--fin-c2) var(--fin-head-a), transparent), transparent 60%);
+  --fin-page-reflect: radial-gradient(60% 32% at 50% 0%, color-mix(in srgb, var(--fin-c1) calc(var(--fin-page-a) * 0.4), transparent), transparent 75%);
+  --fin-filet: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 100%), transparent) 18%, color-mix(in srgb, var(--fin-c2) calc(var(--fin-k) * 100%), transparent) 62%, transparent) 0 100% / 100% 1px no-repeat;
+}
+
+/* ── Grain ────────────────────────────────────────────────────────────────────
+   Paper or film: a fine warm grain (one small raster tile, light and dark specks at low
+   alpha, so it lightens a dark base and darkens a light one) over soft opaque blobs of
+   the theme's colours, on a base nudged a few percent toward the warning hue. */
+:root[data-finish="grain"] {
+  --fin-film: url("data:image/webp;base64,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");
+  --fin-tex: var(--fin-film);
+  --fin-page-tex: var(--fin-film);
+  --fin-base: color-mix(in srgb, var(--warning) 3%, color-mix(in srgb, var(--bg) 40%, var(--panel)));
+  --fin-page-base: color-mix(in srgb, var(--warning) 3%, var(--bg));
+  --fin-line: var(--border);
+  --fin-bar-reflect:
+    radial-gradient(40% 260% at 4% 0%, color-mix(in srgb, var(--fin-c1) var(--fin-bar-a), transparent), transparent 70%),
+    radial-gradient(40% 260% at 98% 100%, color-mix(in srgb, var(--fin-c2) var(--fin-bar-a), transparent), transparent 70%);
+  --fin-head-reflect:
+    radial-gradient(44% 280% at 6% 0%, color-mix(in srgb, var(--fin-c1) var(--fin-head-a), transparent), transparent 70%),
+    radial-gradient(44% 280% at 96% 100%, color-mix(in srgb, var(--fin-c2) var(--fin-head-a), transparent), transparent 70%);
+  --fin-page-reflect:
+    radial-gradient(54% 48% at 4% 2%, color-mix(in srgb, var(--fin-c1) var(--fin-page-a), transparent), transparent 72%),
+    radial-gradient(50% 50% at 98% 100%, color-mix(in srgb, var(--fin-c2) calc(var(--fin-page-a) * 0.85), transparent), transparent 72%),
+    radial-gradient(36% 40% at 100% 8%, color-mix(in srgb, var(--fin-c3) calc(var(--fin-page-a) * 0.5), transparent), transparent 72%);
+}
+
+/* ── Honeycomb ────────────────────────────────────────────────────────────────
+   A very fine hexagonal mesh (a 9x15px vector tile, a dark line with a faint light one
+   beside it, no colour of its own), tone on tone like the carbon weave, under a diagonal
+   reflect of the theme's two colours. Like a loudspeaker grille: never loud. */
+:root[data-finish="honeycomb"] {
+  --fin-mesh: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='15' viewBox='0 0 9 15'><g fill='none' stroke-width='.8'><path stroke='%23fff' stroke-opacity='.07' d='M4.5 3.3L9 5.8V10.8L4.5 13.3L0 10.8V5.8ZM4.5 .8V3.3M4.5 13.3V15.8'/><path stroke='%23000' stroke-opacity='.16' d='M4.5 2.5L9 5V10L4.5 12.5L0 10V5ZM4.5 0V2.5M4.5 12.5V15'/></g></svg>");
+  --fin-tex: var(--fin-mesh);
+  --fin-page-tex: var(--fin-mesh);
+  --fin-base: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  --fin-page-base: var(--fin-w0);
+  --fin-line: var(--border);
+  --fin-bar-reflect: linear-gradient(100deg, color-mix(in srgb, var(--fin-c1) var(--fin-bar-a), transparent) 0%, transparent 28%, transparent 70%, color-mix(in srgb, var(--fin-c2) var(--fin-bar-a), transparent) 100%);
+  --fin-head-reflect: linear-gradient(100deg, color-mix(in srgb, var(--fin-c1) var(--fin-head-a), transparent) 0%, transparent 28%, transparent 70%, color-mix(in srgb, var(--fin-c2) var(--fin-head-a), transparent) 100%);
+  --fin-page-reflect: linear-gradient(118deg, color-mix(in srgb, var(--fin-c1) var(--fin-page-a), transparent) 0%, transparent 36%, transparent 64%, color-mix(in srgb, var(--fin-c2) var(--fin-page-a), transparent) 100%);
+  --fin-filet: linear-gradient(90deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 100%), transparent), color-mix(in srgb, var(--fin-c2) calc(var(--fin-k) * 100%), transparent) 55%, transparent) 0 100% / 100% 2px no-repeat;
+}
+
+/* ── Brutal ───────────────────────────────────────────────────────────────────
+   Neo-brutalism, and unlike the others a shape as well as a material: no gradient, no
+   texture, solid fills, square corners, sharp borders in the ink colour and hard offset
+   shadows. The solid blocks of colour (top bar, active items, primary button) are the
+   theme's own primary fill, flattened; the sheen slider is how saturated they are
+   (0 leaves the theme's black and white structure alone). The text on a block follows
+   the same slider, --on-accent once the block is coloured. It reaches the tokens
+   (--radius, --shadow-1/2, --control-border) and the surfaces and controls listed in the
+   rules below; whatever a component hard-codes beyond them keeps its old shape. */
+:root[data-finish="brutal"] {
+  --fin-veil: calc(clamp(0, (0.5 - var(--fin-k)) / 0.15, 1) * 100%);   /* 100% = no colour yet */
+  --fin-inkstep: clamp(0, (var(--fin-k) - 0.425) * 1000, 1);           /* 0, then 1: the ink flips */
+  --fin-ink: color-mix(in srgb, var(--on-accent) calc(var(--fin-inkstep) * 100%), var(--text));
+  /* the first tenth of the primary gradient, stretched: a solid block of the theme's colour,
+     under a veil of the panel that thins out as the sheen rises */
+  --fin-block:
+    linear-gradient(color-mix(in srgb, var(--panel) var(--fin-veil), transparent), color-mix(in srgb, var(--panel) var(--fin-veil), transparent)),
+    var(--grad-accent) 0 0 / 1000% 100%;
+  --fin-base: var(--panel);
+  --fin-page-base: var(--bg);
+  --fin-lift: none;
+  --fin-edge: transparent;
+  --fin-line: var(--text);
+}
+
+/* ── Retro ────────────────────────────────────────────────────────────────────
+   Retro-futurism: a faint perspective grid running to a horizon on the page, with a glow of
+   the theme's colours there; bars with banded chrome, a neon fillet (accent to second
+   colour) with a soft halo, and hairline scan lines (never on the page or the content);
+   active items underlined in neon. On a light theme it turns pastel. The sheen slider is
+   how strong the neon and the glows are. Nothing moves. */
+:root[data-finish="retro"] {
+  --fin-neon: calc(var(--fin-k) * 100%);
+  --fin-scan: repeating-linear-gradient(180deg, color-mix(in srgb, var(--text) calc(var(--fin-k) * 9%), transparent) 0 1px, transparent 1px 3px);
+  --fin-tex: var(--fin-scan);
+  --fin-base: color-mix(in srgb, var(--fin-c2) 7%, color-mix(in srgb, var(--bg) 40%, var(--panel)));
+  --fin-page-base: color-mix(in srgb, var(--fin-c2) 9%, var(--bg));
+  --fin-line: color-mix(in srgb, var(--fin-c1) calc(25% + var(--fin-k) * 40%), var(--border));
+  --fin-edge: color-mix(in srgb, var(--text) 12%, transparent);
+  --fin-bar-reflect:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) calc(var(--fin-k) * 14%), transparent) 0, color-mix(in srgb, var(--text) calc(var(--fin-k) * 3%), transparent) 49%, color-mix(in srgb, #000 calc(var(--fin-k) * 12%), transparent) 51%, transparent 100%),
+    linear-gradient(100deg, color-mix(in srgb, var(--fin-c1) var(--fin-bar-a), transparent) 0%, transparent 30%, transparent 70%, color-mix(in srgb, var(--fin-c2) var(--fin-bar-a), transparent) 100%);
+  --fin-head-reflect: linear-gradient(100deg, color-mix(in srgb, var(--fin-c1) var(--fin-head-a), transparent) 0%, transparent 30%, transparent 70%, color-mix(in srgb, var(--fin-c2) var(--fin-head-a), transparent) 100%);
+  --fin-page-reflect:
+    radial-gradient(80% 22% at 50% 60%, color-mix(in srgb, var(--fin-c2) calc(var(--fin-page-a) * 1.5), transparent), transparent 75%),
+    linear-gradient(180deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-page-a) * 0.9), transparent), transparent 55%);
+  --fin-filet: linear-gradient(90deg, color-mix(in srgb, var(--fin-c1) var(--fin-neon), transparent), color-mix(in srgb, var(--fin-c2) var(--fin-neon), transparent)) 0 100% / 100% 2px no-repeat;
+}
+/* light themes: a pastel version (the page and bars wash toward the accents, not toward ink) */
+:root[data-finish="retro"]:is([data-theme="light"], [data-theme="imperium"]) {
+  --fin-base: color-mix(in srgb, var(--fin-c1) 5%, color-mix(in srgb, var(--fin-c2) 6%, var(--panel)));
+  --fin-page-base: color-mix(in srgb, var(--fin-c2) 8%, color-mix(in srgb, var(--fin-c1) 6%, var(--bg-soft)));
+  --fin-scan: repeating-linear-gradient(180deg, color-mix(in srgb, var(--text) calc(var(--fin-k) * 5%), transparent) 0 1px, transparent 1px 3px);
+}
+
 /* The grain darkens a light page by a few percent, and the page's own muted text has little
    margin there (4.97:1 on --bg): the base is lifted toward --bg-soft to pay it back. */
-:root[data-finish]:is([data-finish="titanium"], [data-finish="marble"], [data-finish="slate"]):is([data-theme="light"], [data-theme="imperium"]) {
+:root[data-finish]:is([data-finish="titanium"], [data-finish="marble"], [data-finish="slate"], [data-finish="grain"], [data-finish="honeycomb"]):is([data-theme="light"], [data-theme="imperium"]) {
   --fin-page-base: color-mix(in srgb, var(--bg) 45%, var(--bg-soft));
+}
+:root[data-finish="grain"]:is([data-theme="light"], [data-theme="imperium"]) {
+  --fin-page-base: color-mix(in srgb, var(--warning) 4%, color-mix(in srgb, var(--bg) 45%, var(--bg-soft)));
 }
 
 /* The page: a fixed layer under everything (one paint, nothing to repaint on scroll).
@@ -230,6 +368,11 @@
     --fin-filet: none;
     --fin-base: var(--panel);
   }
+  /* the edge light of glow is a line of colour, not a material: it goes too */
+  :root[data-finish="glow"] {
+    --fin-edge: color-mix(in srgb, var(--text) 8%, transparent);
+    --fin-line: var(--border);
+  }
 }
 
 /* The blur goes only where the app already had one (backdrop-filter anything but none makes a
@@ -247,5 +390,86 @@
     --fin-page-reflect: none;
     --fin-line: var(--border-soft);
     --fin-edge: color-mix(in srgb, var(--text) 8%, transparent);
+  }
+}
+
+/* The shape of the two (and the retro grid): off when more contrast is asked for. */
+@media not ((prefers-contrast: more) or (forced-colors: active)) {
+  :root[data-finish="brutal"] {
+    --radius: 0px;
+    --shadow-1: 2px 2px 0 var(--text);
+    --shadow-2: 4px 4px 0 var(--text);
+    --control-border: var(--text);
+  }
+  :root[data-finish="brutal"] :is(.card, .hw, .modal-card, .menu, .sel-panel, [role="dialog"], .tile) {
+    border: 2px solid var(--text);
+    border-radius: 0;
+    box-shadow: 3px 3px 0 var(--text);
+  }
+  :root[data-finish="brutal"] :is(.topbar, .toolbar, .etb, .ddz-top, .rdz-top, .nbpage > .bar, [data-fin="bar"]) {
+    border-bottom: 2px solid var(--text);
+    box-shadow: 0 3px 0 var(--text);
+  }
+  :root[data-finish="brutal"] :is(.hw-head, .modal-head, [data-fin="head"], [data-fin="tabs"]) { border-bottom-width: 2px; border-radius: 0; }
+  :root[data-finish="brutal"] .topbar.topbar { background: var(--fin-block); } /* doubled: out-weighs the shared bars rule */
+  :root[data-finish="brutal"] .topbar :is(.brand, .navlink, .navlink:hover) { color: var(--fin-ink); }
+  :root[data-finish="brutal"] .topbar .navlink.on { background: var(--panel); color: var(--text); border-bottom-color: var(--text); box-shadow: none; }
+  :root[data-finish="brutal"] :is(.navitem.on, .viewtabs button.active) { background: var(--fin-block); color: var(--fin-ink); }
+  :root[data-finish="brutal"] .navlink.on:not(.topbar *) { background: var(--fin-block); color: var(--fin-ink); box-shadow: none; }
+  :root[data-finish="brutal"] button:not([role="switch"]) {
+    border-color: var(--text);
+    border-radius: 0;
+    box-shadow: 2px 2px 0 var(--text);
+  }
+  :root[data-finish="brutal"] button:not([role="switch"]):hover { border-color: var(--text); box-shadow: 3px 3px 0 var(--text); }
+  :root[data-finish="brutal"] button:not([role="switch"]):active { transform: translate(2px, 2px); box-shadow: none; }
+  :root[data-finish="brutal"] button:not([role="switch"]):disabled { box-shadow: none; }
+  :root[data-finish="brutal"] button.primary { background: var(--fin-block); color: var(--fin-ink); }
+  /* the top bar is one block of colour: what is pressed on it (its menus, its icons) is its ink, not
+     boxes of their own. The buttons of a menu opened from the bar are on a panel, and stay boxes. */
+  :root[data-finish="brutal"] .topbar button:not([role="switch"]):not(.menu *),
+  :root[data-finish="brutal"] .topbar button:not([role="switch"]):not(.menu *):hover {
+    border-color: transparent; box-shadow: none; background: transparent; color: var(--fin-ink);
+  }
+  :root[data-finish="brutal"] :is(select, textarea),
+  :root[data-finish="brutal"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([role="switch"]) {
+    border-radius: 0;
+    box-shadow: 2px 2px 0 var(--text);
+  }
+  :root[data-finish="brutal"] :is(select, textarea):focus,
+  :root[data-finish="brutal"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([role="switch"]):focus {
+    border-color: var(--text);
+    box-shadow: 3px 3px 0 var(--accent);
+  }
+
+  /* the perspective grid: a fixed layer above the page's own and under everything else, a
+     plane tipped back from the horizon (its top edge) toward the viewer, fading into it */
+  :root[data-finish="retro"]::after {
+    content: "";
+    position: fixed;
+    left: -100%;
+    right: -100%;
+    top: 60vh;
+    height: 90vh;
+    z-index: -1;
+    pointer-events: none;
+    transform-origin: 50% 0;
+    transform: perspective(1100px) rotateX(68deg);
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 34%), transparent) 1px, transparent 1px) 0 0 / 64px 64px,
+      linear-gradient(0deg, color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 34%), transparent) 1px, transparent 1px) 0 0 / 64px 64px;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 60%);
+    mask-image: linear-gradient(180deg, transparent 0, #000 60%);
+  }
+  :root[data-finish="retro"] :is(.topbar, .toolbar, .etb, .ddz-top, .rdz-top, .nbpage > .bar, [data-fin="bar"]) {
+    box-shadow: inset 0 1px 0 var(--fin-edge), 0 6px 16px -6px color-mix(in srgb, var(--fin-c1) calc(var(--fin-k) * 60%), transparent);
+  }
+  :root[data-finish="retro"] .navlink.on {
+    background: none;
+    box-shadow: 0 6px 10px -6px color-mix(in srgb, var(--fin-c1) var(--fin-neon), transparent);
+    border-bottom-color: var(--fin-c1);
+  }
+  :root[data-finish="retro"] :is(.navitem.on, .viewtabs button.active) {
+    box-shadow: inset 0 -2px 0 var(--fin-c1), 0 6px 10px -6px color-mix(in srgb, var(--fin-c1) var(--fin-neon), transparent);
   }
 }

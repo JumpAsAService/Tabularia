@@ -57,7 +57,10 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   new draft. The same for a turn stopped with Stop in a chat conversation that already exists.
   A turn the model declined, one overtaken by metadata-only mode, and the script and Bayesian
   assistants' turns are counted and not kept, as before.
-- A finish can be laid over the theme: carbon, titanium, marble, slate or glass, chosen under the
+- A finish can be laid over the theme: carbon, titanium, marble, slate, glass, aurora (soft colour patches, no glass), glow (a thin
+  thread of light on the edges), grain (paper or film), honeycomb (a fine hexagonal mesh), brutal
+  (neo-brutalism: solid blocks, hard shadows, square corners) or retro (retro-futurism: perspective
+  grid, chrome and neon), chosen under the
   theme in the settings menu, with a slider for how strong the reflections are. The theme gives
   the colours and the finish the texture and the sheen, tinted by the theme's own accents, so each
   finish follows the five themes. The material is on bars, the page behind the content, headers,

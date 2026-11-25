@@ -1,12 +1,12 @@
-// Surface finish: a material (carbon, titanium, marble, slate, glass) laid over the colour theme,
+// Surface finish: a material (carbon, titanium, marble, slate, glass, aurora, glow, grain, honeycomb, brutal, retro) laid over the colour theme,
 // plus how strong its highlights are. On <html> it is a `data-finish` attribute (ABSENT for
 // «plain», the app as it is) and an inline `--finish-sheen` number from 0 to 1; the styles are in
 // assets/finishes.css. Both choices are persisted in localStorage and read again cold by the
 // anti-flash script in nuxt.config, which must use the same keys and values.
 import { ref } from 'vue'
 
-export type Finish = 'plain' | 'carbon' | 'titanium' | 'marble' | 'slate' | 'glass'
-export const FINISHES: Finish[] = ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass']
+export type Finish = 'plain' | 'carbon' | 'titanium' | 'marble' | 'slate' | 'glass' | 'aurora' | 'glow' | 'grain' | 'honeycomb' | 'brutal' | 'retro'
+export const FINISHES: Finish[] = ['plain', 'carbon', 'titanium', 'marble', 'slate', 'glass', 'aurora', 'glow', 'grain', 'honeycomb', 'brutal', 'retro']
 export const FINISH_STORAGE_KEY = 'tabularia-finish'
 export const SHEEN_STORAGE_KEY = 'tabularia-sheen'
 export const SHEEN_DEFAULT = 50
