@@ -566,9 +566,9 @@ const notesOpen = ref(false)
               </button>
             </div>
           </div>
-          <ul v-if="notesOpen && warnings.length" id="rv-notes" class="notes" :aria-label="$t('report.notes', { n: warnings.length }, warnings.length)">
+          <ExpandBody><ul v-if="notesOpen && warnings.length" id="rv-notes" class="notes" :aria-label="$t('report.notes', { n: warnings.length }, warnings.length)">
             <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
-          </ul>
+          </ul></ExpandBody>
 
           <div class="stage">
             <div v-if="problem" class="state" role="alert">

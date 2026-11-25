@@ -536,7 +536,7 @@ watch(() => route.query.id, (id) => {
                   <Trash2 :size="12" />
                 </button>
               </div>
-              <div v-if="open === i" class="res-body">
+              <ExpandBody><div v-if="open === i" class="res-body">
                 <p v-if="foreign(r)" class="note small">{{ $t('dataApi.foreignResource') }}</p>
                 <div class="row2">
                   <label class="field">
@@ -601,7 +601,7 @@ watch(() => route.query.id, (id) => {
                     <input v-model.number="r.max_page" type="number" min="1" :max="limits?.max_page ?? 10000" :readonly="!canEdit || foreign(r)" />
                   </label>
                 </div>
-              </div>
+              </div></ExpandBody>
             </div>
             <div v-if="canEdit" class="add">
               <Select v-if="adding" :model-value="null" :options="dsOptions" :placeholder="$t('dataApi.chooseDatasource')" auto-open searchable

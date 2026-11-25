@@ -308,7 +308,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
       </p>
 
       <!-- before a build an administrator queues: the clause, the sizes, the tick -->
-      <section v-if="boxShown(g) && licence[g.id]" :id="`mg-${g.id}-licence`" class="licence-box" :aria-labelledby="`mg-${g.id}-licence-title`">
+      <ExpandBody><section v-if="boxShown(g) && licence[g.id]" :id="`mg-${g.id}-licence`" class="licence-box" :aria-labelledby="`mg-${g.id}-licence-title`">
         <h5 :id="`mg-${g.id}-licence-title`"><Info :size="14" /> {{ $t('modelsAdmin.licence.title') }}</h5>
         <p class="small">{{ $t('modelsAdmin.licence.intro') }}</p>
         <blockquote v-if="clauseOf(g)" class="clause" lang="en">{{ clauseOf(g) }}</blockquote>
@@ -336,7 +336,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
           <span>{{ $t('modelsAdmin.licence.accept') }}</span>
         </label>
         <p :id="`mg-${g.id}-needs`" class="muted small">{{ licenceReady(licence[g.id]) ? '' : $t('modelsAdmin.licence.needsTick') }}</p>
-      </section>
+      </section></ExpandBody>
 
       <div v-if="editable" class="actions">
         <button

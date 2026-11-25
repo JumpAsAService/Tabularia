@@ -133,7 +133,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           </span>
           <span class="when muted">{{ g.runs.length > 1 ? $t('runs.last', { when: fmtDate(g.head.started_at) }) : fmtDate(g.head.started_at) }}</span>
         </button>
-        <Transition name="unfold">
+        <ExpandBody>
         <div v-if="shown(g)" class="detail-fold">
         <div v-for="r in [shown(g)!]" :key="g.head.id" class="detail">
           <!-- the runs of the group: which one the detail below is of -->
@@ -169,7 +169,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <p v-else-if="!(r.status === 'SUCCESS' && runNotes(r.notes))" class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>
         </div>
-        </Transition>
+        </ExpandBody>
       </div>
     </div>
 

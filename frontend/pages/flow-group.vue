@@ -666,7 +666,7 @@ async function saveSchedule(cron: string) {
             </button>
           </div>
 
-          <ul v-if="historyOpen && runs.length" class="history">
+          <ExpandBody><ul v-if="historyOpen && runs.length" class="history">
             <li v-for="run in runs" :key="run.id">
               <button class="hrun" :class="{ on: shownRun?.id === run.id }" @click="shownRunId = run.id">
                 <CircleCheck v-if="run.status === 'SUCCESS'" :size="13" class="ok" />
@@ -678,7 +678,7 @@ async function saveSchedule(cron: string) {
                 <span v-if="run.error" class="rerr" :title="knownError(run.error, t)">{{ knownError(run.error, t) }}</span>
               </button>
             </li>
-          </ul>
+          </ul></ExpandBody>
 
           <p v-if="canEdit" class="lead muted">{{ $t('flowGroups.lead') }}</p>
 

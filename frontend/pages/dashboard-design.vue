@@ -643,7 +643,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('dashboardDesigner.ti
       </button>
     </header>
 
-    <div v-if="problemsOpen && store.problems.value.length" class="ddz-plist" role="region" :aria-label="$t('reportDesigner.problemsLabel')">
+    <ExpandBody><div v-if="problemsOpen && store.problems.value.length" class="ddz-plist" role="region" :aria-label="$t('reportDesigner.problemsLabel')">
       <ul>
         <li v-for="(p, i) in store.problems.value" :key="i">
           <button type="button" @click="goToProblem(p)">
@@ -653,7 +653,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('dashboardDesigner.ti
           </button>
         </li>
       </ul>
-    </div>
+    </div></ExpandBody>
 
     <span class="sr-only" role="status" aria-live="polite">{{ announce }}</span>
     <!-- a phone: the grid and its panels do not fit, and the viewer does -->

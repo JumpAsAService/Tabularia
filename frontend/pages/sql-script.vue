@@ -716,7 +716,7 @@ watch(() => route.query.id, (id) => {
                       <span class="nm">{{ tb }}</span>
                     </button>
                   </div>
-                  <template v-if="openTable === tb">
+                  <ExpandBody><div v-if="openTable === tb">
                     <p v-if="dbColumns[tb] === 'loading'" class="muted small nodata">{{ $t('sqlScript.columnsLoading') }}</p>
                     <p v-else-if="columnsError(tb)" class="err small nodata">{{ columnsError(tb) }}</p>
                     <ul v-else-if="columnsOf(tb)" class="cols">
@@ -726,7 +726,7 @@ watch(() => route.query.id, (id) => {
                         </button>
                       </li>
                     </ul>
-                  </template>
+                  </div></ExpandBody>
                 </li>
               </ul>
               <p v-if="dbTablesState === 'idle' && !shownTables.length" class="muted small">{{ $t('sqlScript.tablesEmpty') }}</p>
@@ -758,13 +758,13 @@ watch(() => route.query.id, (id) => {
                   </button>
                 </div>
                 <p v-if="!d.has_data" class="muted small nodata">{{ $t('sqlScript.noData') }}</p>
-                <ul v-if="openItem === d.id" class="cols">
+                <ExpandBody><ul v-if="openItem === d.id" class="cols">
                   <li v-for="c in d.columns" :key="c.name">
                     <button type="button" :disabled="!!viewing" @click="insertColumn(c.name)">
                       <span class="cn">{{ c.name }}</span><span class="muted ct">{{ c.type }}</span>
                     </button>
                   </li>
-                </ul>
+                </ul></ExpandBody>
               </li>
             </ul>
             <p v-if="!shownCatalog.length" class="muted small">{{ $t('sqlScript.catalogEmpty') }}</p>

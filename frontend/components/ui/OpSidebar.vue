@@ -169,7 +169,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         <span>{{ $t('opSidebar.statisticsGroup') }}</span>
         <span class="group-count" aria-hidden="true">{{ statCount }}</span>
       </button>
-      <div v-show="statOpen" id="palette-statistics" class="stat-group" role="group" :aria-label="$t('opSidebar.statisticsGroup')">
+      <ExpandBody><div v-show="statOpen" id="palette-statistics" class="stat-group" role="group" :aria-label="$t('opSidebar.statisticsGroup')">
         <div v-for="g in statGroups" :key="g.family" class="stat-family" role="group" :aria-labelledby="`palette-stat-${g.family}`">
           <div :id="`palette-stat-${g.family}`" class="family-title">{{ $t(`stat.families.${g.family}`) }}</div>
           <div
@@ -191,7 +191,7 @@ function onDragStart(ev: DragEvent, kind: string) {
             <GripVertical :size="13" class="grip" aria-hidden="true" />
           </div>
         </div>
-      </div>
+      </div></ExpandBody>
     </template>
 
     <template v-if="showModels">
@@ -209,7 +209,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         <span>{{ $t('models.palette.group') }}</span>
         <span class="group-count" aria-hidden="true">{{ modelCount }}</span>
       </button>
-      <div v-show="modelOpen" id="palette-models" class="stat-group" role="group" :aria-label="$t('models.palette.group')">
+      <ExpandBody><div v-show="modelOpen" id="palette-models" class="stat-group" role="group" :aria-label="$t('models.palette.group')">
         <div
           v-if="showPredict"
           class="item"
@@ -273,7 +273,7 @@ function onDragStart(ev: DragEvent, kind: string) {
             <GripVertical :size="13" class="grip" aria-hidden="true" />
           </div>
         </div>
-      </div>
+      </div></ExpandBody>
     </template>
 
     <template v-if="showControl">

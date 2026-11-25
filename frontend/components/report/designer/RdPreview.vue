@@ -178,9 +178,9 @@ watch(warnings, () => { notesOpen.value = false })
       </button>
       <span class="sr-only" role="status" aria-live="polite">{{ busy ? $t('reportDesigner.preview.rendering') : '' }}</span>
     </div>
-    <ul v-if="notesOpen && warnings.length" class="rpv-list">
+    <ExpandBody><ul v-if="notesOpen && warnings.length" class="rpv-list">
       <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
-    </ul>
+    </ul></ExpandBody>
     <div class="rpv-stage">
       <div v-if="error" class="rpv-state" role="alert">
         <CircleAlert v-if="error.problems.length" :size="22" class="rpv-icon" aria-hidden="true" />

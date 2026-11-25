@@ -27,11 +27,20 @@ const KIND_ICON: Record<string, any> = {
 // folded or open: per person, in this browser (a preference of the view, not data)
 const storeKey = computed(() => `tabularia-explore-start:${props.userId ?? 'anon'}`)
 const folded = ref(false)
+// The columns open and close over a moment when the person asks (ExpandBody), at once when the
+// preference is only being read. Folding, the box keeps its open look until the columns are
+// gone (`settled`): they would otherwise be seen leaving a box that is no longer there.
+const byHand = ref(false)
+const settled = ref(true)
 function readFolded() {
+  byHand.value = false
+  settled.value = true
   try { folded.value = localStorage.getItem(storeKey.value) === 'folded' } catch { folded.value = false }
 }
 function toggle() {
+  byHand.value = true
   folded.value = !folded.value
+  if (folded.value) settled.value = false
   try { localStorage.setItem(storeKey.value, folded.value ? 'folded' : 'open') } catch { /* storage denied: it holds for this visit */ }
 }
 
@@ -64,13 +73,13 @@ const runName = (r: RunInfo) => r.flow_name || r.group_name || r.sql_script_name
 </script>
 
 <template>
-  <section class="start" :class="{ folded }" :aria-label="$t('projectBrowser.startLabel')">
+  <section class="start" :class="{ folded: folded && settled }" :aria-label="$t('projectBrowser.startLabel')">
     <button class="fold" :aria-expanded="!folded" @click="toggle">
       <component :is="folded ? ChevronDown : ChevronUp" :size="14" />
       {{ folded ? $t('projectBrowser.startShow') : $t('projectBrowser.startHide') }}
     </button>
 
-    <div v-if="!folded" class="cols">
+    <ExpandBody :instant="!byHand" @after-leave="settled = true"><div v-if="!folded" class="cols">
       <div class="col">
         <h2>{{ $t('projectBrowser.startRecent') }}</h2>
         <p v-if="recent === null" class="note"><span class="sk" style="width: 60%" /></p>
@@ -111,7 +120,7 @@ const runName = (r: RunInfo) => r.flow_name || r.group_name || r.sql_script_name
         </ul>
         <NuxtLink v-if="(failed?.length ?? 0) > SHOWN" to="/runs" class="more">{{ $t('projectBrowser.startShowAll') }}</NuxtLink>
       </div>
-    </div>
+    </div></ExpandBody>
   </section>
 </template>
 

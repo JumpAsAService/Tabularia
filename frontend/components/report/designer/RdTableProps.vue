@@ -212,7 +212,7 @@ function interactive() {
         <button type="button" class="rp-icon" :disabled="i === item.columns.length - 1" :aria-label="$t('reportDesigner.props.moveDown')" :title="$t('reportDesigner.props.moveDown')" @click="moveColumn(i, 1)"><ArrowDown :size="13" /></button>
         <button type="button" class="rp-icon danger" :aria-label="$t('reportDesigner.props.remove')" :title="$t('reportDesigner.props.remove')" @click="item.columns.splice(i, 1)"><Trash2 :size="13" /></button>
       </div>
-      <div v-if="colOpen(i)" class="rp-cbody">
+      <ExpandBody><div v-if="colOpen(i)" class="rp-cbody">
         <label class="rp-f">
           <span>{{ $t('reportDesigner.table.header') }}</span>
           <input v-model="c.header" type="text" maxlength="500" />
@@ -258,7 +258,7 @@ function interactive() {
             </label>
           </div>
         </div>
-      </div>
+      </div></ExpandBody>
     </div>
     <p v-if="colWidth > item.w + 0.05" class="rp-err">{{ $t('reportDesigner.table.tooWide', { cols: colWidth.toFixed(1), w: item.w.toFixed(1) }) }}</p>
   </RdSection>

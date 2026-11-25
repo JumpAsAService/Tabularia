@@ -706,7 +706,7 @@ function confirm() {
               <Info :size="14" />
             </button>
           </div>
-          <section v-if="showExample" id="cd-example" class="cd-example cd-wide" :aria-label="$t('connectionExamples.title', { type: typeLabel })">
+          <ExpandBody><section v-if="showExample" id="cd-example" class="cd-example cd-wide" :aria-label="$t('connectionExamples.title', { type: typeLabel })">
             <p class="cd-example-title">
               <span>{{ $t('connectionExamples.title', { type: typeLabel }) }}</span>
               <button type="button" class="cd-x" :aria-label="$t('connectionExamples.close')" @click="closeExample"><X :size="12" /></button>
@@ -719,7 +719,7 @@ function confirm() {
             </dl>
             <p class="cd-example-tip">{{ exampleTip }}</p>
             <p class="cd-example-note">{{ $t('connectionExamples.madeUp') }}</p>
-          </section>
+          </section></ExpandBody>
           <div v-if="!isS3 && !isSp && !isApi && !isGs && !isMl" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />

@@ -225,8 +225,8 @@ function toggleEvent(e: WebhookEvent) {
               </template>
             </td>
           </tr>
-          <tr v-if="isOpen === w.id" class="detail">
-            <td colspan="5">
+          <ExpandBody><tr v-if="isOpen === w.id" class="detail">
+            <td colspan="5"><div>
               <p class="small muted reg">{{ $t('integrations.deliveriesLead') }}</p>
               <table v-if="deliveries.length" class="cons">
                 <tbody>
@@ -253,8 +253,8 @@ function toggleEvent(e: WebhookEvent) {
                 </tbody>
               </table>
               <p v-else class="muted small">{{ $t('integrations.noDeliveries') }}</p>
-            </td>
-          </tr>
+            </div></td>
+          </tr></ExpandBody>
         </template>
         <tr v-if="!hooks.length">
           <td colspan="5" class="muted">{{ $t('integrations.noWebhooks') }}</td>

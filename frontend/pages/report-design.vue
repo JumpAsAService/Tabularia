@@ -540,7 +540,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
       </button>
     </header>
 
-    <div v-if="problemsOpen && store.problems.value.length" class="rdz-plist" role="region" :aria-label="$t('reportDesigner.problemsLabel')">
+    <ExpandBody><div v-if="problemsOpen && store.problems.value.length" class="rdz-plist" role="region" :aria-label="$t('reportDesigner.problemsLabel')">
       <ul>
         <li v-for="(p, i) in store.problems.value" :key="i">
           <button type="button" @click="goToProblem(p)">
@@ -550,7 +550,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
           </button>
         </li>
       </ul>
-    </div>
+    </div></ExpandBody>
 
     <p v-if="loadError" class="rdz-error" role="alert">{{ loadError }}</p>
     <div v-else-if="loading" class="rdz-loading"><SkeletonRows :rows="6" /></div>

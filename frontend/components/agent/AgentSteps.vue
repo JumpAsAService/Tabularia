@@ -45,14 +45,14 @@ function shownArgs(s: AgentStep): string {
           {{ $t('chat.step.attempt', { n: i + 1, error: f.error || $t('chat.step.noReason') }) }}
         </li>
       </ul>
-      <div v-if="open[g.key]" class="details">
+      <ExpandBody><div v-if="open[g.key]" class="details">
         <template v-for="(a, i) in [...g.failed, g.last]" :key="a.id">
           <p v-if="g.failed.length" class="details-head">{{ $t('chat.step.attemptN', { n: i + 1 }) }}</p>
           <pre v-if="a.args?.sql" class="code"><code>{{ a.args.sql }}</code></pre>
           <pre v-if="shownArgs(a)" class="code"><code>{{ shownArgs(a) }}</code></pre>
           <p v-if="!a.args?.sql && !shownArgs(a)" class="muted small">{{ $t('chat.step.noArguments') }}</p>
         </template>
-      </div>
+      </div></ExpandBody>
       <slot name="evidence" :step="g.last" />
     </li>
   </ol>

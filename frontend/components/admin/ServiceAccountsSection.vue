@@ -201,8 +201,8 @@ const humans = computed(() => allTokens.value.filter((tk) => !tk.is_service).len
               <button v-if="canWrite" class="mini danger" :title="$t('integrations.deleteAccount')" :aria-label="$t('integrations.deleteAccountAria', { name: a.name })" @click="remove(a)"><Trash2 :size="13" /></button>
             </td>
           </tr>
-          <tr v-if="isOpen === a.id" class="detail">
-            <td colspan="5">
+          <ExpandBody><tr v-if="isOpen === a.id" class="detail">
+            <td colspan="5"><div>
               <SecretOnce v-if="secret?.account === a.id" :value="secret.value" :label="$t('integrations.newTokenFor', { name: a.name })" @done="secret = null" />
               <TokenForm v-else-if="canWrite" :busy="busy" @create="createToken(a, $event)" />
               <ul v-if="tokensOf.length" class="toklist">
@@ -216,8 +216,8 @@ const humans = computed(() => allTokens.value.filter((tk) => !tk.is_service).len
                 </li>
               </ul>
               <p v-else class="muted small">{{ $t('integrations.noTokens') }}</p>
-            </td>
-          </tr>
+            </div></td>
+          </tr></ExpandBody>
         </template>
         <tr v-if="!accounts.length">
           <td colspan="5" class="muted">{{ $t('integrations.noAccounts') }}</td>

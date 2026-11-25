@@ -49,6 +49,8 @@ async function render (comp, props) {
   const app = createSSRApp({ render: () => h(comp, props) })
   app.use(createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false }))
   app.component('Select', Select)
+  // the app's ExpandBody only gives its one child a travel: here the child alone
+  app.component('ExpandBody', (_, { slots }) => slots.default?.())
   const warnings = []
   app.config.warnHandler = (m) => warnings.push(m)
   app.config.errorHandler = (e) => { throw e }

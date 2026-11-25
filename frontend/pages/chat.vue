@@ -537,7 +537,7 @@ watch(draft, async () => {
           <button v-if="turns.length" class="mini" type="button" @click="reset"><Plus :size="13" /> {{ $t('chat.newConversation') }}</button>
         </header>
 
-        <div v-if="chatsOpen" class="chats">
+        <ExpandBody><div v-if="chatsOpen" class="chats">
           <div class="chatsearch">
             <Search :size="14" />
             <input
@@ -574,7 +574,7 @@ watch(draft, async () => {
               </button>
             </li>
           </ul>
-        </div>
+        </div></ExpandBody>
 
         <div ref="scroller" class="stream" aria-live="polite">
           <!-- states in which one cannot chat: explained, with the remedy -->

@@ -222,7 +222,7 @@ const fieldTitle = computed(() => {
             </button>
           </div>
           <RdRowCount class="rds-rows" :count="countFor(store.rowCounts.value[ds.name], ds.source)" />
-          <template v-if="isOpen(ds.name)">
+          <ExpandBody><div v-if="isOpen(ds.name)">
             <p v-if="fieldErrors?.[ds.name] && !(ds.fields ?? []).length" class="rds-nofields bad" role="alert">{{ fieldErrors[ds.name] }}</p>
             <p v-else-if="!(ds.fields ?? []).length && !(ds.calculated ?? []).length" class="rds-nofields">
               {{ $t('reportDesigner.data.noFields') }}
@@ -261,7 +261,7 @@ const fieldTitle = computed(() => {
                 </button>
               </li>
             </ul>
-          </template>
+          </div></ExpandBody>
         </li>
       </ul>
 

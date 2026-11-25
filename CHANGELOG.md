@@ -16,10 +16,12 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   from a visible opacity so nothing flashes. The top bar stays still; nothing is held back or
   mounted twice; nothing animates when a page only changes its filter or folder, when a
   leave-with-unsaved-changes question is answered Cancel, or with reduced motion.
-- Expanders open and close over a moment instead of at once: the groups of the admin settings,
-  the AI agents' instructions, and every other collapsible section (logs, advanced options).
-  What is below slides instead of jumping, a click half-way turns the movement round, the
-  keyboard works as before, and nothing moves with reduced motion.
+- Expanders open and close over a moment instead of at once, everywhere: the groups of the admin
+  settings, the AI agents' instructions, logs and advanced options, the detail of a run, the
+  Explore start box, the palette's groups in the flow editor, the sections of the report
+  designer, the tokens of a service account and the deliveries of a webhook, and the rest. What
+  is below slides instead of jumping, a click half-way turns the movement round, the keyboard
+  works as before, and nothing moves with reduced motion.
 
 ## 1.5.0 «Augustus» — 2026-11-24
 

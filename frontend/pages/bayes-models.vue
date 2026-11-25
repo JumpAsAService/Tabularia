@@ -232,7 +232,7 @@ async function remove () {
           </div>
           <button type="button" :aria-expanded="whatOpen" aria-controls="bm-what" @click="whatOpen = !whatOpen"><Info :size="14" aria-hidden="true" /> {{ t('bayesModels.list.what') }}</button>
         </div>
-        <div v-if="whatOpen" id="bm-what" class="what"><BayesGlossary /></div>
+        <ExpandBody><div v-if="whatOpen" id="bm-what" class="what"><BayesGlossary /></div></ExpandBody>
       </section>
 
       <section v-else class="card">

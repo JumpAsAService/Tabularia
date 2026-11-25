@@ -395,7 +395,7 @@ function stepLabel(s: Step): string {
                 >{{ s.open ? $t('flowAssistant.hideRows') : $t('flowAssistant.showRows', { n: s.table.row_count }) }}</button>
               </span>
               <span v-if="s.error" class="fa-step-err">{{ s.error }}</span>
-              <div v-if="s.table && s.open" class="fa-table"><DataGrid :result="s.table" /></div>
+              <ExpandBody><div v-if="s.table && s.open" class="fa-table"><DataGrid :result="s.table" /></div></ExpandBody>
             </li>
           </ol>
           <MarkdownLite v-if="turn.text" :text="turn.text" />

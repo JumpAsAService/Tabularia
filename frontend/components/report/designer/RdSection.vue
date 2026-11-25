@@ -25,7 +25,7 @@ const uid = `rsec-${Math.random().toString(36).slice(2, 9)}`
       </h3>
       <slot name="actions" />
     </div>
-    <div v-show="open || bad" :id="uid" class="rsec-body"><slot /></div>
+    <ExpandBody><div v-show="open || bad" :id="uid" class="rsec-body"><slot /></div></ExpandBody>
   </section>
 </template>
 
