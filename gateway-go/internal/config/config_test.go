@@ -138,3 +138,26 @@ func TestTheDataAPIsPublicAddress(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// The XMLA interface (docs/specs/xmla.md): off, with the caps' defaults, and the caps bounded.
+func TestTheXMLASwitchAndCaps(t *testing.T) {
+	base := map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k"}
+	c, err := Load(env(base))
+	if err != nil || c.DataAPI.XMLA != (XMLAConfig{MaxCells: 1_000_000, MaxTuples: 10_000, MaxMembers: 5_000}) {
+		t.Fatalf("%v %+v", err, c.DataAPI.XMLA)
+	}
+	base["DATA_API__XMLA_ENABLED"], base["DATA_API__XMLA_MAX_CELLS"], base["DATA_API__XMLA_MAX_TUPLES"] = "true", "250000", "2000"
+	base["DATA_API__XMLA_MAX_MEMBERS"], base["DATA_API__XMLA_KEEP_REFUSED"] = "800", "true"
+	c, err = Load(env(base))
+	if err != nil || c.DataAPI.XMLA != (XMLAConfig{Enabled: true, MaxCells: 250000, MaxTuples: 2000, MaxMembers: 800, KeepRefused: true}) {
+		t.Fatalf("%v %+v", err, c.DataAPI.XMLA)
+	}
+	for _, name := range []string{"DATA_API__XMLA_MAX_CELLS", "DATA_API__XMLA_MAX_TUPLES", "DATA_API__XMLA_MAX_MEMBERS"} {
+		for _, bad := range []string{"0", "-1", "many"} {
+			b := map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k", name: bad}
+			if _, err := Load(env(b)); err == nil || !strings.Contains(err.Error(), name) {
+				t.Errorf("%s=%s: %v", name, bad, err)
+			}
+		}
+	}
+}

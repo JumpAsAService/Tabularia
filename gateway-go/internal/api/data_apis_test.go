@@ -161,8 +161,10 @@ type dapiDetail struct {
 	ResourceCount  int              `json:"resources"`
 	Runtime        dataapis.Runtime `json:"runtime"`
 	Suspended      string           `json:"suspended"`
+	Xmla           dataapis.Xmla    `json:"xmla"`
 	Resources      []struct {
 		Name       string   `json:"name"`
+		Cube       string   `json:"cube"`
 		Columns    []string `json:"columns"`
 		Datasource struct {
 			Name     *string `json:"name"`

@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -415,6 +416,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/data/{api}/health", s.health)
 	mux.HandleFunc("/data/{api}/openapi.json", s.openAPI)
+	mux.HandleFunc("/data/{api}/xmla", s.xmla)
 	mux.HandleFunc("/data/{api}/{resource}", s.data)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		problem(w, &Problem{Status: 404, Code: "not_found", Detail: "Nothing here: the data are at /data/{api}/{resource}"})
@@ -425,9 +427,14 @@ func (s *Server) Handler() http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			problem(sw, &Problem{Status: 405, Code: "method_not_allowed", Detail: "A data API is read-only: GET only"})
+		if r.Method != http.MethodGet && !(r.Method == http.MethodPost && isXMLAPath(r.URL.Path)) {
+			if isXMLAPath(r.URL.Path) {
+				w.Header().Set("Allow", "POST")
+				problem(sw, &Problem{Status: 405, Code: "method_not_allowed", Detail: "XMLA is SOAP over POST"})
+			} else {
+				w.Header().Set("Allow", "GET")
+				problem(sw, &Problem{Status: 405, Code: "method_not_allowed", Detail: "A data API is read-only: GET only"})
+			}
 		} else {
 			mux.ServeHTTP(sw, r.WithContext(context.WithValue(r.Context(), recordKey{}, rec)))
 		}
@@ -484,13 +491,27 @@ func problem(w http.ResponseWriter, p *Problem) {
 		w.Header().Set("Retry-After", strconv.Itoa(p.RetryAfter))
 	}
 	if p.Status == 401 {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="data API"`)
+		if p.Challenge != "" {
+			w.Header().Set("WWW-Authenticate", p.Challenge)
+		} else {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="data API"`)
+		}
 	}
 	writeJSON(w, p.Status, map[string]string{"detail": p.Detail, "code": p.Code})
 }
 
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, p *Problem) {
 	recordOf(r).code = p.Code
+	if p.Status == 401 && p.Challenge == "" && isXMLAPath(r.URL.Path) {
+		// the client asks the person for a password only when it is told to use Basic
+		realm := "data API"
+		if snap := s.snap.Load(); snap != nil && snap.m.Name != "" {
+			realm = snap.m.Name
+		}
+		q := *p
+		q.Challenge = `Basic realm="` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(realm) + `"`
+		p = &q
+	}
 	problem(w, p)
 }
 
@@ -550,7 +571,14 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request) (*snapshot, *KeyR
 		s.fail(w, r, keyInQuery())
 		return nil, nil, false
 	}
-	key, p := snap.keys.Check(KeyOf(r), s.now())
+	sent := KeyOf(r)
+	if sent != "" && UsesBasic(r) && s.clientIP.Scheme(r) != "https" {
+		// Basic is the key in clear text: only where TLS ends at a proxy that says so
+		s.fail(w, r, &Problem{Status: 403, Code: "https_required",
+			Detail: "A key sent as HTTP Basic is accepted over HTTPS only: use the https address of the data API"})
+		return nil, nil, false
+	}
+	key, p := snap.keys.Check(sent, s.now())
 	if p != nil {
 		recordOf(r).key = key // a revoked or expired key is still counted as its own
 		s.fail(w, r, p)

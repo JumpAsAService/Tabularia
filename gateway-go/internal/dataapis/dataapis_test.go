@@ -1,6 +1,7 @@
 package dataapis
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +143,7 @@ func TestADefinitionIsCheckedAgainstItsDatasource(t *testing.T) {
 	bad("is not available", func(r *Resource) { r.Source.Kind = "connection" })
 	bad("lowercase letters", func(r *Resource) { r.Name = "Customers" })
 	bad("kept for the API itself", func(r *Resource) { r.Name = "health" })
+	bad("kept for the API itself", func(r *Resource) { r.Name = "xmla" })
 	if _, err := CheckDefinition(Definition{Resources: []Resource{resource(), resource()}}, source()); err == nil ||
 		!strings.Contains(err.Error(), "two resources") {
 		t.Errorf("two resources with one name: %v", err)
@@ -209,5 +211,78 @@ func TestCIDRs(t *testing.T) {
 	}
 	if _, err := CIDRs(make([]string, MaxCIDRs+1)); err == nil {
 		t.Error("too many")
+	}
+}
+
+func TestXmlaAndCubeCaptions(t *testing.T) {
+	// off by default, and a definition with no caption is a definition as before
+	def, err := CheckDefinition(Definition{Resources: []Resource{resource()}}, source())
+	if err != nil || def.Xmla.Enabled || def.Resources[0].Cube != "" || def.Resources[0].CubeName() != "customers" {
+		t.Fatalf("%+v %v", def, err)
+	}
+	// a caption is tidied; the name itself is the default and is kept as nothing
+	r := resource()
+	r.Cube = "  Customers of the CRM  "
+	def, err = CheckDefinition(Definition{Resources: []Resource{r}, Xmla: Xmla{Enabled: true}}, source())
+	if err != nil || def.Resources[0].Cube != "Customers of the CRM" || def.Resources[0].CubeName() != "Customers of the CRM" || !def.Xmla.Enabled {
+		t.Fatalf("%+v %v", def, err)
+	}
+	r.Cube = "customers"
+	if def, err = CheckDefinition(Definition{Resources: []Resource{r}}, source()); err != nil || def.Resources[0].Cube != "" {
+		t.Fatalf("the default spelled out: %+v %v", def, err)
+	}
+	bad := func(why string, def Definition) {
+		t.Helper()
+		if _, err := CheckDefinition(def, source()); err == nil || !strings.Contains(err.Error(), why) {
+			t.Errorf("%s: %v", why, err)
+		}
+	}
+	long := resource()
+	long.Cube = strings.Repeat("é", MaxCube+1)
+	bad("longer than", Definition{Resources: []Resource{long}})
+	ctl := resource()
+	ctl.Cube = "two\nlines"
+	bad("control character", Definition{Resources: []Resource{ctl}})
+	// two cubes of one name, however it is cased: only where the interface is on
+	a, b := resource(), resource()
+	b.Name, b.Cube = "orders", "CUSTOMERS"
+	bad("both the cube", Definition{Resources: []Resource{a, b}, Xmla: Xmla{Enabled: true}})
+	if _, err := CheckDefinition(Definition{Resources: []Resource{a, b}}, source()); err != nil {
+		t.Errorf("the clash does not matter with XMLA off: %v", err)
+	}
+	b.Cube = "Orders of the CRM"
+	if _, err := CheckDefinition(Definition{Resources: []Resource{a, b}, Xmla: Xmla{Enabled: true}}, source()); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestADefinitionWithXmlaIsTheSameJSON(t *testing.T) {
+	// the versions hold the definition as JSON: the fields are added, an old version reads as off
+	var old Definition
+	if err := json.Unmarshal([]byte(`{"resources": [{"name": "c", "columns": ["id"]}], "runtime": {"replicas": 1}}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if old.Xmla.Enabled || old.Resources[0].Cube != "" {
+		t.Errorf("%+v", old)
+	}
+	def := Definition{Resources: []Resource{{Name: "c", Cube: "Cube C"}}, Xmla: Xmla{Enabled: true}}
+	raw, _ := json.Marshal(def)
+	if !strings.Contains(string(raw), `"xmla":{"enabled":true}`) || !strings.Contains(string(raw), `"cube":"Cube C"`) {
+		t.Errorf("%s", raw)
+	}
+	var back Definition
+	if err := json.Unmarshal(raw, &back); err != nil || !back.Xmla.Enabled || back.Resources[0].Cube != "Cube C" {
+		t.Errorf("%+v %v", back, err)
+	}
+	// a resource with no caption writes none: the old versions stay byte for byte the same
+	raw, _ = json.Marshal(Resource{Name: "c"})
+	if strings.Contains(string(raw), "cube") {
+		t.Errorf("%s", raw)
+	}
+	if got := WireResource(Resource{Name: "c"}).Cube; got != "c" {
+		t.Errorf("the wire's cube: %q", got)
+	}
+	if got := WireResource(Resource{Name: "c", Cube: "Cube C"}).Cube; got != "Cube C" {
+		t.Errorf("the wire's cube: %q", got)
 	}
 }

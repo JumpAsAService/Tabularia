@@ -138,10 +138,37 @@ func Resources(ctx context.Context, q Querier, apiID int64) ([]Resource, error) 
 	return out, err
 }
 
-// CurrentDefinition is what the data API publishes now.
+// CurrentDefinition is what the data API publishes now. The resources' columns are rows of
+// data_api_resources and the runtime is the data API's own; what has no column (the XMLA switch,
+// the cubes' captions) is read from the current version's JSON, so that it needs no migration.
 func CurrentDefinition(ctx context.Context, q Querier, a *API) (Definition, error) {
 	res, err := Resources(ctx, q, a.ID)
-	return Definition{Resources: res, Runtime: a.Runtime}, err
+	if err != nil {
+		return Definition{}, err
+	}
+	def := Definition{Resources: res, Runtime: a.Runtime}
+	var text string
+	err = q.QueryRow(ctx, `SELECT content FROM data_api_versions WHERE data_api_id = $1 AND version = $2`,
+		a.ID, a.CurrentVersion).Scan(&text)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return def, nil
+	}
+	if err != nil {
+		return def, err
+	}
+	var saved Definition
+	if json.Unmarshal([]byte(text), &saved) != nil {
+		return def, nil
+	}
+	def.Xmla = saved.Xmla
+	cubes := map[string]string{}
+	for _, r := range saved.Resources {
+		cubes[r.Name] = r.Cube
+	}
+	for i := range def.Resources {
+		def.Resources[i].Cube = cubes[def.Resources[i].Name]
+	}
+	return def, nil
 }
 
 func nonNil[T any](s []T) []T {

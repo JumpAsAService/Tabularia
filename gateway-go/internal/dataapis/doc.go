@@ -44,7 +44,7 @@ func Doc(a *API, def Definition, sources map[int64]*Datasource) (dataapiwire.Doc
 // link, which the manifest adds).
 func WireResource(r Resource) dataapiwire.Resource {
 	out := dataapiwire.Resource{Name: r.Name, Columns: nonNil(r.Columns), Filters: []dataapiwire.Filter{},
-		DefaultSort: nonNil(r.DefaultSort), MaxPage: r.MaxPage}
+		DefaultSort: nonNil(r.DefaultSort), MaxPage: r.MaxPage, Cube: r.CubeName()}
 	for _, f := range r.Filters {
 		out.Filters = append(out.Filters, dataapiwire.Filter{Column: f.Column, Operators: nonNil(f.Operators)})
 	}

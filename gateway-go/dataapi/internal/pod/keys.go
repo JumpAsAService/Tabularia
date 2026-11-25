@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"encoding/base64"
 	"math"
 	"net/http"
 	"net/netip"
@@ -41,23 +42,42 @@ func NewKeys(list []dataapiwire.Key) *Keys {
 	return k
 }
 
-// KeyOf is the key a request sends: `Authorization: Bearer …` or `X-API-Key`; "" with none.
+// KeyOf is the key a request sends: `Authorization: Bearer …`, `Authorization: Basic …` (what a
+// pivot table can send: the user name is ignored, the password is the key) or `X-API-Key`; ""
+// with none.
 func KeyOf(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); h != "" {
 		scheme, rest, _ := strings.Cut(h, " ")
-		if strings.EqualFold(scheme, "bearer") {
+		switch {
+		case strings.EqualFold(scheme, "bearer"):
 			return strings.TrimSpace(rest)
+		case strings.EqualFold(scheme, "basic"):
+			raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(rest))
+			if err != nil {
+				return ""
+			}
+			_, password, ok := strings.Cut(string(raw), ":")
+			if !ok {
+				return ""
+			}
+			return strings.TrimSpace(password)
 		}
 		return ""
 	}
 	return strings.TrimSpace(r.Header.Get("X-API-Key"))
 }
 
+// UsesBasic says whether the key came as HTTP Basic, which only travels over HTTPS.
+func UsesBasic(r *http.Request) bool {
+	scheme, _, _ := strings.Cut(r.Header.Get("Authorization"), " ")
+	return strings.EqualFold(scheme, "basic")
+}
+
 // Check finds the key and says why it may not come in, nil when it may.
 func (k *Keys) Check(key string, now time.Time) (*KeyRule, *Problem) {
 	if key == "" {
 		return nil, &Problem{Status: 401, Code: "key_missing",
-			Detail: "A key is needed: send it as Authorization: Bearer tdk_… or in X-API-Key"}
+			Detail: "A key is needed: send it as Authorization: Bearer tdk_…, as the password of Authorization: Basic, or in X-API-Key"}
 	}
 	if !dataapiwire.WellFormed(key, dataapiwire.KeyPrefix) {
 		return nil, &Problem{Status: 401, Code: "key_invalid", Detail: "Not a key of this data API"}

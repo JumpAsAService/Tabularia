@@ -785,6 +785,16 @@ dataApi:
   keyDefaultRate: 600    # the requests per minute of a key made without a rate
   pollSeconds: 20        # how often the pods ask for their manifest: a revoked key or a refresh reaches them within it
   usageRetentionDays: 30 # how long the requests per key and minute are kept for the pages
+  # The XMLA interface (docs/specs/xmla.md), a second way a data API answers, for pivot tables:
+  # POST /data/{address}/xmla, with the key as the password of HTTP Basic (HTTPS only). Off: it
+  # is not offered, and a data API saved with it on is refused. Each data API still turns it on
+  # for itself. The caps are the administrator's and reach the pods in their manifest.
+  xmla:
+    enabled: false
+    maxCells: 1000000    # the most cells in one answer to an Execute
+    maxTuples: 10000     # the most tuples on one axis of an answer
+    maxMembers: 5000     # the most members in one answer to a Discover (a larger level is paged)
+    keepRefused: false   # keep, for a day, the MDX of a refused statement (it carries values of the data)
   # where the pods and their objects go; empty: the scripts' namespace (scripts.namespace).
   # Another one is created with scripts.createNamespaces, at the `restricted` Pod Security
   # level; it needs the image pull secrets of image.pullSecrets.

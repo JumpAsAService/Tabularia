@@ -454,6 +454,9 @@ text = "Model proposed first in the picker, if an administrator enabled it, on a
 [var.AI__MAX_RESULT_ROWS]
 text = "Rows a query of the assistant may return, to the model and to the chat. Each query also stops at the engine's preview cap, 1000 rows."
 
+[var.AI__MAX_RESULT_CHARS_FOR_MODEL]
+text = "How much of one result's rows the model is given, in characters (about four to a token). The chat shows the person the whole result and keeps it; the model reads the first rows that fit, at least five, with a note of how many there are, in the turn and in the turns after. `0` gives the model everything: a long or wide table then stays in every request that follows."
+
 [var.AI__MAX_REQUESTS]
 text = "Model round-trips per message of the data chat: the cap on its tool-calling loop."
 
@@ -1470,6 +1473,31 @@ text = "How often, in seconds (5 to 600), the pods of a data API ask the gateway
 helm = "`dataApi.usageRetentionDays`"
 default = "`30`"
 text = "How long, in days (1 to 3650), the requests, rows, errors and over-the-rate answers of each data API key and minute are kept for the pages; older ones are deleted by the orchestrator."
+
+[var.DATA_API__XMLA_ENABLED]
+helm = "`dataApi.xmla.enabled`"
+default = "`false`"
+text = "Offers the XMLA interface of the data APIs, a second way they answer, for pivot tables (`POST /data/{address}/xmla`, SOAP; the key is sent as the password of HTTP Basic, over HTTPS only). Needs `DATA_API__ENABLED`. Each data API still turns it on for itself in its definition. Off: `GET /data-apis/limits` says it is not offered, and saving a data API with XMLA on is refused (409, code `xmla_off`)."
+
+[var.DATA_API__XMLA_MAX_CELLS]
+helm = "`dataApi.xmla.maxCells`"
+default = "`1000000`"
+text = "The most cells in one answer to an XMLA `Execute`, 1 to 100,000,000; past it the answer is a SOAP fault that names the cap. It travels to the pods in their manifest."
+
+[var.DATA_API__XMLA_MAX_TUPLES]
+helm = "`dataApi.xmla.maxTuples`"
+default = "`10000`"
+text = "The most tuples on one axis of an XMLA `Execute` answer, 1 to 10,000,000."
+
+[var.DATA_API__XMLA_MAX_MEMBERS]
+helm = "`dataApi.xmla.maxMembers`"
+default = "`5000`"
+text = "The most members in one answer to an XMLA `Discover`, 1 to 10,000,000; a level with more is paged, not sent whole."
+
+[var.DATA_API__XMLA_KEEP_REFUSED]
+helm = "`dataApi.xmla.keepRefused`"
+default = "`false`"
+text = "Keeps, for a day, the MDX of a statement the pod refused, for whoever manages the data API to read and send. Off by default: an MDX statement carries member names, which are values of the data."
 
 [var.DATA_API__NAMESPACE]
 helm = "`dataApi.namespace`"

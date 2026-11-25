@@ -129,7 +129,7 @@ func adminDataAPIs(d *Deps, w http.ResponseWriter, r *http.Request, _ *auth.Prin
 	server.JSON(w, http.StatusOK, map[string]any{"enabled": off == "", "reason": off, "max_apis": d.Config.DataAPI.MaxAPIs,
 		"max_total_replicas": d.Config.DataAPI.MaxTotalReplicas, "runtime_limits": runtimeLimits(d.Config.DataAPI),
 		"default_runtime": dataapis.DefaultRuntime(), "base_url": d.Config.DataAPI.Pods.PublicBaseURL,
-		"host": dataapis.IngressHost(d.Config.DataAPI.Pods), "apis": list})
+		"host": dataapis.IngressHost(d.Config.DataAPI.Pods), "xmla": xmlaLimits(d), "apis": list})
 }
 
 // adminDataAPIOf is the data API of the path, any of the installation (404 when there is none).
@@ -185,7 +185,7 @@ func adminSetDataAPIRuntime(d *Deps, w http.ResponseWriter, r *http.Request, p *
 			return err
 		}
 		if now == nil {
-			ref = &dataAPIRefusal{http.StatusNotFound, "Data API not found"}
+			ref = &dataAPIRefusal{status: http.StatusNotFound, text: "Data API not found"}
 			return nil
 		}
 		a, before = now, now.Runtime

@@ -30,8 +30,31 @@ type DataAPIConfig struct {
 	// DATA_API__USAGE_RETENTION_DAYS: how long the usage per key and minute is kept
 	UsageRetentionDays int
 
+	// The XMLA interface (docs/specs/xmla.md): the installation's switch and the caps the pods
+	// apply to every answer
+	XMLA XMLAConfig
+
 	// The pods, as the orchestrator's reconcile loop makes them (DataAPIPods)
 	Pods DataAPIPods
+}
+
+// XMLAConfig is the administrator's side of the XMLA interface, a second way a data API answers
+// (for pivot tables). The caps travel to the pods in the manifest.
+type XMLAConfig struct {
+	// DATA_API__XMLA_ENABLED: offers the interface; each data API still turns it on for itself.
+	// Needs DATA_API__ENABLED
+	Enabled bool
+	// DATA_API__XMLA_MAX_CELLS: the most cells in one Execute answer
+	MaxCells int
+	// DATA_API__XMLA_MAX_TUPLES: the most tuples on one axis of an Execute answer
+	MaxTuples int
+	// DATA_API__XMLA_MAX_MEMBERS: the most members in one Discover answer (a level with more is
+	// paged, not sent whole)
+	MaxMembers int
+	// DATA_API__XMLA_KEEP_REFUSED: keep, for a day, the MDX of a statement the pod refused, for
+	// whoever manages the data API to read (it carries member names, that is, values of the
+	// data): off by default
+	KeepRefused bool
 }
 
 // DataAPIPods is how the reconcile loop runs a data API's pods and opens them to the other
@@ -137,6 +160,13 @@ func loadDataAPI(r *reader) DataAPIConfig {
 		KeyDefaultRate:     r.integer("DATA_API__KEY_DEFAULT_RATE", 600, 1, 1_000_000),
 		PollSeconds:        r.integer("DATA_API__POLL_SECONDS", 20, 5, 600),
 		UsageRetentionDays: r.integer("DATA_API__USAGE_RETENTION_DAYS", 30, 1, 3650),
+	}
+	c.XMLA = XMLAConfig{
+		Enabled:     r.boolean("DATA_API__XMLA_ENABLED", false),
+		MaxCells:    r.integer("DATA_API__XMLA_MAX_CELLS", 1_000_000, 1, 100_000_000),
+		MaxTuples:   r.integer("DATA_API__XMLA_MAX_TUPLES", 10_000, 1, 10_000_000),
+		MaxMembers:  r.integer("DATA_API__XMLA_MAX_MEMBERS", 5_000, 1, 10_000_000),
+		KeepRefused: r.boolean("DATA_API__XMLA_KEEP_REFUSED", false),
 	}
 	p := &c.Pods
 	p.Namespace = strings.TrimSpace(r.str("DATA_API__NAMESPACE", ""))

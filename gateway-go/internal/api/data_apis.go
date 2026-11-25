@@ -80,6 +80,22 @@ func dataAPIsOff(d *Deps) string {
 
 func dataAPIsOn(d *Deps) bool { return dataAPIsOff(d) == "" }
 
+// xmlaOn says whether the XMLA interface is offered here: DATA_API__XMLA_ENABLED, on an
+// installation that has the data APIs.
+func xmlaOn(d *Deps) bool { return dataAPIsOn(d) && d.Config.DataAPI.XMLA.Enabled }
+
+// xmlaLimits is what the pages learn of the XMLA interface: whether it is offered and, when it
+// is, the caps the administrator set.
+func xmlaLimits(d *Deps) map[string]any {
+	c := d.Config.DataAPI.XMLA
+	out := map[string]any{"enabled": xmlaOn(d)}
+	if xmlaOn(d) {
+		out["max_cells"], out["max_tuples"], out["max_members"] = c.MaxCells, c.MaxTuples, c.MaxMembers
+		out["keep_refused"] = c.KeepRefused
+	}
+	return out
+}
+
 // dataAPINeedOn answers the 409 of an installation without data APIs.
 func dataAPINeedOn(d *Deps, w http.ResponseWriter) bool {
 	switch dataAPIsOff(d) {
@@ -138,6 +154,7 @@ type dataAPIResourceOut struct {
 type dataAPIDetail struct {
 	dataAPIOut
 	Runtime      dataapis.Runtime     `json:"runtime"`
+	Xmla         dataapis.Xmla        `json:"xmla"`
 	ResourceList []dataAPIResourceOut `json:"resource_list"`
 	// Suspended says why an active data API would not answer now: "creator_inactive",
 	// "creator_rights", "datasource_rights"; "" when nothing stops it
@@ -218,7 +235,7 @@ func (o *dataAPIOuts) detail(a *dataapis.API) (*dataAPIDetail, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := &dataAPIDetail{dataAPIOut: base, Runtime: def.Runtime, ResourceList: []dataAPIResourceOut{}}
+	out := &dataAPIDetail{dataAPIOut: base, Runtime: def.Runtime, Xmla: def.Xmla, ResourceList: []dataAPIResourceOut{}}
 	ids := []int64{}
 	for _, r := range def.Resources {
 		ids = append(ids, r.Source.ID)
@@ -416,12 +433,14 @@ func dataAPIEnsureManage(d *Deps, w http.ResponseWriter, ctx context.Context, c 
 type dataAPIRefusal struct {
 	status int
 	text   string
+	// a machine-readable reason, when the page tells it apart: sent as {code, detail}
+	code string
 }
 
 func (e *dataAPIRefusal) Error() string { return e.text }
 
 func refused422(err error) *dataAPIRefusal {
-	return &dataAPIRefusal{http.StatusUnprocessableEntity, dataapis.Sentence(err.Error())}
+	return &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: dataapis.Sentence(err.Error())}
 }
 
 // checkDataAPIDefinition checks the resources of a definition this person saves against their
@@ -441,6 +460,10 @@ func checkDataAPIDefinition(ctx context.Context, d *Deps, c *perm.Checker, def d
 	def, err = dataapis.CheckDefinition(def, sources)
 	if err != nil {
 		return def, refused422(err), nil
+	}
+	if def.Xmla.Enabled && !xmlaOn(d) {
+		return def, &dataAPIRefusal{status: http.StatusConflict, code: "xmla_off",
+			text: "XMLA is not offered on this installation (DATA_API__XMLA_ENABLED): switch it off in the definition"}, nil
 	}
 	old := map[string]dataapis.Resource{}
 	for _, r := range before {
@@ -482,7 +505,7 @@ func checkDataAPIPods(ctx context.Context, d *Deps, q dataapis.Querier, id int64
 		return nil, err
 	}
 	if total := d.Config.DataAPI.MaxTotalReplicas; others+rt.Pods() > total {
-		return &dataAPIRefusal{http.StatusConflict, fmt.Sprintf(
+		return &dataAPIRefusal{status: http.StatusConflict, text: fmt.Sprintf(
 			"The active data APIs may run at most %d pods together: %d are taken, this one asks for %d", total, others, rt.Pods())}, nil
 	}
 	return nil, nil
@@ -491,10 +514,10 @@ func checkDataAPIPods(ctx context.Context, d *Deps, q dataapis.Querier, id int64
 func checkDataAPIName(name string) (string, *dataAPIRefusal) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", &dataAPIRefusal{http.StatusUnprocessableEntity, "A data API needs a name"}
+		return "", &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: "A data API needs a name"}
 	}
 	if len([]rune(name)) > dataapis.MaxName {
-		return "", &dataAPIRefusal{http.StatusUnprocessableEntity, fmt.Sprintf("The name is longer than %d characters", dataapis.MaxName)}
+		return "", &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: fmt.Sprintf("The name is longer than %d characters", dataapis.MaxName)}
 	}
 	return name, nil
 }
@@ -502,7 +525,7 @@ func checkDataAPIName(name string) (string, *dataAPIRefusal) {
 func checkDataAPIDescription(text string) (string, *dataAPIRefusal) {
 	text = strings.TrimSpace(text)
 	if len([]rune(text)) > dataapis.MaxDescription {
-		return "", &dataAPIRefusal{http.StatusUnprocessableEntity, fmt.Sprintf("The description is longer than %d characters", dataapis.MaxDescription)}
+		return "", &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: fmt.Sprintf("The description is longer than %d characters", dataapis.MaxDescription)}
 	}
 	return text, nil
 }
@@ -512,11 +535,11 @@ func checkDataAPIDescription(text string) (string, *dataAPIRefusal) {
 func uniqueDataAPI(ctx context.Context, q dataapis.Querier, projectID int64, name, slug string, except int64) (*dataAPIRefusal, error) {
 	taken, err := dataapis.NameTaken(ctx, q, projectID, name, except)
 	if err != nil || taken {
-		return &dataAPIRefusal{http.StatusConflict, "A data API with this name already exists in the folder"}, err
+		return &dataAPIRefusal{status: http.StatusConflict, text: "A data API with this name already exists in the folder"}, err
 	}
 	taken, err = dataapis.SlugTaken(ctx, q, slug, except)
 	if err != nil || taken {
-		return &dataAPIRefusal{http.StatusConflict, fmt.Sprintf("Another data API already answers at /data/%s/", slug)}, err
+		return &dataAPIRefusal{status: http.StatusConflict, text: fmt.Sprintf("Another data API already answers at /data/%s/", slug)}, err
 	}
 	return nil, nil
 }
@@ -527,6 +550,10 @@ func answerRefusal(d *Deps, w http.ResponseWriter, what string, ref *dataAPIRefu
 		return true
 	}
 	if ref != nil {
+		if ref.code != "" {
+			server.JSON(w, ref.status, map[string]string{"code": ref.code, "detail": ref.text})
+			return true
+		}
 		detail(w, ref.status, ref.text)
 		return true
 	}
@@ -592,6 +619,7 @@ func dataAPILimits(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		// data APIs are published on; both empty: the interface's own
 		out["base_url"] = c.Pods.PublicBaseURL
 		out["host"] = dataapis.IngressHost(c.Pods)
+		out["xmla"] = xmlaLimits(d)
 	}
 	server.JSON(w, http.StatusOK, out)
 }
@@ -625,6 +653,7 @@ type dataAPICreateIn struct {
 	Description string              `json:"description"`
 	Resources   []dataapis.Resource `json:"resources"`
 	Runtime     *dataapis.Runtime   `json:"runtime"`
+	Xmla        *dataapis.Xmla      `json:"xmla"`
 }
 
 // POST /projects/{project_id}/data-apis: a new data API, a draft.
@@ -670,13 +699,16 @@ func createDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	slug := strings.TrimSpace(in.Slug)
 	if ref == nil {
 		if problem := dataapis.CheckSlug(slug); problem != "" {
-			ref = &dataAPIRefusal{http.StatusUnprocessableEntity, problem}
+			ref = &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: problem}
 		}
 	}
 	if answerRefusal(d, w, "", ref, nil) {
 		return
 	}
 	def := dataapis.Definition{Resources: in.Resources, Runtime: dataapis.DefaultRuntime()}
+	if in.Xmla != nil {
+		def.Xmla = *in.Xmla
+	}
 	if in.Runtime != nil && !dataapis.SameRuntime(*in.Runtime, def.Runtime) {
 		runtimeAdminOnly(w)
 		return
@@ -713,6 +745,7 @@ type dataAPIUpdateIn struct {
 	ProjectID   *int64               `json:"project_id"`
 	Resources   *[]dataapis.Resource `json:"resources"`
 	Runtime     *dataapis.Runtime    `json:"runtime"`
+	Xmla        *dataapis.Xmla       `json:"xmla"`
 }
 
 // PATCH /data-apis/{api_id}: its name, address, description, folder, resources. A change of
@@ -785,8 +818,13 @@ func saveDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	def := current
 	newDefinition := false
-	if in.Resources != nil {
-		def.Resources = *in.Resources
+	if in.Resources != nil || in.Xmla != nil {
+		if in.Resources != nil {
+			def.Resources = *in.Resources
+		}
+		if in.Xmla != nil {
+			def.Xmla = *in.Xmla
+		}
 		def, ref, err = checkDataAPIDefinition(ctx, d, c, def, current.Resources)
 		if answerRefusal(d, w, "data apis: the definition", ref, err) {
 			return
@@ -902,6 +940,9 @@ func duplicateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		return
 	}
 	def.Runtime = dataapis.DefaultRuntime()
+	if !xmlaOn(d) {
+		def.Xmla.Enabled = false // a copy is not refused for what the installation no longer offers
+	}
 	def, ref, err := checkDataAPIDefinition(ctx, d, c, def, nil)
 	if answerRefusal(d, w, "data apis: the definition", ref, err) {
 		return
@@ -1105,7 +1146,7 @@ func restoreDataAPIVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 		sendDataAPIDetail(d, w, r, p, a.ID, http.StatusOK)
 		return
 	}
-	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources},
+	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources, Xmla: &def.Xmla},
 		"restored from v"+strconv.FormatInt(v, 10), v)
 }
 

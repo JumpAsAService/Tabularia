@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
@@ -46,8 +47,9 @@ var rangeOperators = map[string]bool{"gt": true, "gte": true, "lt": true, "lte":
 // a slug and a resource's name: a DNS label (they name Kubernetes objects and paths)
 var labelRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
-// resource names the pods answer themselves: /data/{api}/openapi.json, /data/{api}/health
-var reservedResources = map[string]bool{"health": true, "openapi": true}
+// resource names the pods answer themselves: /data/{api}/openapi.json, /data/{api}/health,
+// /data/{api}/xmla
+var reservedResources = map[string]bool{"health": true, "openapi": true, "xmla": true}
 
 // CheckSlug says what is wrong with a data API's address, "" when nothing.
 func CheckSlug(slug string) string {
@@ -200,13 +202,33 @@ type Resource struct {
 	Filters     []Filter `json:"filters"`
 	DefaultSort []string `json:"default_sort"`
 	MaxPage     int      `json:"max_page"`
+	// Cube is the resource's caption as a cube of the XMLA interface; empty: its name. Kept in
+	// the versions' JSON only (not a column of data_api_resources): see CurrentDefinition
+	Cube string `json:"cube,omitempty"`
 }
 
-// Definition is what a version holds: the resources and the runtime.
+// Xmla is whether the data API also answers XMLA, for pivot tables (docs/specs/xmla.md).
+type Xmla struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Definition is what a version holds: the resources, the runtime and the XMLA switch.
 type Definition struct {
 	Resources []Resource `json:"resources"`
 	Runtime   Runtime    `json:"runtime"`
+	Xmla      Xmla       `json:"xmla"`
 }
+
+// CubeName is what a resource is called as a cube: its caption, or its name.
+func (r Resource) CubeName() string {
+	if r.Cube != "" {
+		return r.Cube
+	}
+	return r.Name
+}
+
+// MaxCube is the longest cube caption.
+const MaxCube = 200
 
 // Column is a column of a datasource, its type as the datasource lists it (Polars' names).
 type Column struct {
@@ -270,6 +292,16 @@ func CheckDefinition(def Definition, sources map[int64]*Datasource) (Definition,
 		out = append(out, checked)
 	}
 	def.Resources = out
+	if def.Xmla.Enabled {
+		cubes := map[string]string{}
+		for _, r := range out {
+			key := strings.ToLower(r.CubeName())
+			if other, ok := cubes[key]; ok {
+				return def, fmt.Errorf("the resources «%s» and «%s» are both the cube «%s»: give one a caption of its own", other, r.Name, r.CubeName())
+			}
+			cubes[key] = r.Name
+		}
+	}
 	return def, nil
 }
 
@@ -306,6 +338,18 @@ func checkResource(r Resource, sources map[int64]*Datasource) (Resource, error) 
 		}
 	}
 	r.Columns = out
+	r.Cube = strings.TrimSpace(r.Cube)
+	if len([]rune(r.Cube)) > MaxCube {
+		return r, fmt.Errorf("the cube's caption is longer than %d characters", MaxCube)
+	}
+	for _, c := range r.Cube {
+		if unicode.IsControl(c) {
+			return r, errors.New("the cube's caption has a control character")
+		}
+	}
+	if r.Cube == r.Name {
+		r.Cube = "" // the default, kept as nothing so that a version says only what is chosen
+	}
 	filters := []Filter{}
 	filtered := map[string]bool{}
 	for _, f := range r.Filters {

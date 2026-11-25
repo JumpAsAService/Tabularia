@@ -41,8 +41,22 @@ type Manifest struct {
 	PollSeconds int        `json:"poll_seconds"`
 	Resources   []Resource `json:"resources"`
 	Keys        []Key      `json:"keys"`
+	// the XMLA interface (docs/specs/xmla.md): nil when this data API does not answer it (not
+	// switched on by its definition, or not offered by the installation)
+	XMLA *XMLA `json:"xmla,omitempty"`
 	// when the gateway wrote it
 	At time.Time `json:"at"`
+}
+
+// XMLA is what a pod needs to answer XMLA: it is present only when the data API has it on, with
+// the administrator's caps (DATA_API__XMLA_*).
+type XMLA struct {
+	// the most cells in an Execute answer, tuples on one axis, members in a Discover answer
+	MaxCells   int `json:"max_cells"`
+	MaxTuples  int `json:"max_tuples"`
+	MaxMembers int `json:"max_members"`
+	// keep the MDX of a refused statement for a day
+	KeepRefused bool `json:"keep_refused"`
 }
 
 // Filter is a column one may filter on and the operators allowed on it.
@@ -58,6 +72,8 @@ type Resource struct {
 	Filters     []Filter `json:"filters"`
 	DefaultSort []string `json:"default_sort"`
 	MaxPage     int      `json:"max_page"`
+	// the resource's name as a cube of the XMLA interface: its caption, or its name
+	Cube string `json:"cube,omitempty"`
 	// false when the creator may no longer read the datasource (the pods answer 403), or the
 	// datasource has no data yet; Unavailable says which
 	Available   bool   `json:"available"`

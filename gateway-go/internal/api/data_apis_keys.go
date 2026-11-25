@@ -112,7 +112,7 @@ type dataAPIKeyIn struct {
 func checkDataAPIKey(ctx context.Context, d *Deps, a *dataapis.API, in dataAPIKeyIn) (dataapis.NewKeyRow, *dataAPIRefusal, error) {
 	var n dataapis.NewKeyRow
 	bad := func(text string) (dataapis.NewKeyRow, *dataAPIRefusal, error) {
-		return n, &dataAPIRefusal{http.StatusUnprocessableEntity, text}, nil
+		return n, &dataAPIRefusal{status: http.StatusUnprocessableEntity, text: text}, nil
 	}
 	n.DataAPIID = a.ID
 	n.Name = strings.TrimSpace(in.Name)

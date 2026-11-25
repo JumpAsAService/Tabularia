@@ -212,6 +212,32 @@ as the client will show them. Five languages.
 Later, and only if a datasource proves too large for a pod: the engine as a second backend (its
 dialect, the pods' way to the engine, the administrator's choice per data API).
 
+## As built
+
+**Piece 1** (wire and switch), 2026-11-25:
+
+- The definition's `xmla` and the resources' `cube` live in the JSON of the versions. The current
+  definition is read from rows that have no column for them, so it takes those two from the
+  current version's content: no migration, and a version saved before them reads as off.
+- With XMLA on, two cubes of the same name (case apart) are refused at save. `xmla` is a reserved
+  resource name, as `health` and `openapi`. A copy of a data API is made with XMLA off.
+- `DATA_API__XMLA_ENABLED`, `DATA_API__XMLA_MAX_CELLS` (1,000,000), `_MAX_TUPLES` (10,000),
+  `_MAX_MEMBERS` (5,000), `_KEEP_REFUSED` (false); Helm `dataApi.xmla.*`. Keeping refused
+  statements is a switch of the installation, not of one data API as first written above.
+- The pod answers `404 xmla_off` only **after** the key is checked, so a stranger cannot tell
+  whether a data API has the interface on. Other methods get `405` with `Allow: POST`.
+- Basic is accepted on every route, and refused (`403 https_required`) when the request did not
+  come over HTTPS as a trusted proxy reports it. A call in plain HTTP inside the cluster uses
+  `Authorization: Bearer` or `X-API-Key`.
+- `DISCOVER_PROPERTIES` is answered; every other request gets a fault that names what is not
+  served yet. A request body is 1 MB at most.
+
+**Piece 3** (the MDX parser), 2026-11-25: `gateway-go/dataapi/internal/xmla/mdx`. A statement is
+1 MiB at most, 64 levels deep, 128 axes. An empty argument is allowed between two others, never
+first or last. `Filter` compares a measure with a number, joined by AND and OR. `a * b * c` and
+`CrossJoin(a, b, c)` are one form in the tree. Its long examples are written from memory of what
+a pivot sends: the first trials with the real client replace them.
+
 ## Testing strategy
 
 - **Recorded conversations.** The requests a pivot table sends (connecting, listing, dragging a

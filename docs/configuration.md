@@ -58,11 +58,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 175 |
+| [Gateway](#gateway) | 176 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 46 |
-| **Total** | **338** |
+| [Compose and Helm only](#compose-and-helm-only) | 51 |
+| **Total** | **344** |
 
 ## Before production
 
@@ -716,6 +716,11 @@ containers.
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
 | `DATA_API__POLL_SECONDS` | `20` | Helm chart | How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods. |
 | `DATA_API__USAGE_RETENTION_DAYS` | `30` | Helm chart | How long, in days (1 to 3650), the requests, rows, errors and over-the-rate answers of each data API key and minute are kept for the pages; older ones are deleted by the orchestrator. |
+| `DATA_API__XMLA_ENABLED` | `false` | Helm chart | Offers the XMLA interface of the data APIs, a second way they answer, for pivot tables (`POST /data/{address}/xmla`, SOAP; the key is sent as the password of HTTP Basic, over HTTPS only). Needs `DATA_API__ENABLED`. Each data API still turns it on for itself in its definition. Off: `GET /data-apis/limits` says it is not offered, and saving a data API with XMLA on is refused (409, code `xmla_off`). |
+| `DATA_API__XMLA_MAX_CELLS` | `1000000` | Helm chart | The most cells in one answer to an XMLA `Execute`, 1 to 100,000,000; past it the answer is a SOAP fault that names the cap. It travels to the pods in their manifest. |
+| `DATA_API__XMLA_MAX_TUPLES` | `10000` | Helm chart | The most tuples on one axis of an XMLA `Execute` answer, 1 to 10,000,000. |
+| `DATA_API__XMLA_MAX_MEMBERS` | `5000` | Helm chart | The most members in one answer to an XMLA `Discover`, 1 to 10,000,000; a level with more is paged, not sent whole. |
+| `DATA_API__XMLA_KEEP_REFUSED` | `false` | Helm chart | Keeps, for a day, the MDX of a statement the pod refused, for whoever manages the data API to read and send. Off by default: an MDX statement carries member names, which are values of the data. |
 | `EGRESS__LISTEN` | `:3128` | Helm chart | Where the egress proxy listens as a forward proxy (CONNECT for HTTPS, absolute-form for HTTP): the address the scripts and notebooks without internet access get as `HTTPS_PROXY`. Read only by the `egress-proxy` role. |
 | `EGRESS__TRANSPARENT` | *(set by the chart)* | Helm chart | The egress proxy's transparent ports, `listening port=storage port` pairs (20000=443, 20001=80…): for the libraries that ignore `HTTPS_PROXY` (Arrow, in Python and R), the bucket's names point to the proxy's Service, which reads the name asked (TLS SNI or HTTP Host) and passes the bytes on unchanged to an allowed storage host. |
 | `EGRESS__MAX_CONNECTIONS` | `1024` | Helm chart | The most connections the egress proxy holds at once, all clients together. |

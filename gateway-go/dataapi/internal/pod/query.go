@@ -32,6 +32,8 @@ type Problem struct {
 	Code   string
 	// seconds, for a 429 and a 503
 	RetryAfter int
+	// the WWW-Authenticate of a 401, when it is not the Bearer one (the XMLA route asks for Basic)
+	Challenge string
 }
 
 func (p *Problem) Error() string { return p.Detail }
