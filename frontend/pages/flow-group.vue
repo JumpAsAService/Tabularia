@@ -41,6 +41,7 @@ import {
 } from '~/composables/useFlowGroups'
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -439,8 +440,8 @@ function onKey(e: KeyboardEvent) {
 
 // unsaved changes are not lost by a click elsewhere, nor by opening another group
 // from the search (the same page, another id)
-onBeforeRouteLeave(() => !dirty.value || confirm(t('flowGroups.leaveConfirm')))
-onBeforeRouteUpdate((to) => (Number(to.query.id) || null) === groupId.value || !dirty.value || confirm(t('flowGroups.leaveConfirm')))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction(t('flowGroups.leaveConfirm'), 'leave'))
+onBeforeRouteUpdate(async (to) => (Number(to.query.id) || null) === groupId.value || !dirty.value || await confirmAction(t('flowGroups.leaveConfirm'), 'leave'))
 watch(() => route.query.id, (id) => {
   const next = Number(id) || null
   if (next === groupId.value) return // a group just created took its address

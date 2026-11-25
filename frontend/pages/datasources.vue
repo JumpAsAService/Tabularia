@@ -21,6 +21,7 @@ const toast = useToast()
 // the data contract of the datasource open in the dialog (null = closed)
 const contractFor = ref<DatasourceInfo | null>(null)
 const { t, locale } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 
 // server-side search (name/description, over the whole dataset) + pagination
@@ -249,7 +250,7 @@ async function refresh(d: DatasourceInfo) {
 }
 
 async function remove(d: DatasourceInfo) {
-  if (!confirm(t('datasources.confirmDelete', { name: d.name }))) return
+  if (!(await confirmAction(t('datasources.confirmDelete', { name: d.name }), 'delete'))) return
   try {
     await dsApi.remove(d.id)
     toast.success(t('datasources.deletedToast', { name: d.name }))

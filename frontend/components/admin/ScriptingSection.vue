@@ -26,6 +26,7 @@ const props = defineProps<{ groups: GroupOut[] }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useScripting()
 const toast = useToast()
@@ -228,7 +229,7 @@ async function saveEnvironment() {
 
 async function removeEnvironment() {
   const e = env.value
-  if (!e || !confirm(t('scripting.confirmDelete', { name: e.name }))) return
+  if (!e || !(await confirmAction(t('scripting.confirmDelete', { name: e.name }), 'delete'))) return
   try {
     await api.remove(e.id)
     toast.success(t('scripting.deleted', { name: e.name }))
@@ -256,7 +257,7 @@ async function rebuild() {
 }
 
 async function makeCurrent(v: EnvironmentVersion) {
-  if (!env.value || !confirm(t('scripting.confirmCurrent', { n: v.number }))) return
+  if (!env.value || !(await confirmAction(t('scripting.confirmCurrent', { n: v.number })))) return
   try {
     env.value = await api.makeCurrent(env.value.id, v.id)
   } catch (e) {
@@ -368,7 +369,7 @@ async function saveVariable() {
 }
 
 async function deleteVariable(name: string) {
-  if (!env.value || !confirm(t('scripting.confirmDeleteVariable', { name }))) return
+  if (!env.value || !(await confirmAction(t('scripting.confirmDeleteVariable', { name }), 'delete'))) return
   try {
     env.value = await api.deleteVariable(env.value.id, name)
     if (editingVariable.value === name) clearVariable()

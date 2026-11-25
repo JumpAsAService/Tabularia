@@ -2738,6 +2738,73 @@ export default {
     "rowsCount": "{n} Zeile | {n} Zeilen",
     "title": "Quelle"
   },
+  "confirmDialog": {
+    "cancel": "Abbrechen",
+    "confirm": {
+      "title": "Bitte bestätigen",
+      "label": "Bestätigen"
+    },
+    "delete": {
+      "title": "Löschen?",
+      "label": "Löschen"
+    },
+    "remove": {
+      "title": "Entfernen?",
+      "label": "Entfernen"
+    },
+    "revoke": {
+      "title": "Zugriff widerrufen?",
+      "label": "Widerrufen"
+    },
+    "discard": {
+      "title": "Änderungen verwerfen?",
+      "label": "Verwerfen"
+    },
+    "leave": {
+      "title": "Ohne Speichern verlassen?",
+      "label": "Verlassen"
+    },
+    "restore": {
+      "title": "Diese Version wiederherstellen?",
+      "label": "Wiederherstellen"
+    },
+    "stop": {
+      "title": "Anhalten?",
+      "label": "Anhalten"
+    },
+    "disable": {
+      "title": "Ausschalten?",
+      "label": "Ausschalten"
+    },
+    "grant": {
+      "title": "Rechte ändern?",
+      "label": "Erteilen"
+    },
+    "replace": {
+      "title": "Vorhandenes ersetzen?",
+      "label": "Ersetzen"
+    },
+    "reset": {
+      "title": "Zurücksetzen?",
+      "label": "Zurücksetzen"
+    },
+    "rotate": {
+      "title": "Geheimnis erneuern?",
+      "label": "Erneuern"
+    },
+    "overwrite": {
+      "title": "Über die neuere Version speichern?",
+      "label": "Trotzdem speichern"
+    },
+    "forget": {
+      "title": "Vergessen?",
+      "label": "Vergessen"
+    },
+    "close": {
+      "title": "Sitzungen beenden?",
+      "label": "Sitzungen beenden"
+    }
+  },
   "toastHost": {
     "dismiss": "Schließen"
   },

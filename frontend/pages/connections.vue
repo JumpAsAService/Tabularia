@@ -8,17 +8,21 @@ import { Plug, Search, Trash2, Folder, Pencil, CheckCircle2, XCircle, LoaderCirc
 import { errMessage } from '~/composables/useApi'
 import {
   useConnections,
+  DB_TYPES,
   type ConnectionInfo,
   type ConnectionDraft,
 } from '~/composables/useConnections'
+import ConnIcon from '~/components/ui/ConnIcon.vue'
 import { connectionChanges } from '~/composables/connectionChanges'
 import { useProjects } from '~/composables/useProjects'
 import { usePagedList } from '~/composables/usePagedList'
 
 const connApi = useConnections()
+const typeLabel = (type: string) => DB_TYPES.find((o) => o.value === type)?.label ?? type
 const projectsApi = useProjects()
 const toast = useToast()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 
 // server-side search (name/host/database, over the whole dataset) + pagination
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
@@ -79,7 +83,7 @@ async function saveEdit(draft: ConnectionDraft) {
 }
 
 async function remove(c: ConnectionInfo) {
-  if (!confirm(t('connections.deleteConfirm', { name: c.name }))) return
+  if (!(await confirmAction(t('connections.deleteConfirm', { name: c.name }), 'delete'))) return
   try {
     await connApi.remove(c.id)
     toast.success(t('connections.deletedToast', { name: c.name }))
@@ -112,14 +116,14 @@ async function remove(c: ConnectionInfo) {
       <tbody>
         <tr v-for="c in items" :id="`conn-${c.id}`" :key="c.id" :class="{ target: c.id === target }">
           <td>
-            <span class="rowlink"><Plug :size="14" /> {{ c.name }}</span>
+            <span class="rowlink"><ConnIcon :type="c.db_type" :size="15" /> {{ c.name }}</span>
             <div v-if="c.description" class="muted desc">{{ c.description }}</div>
             <div v-if="testState[c.id] === 'ok'" class="okline"><CheckCircle2 :size="12" /> {{ $t('connections.connectionWorks') }}</div>
             <div v-else-if="testState[c.id] && testState[c.id] !== 'busy'" class="koline" :title="testState[c.id]">
               <XCircle :size="12" /> {{ String(testState[c.id]).slice(0, 90) }}
             </div>
           </td>
-          <td class="muted">{{ c.db_type }}</td>
+          <td class="muted">{{ typeLabel(c.db_type) }}</td>
           <td class="muted nowrap">{{ c.host }}{{ c.database ? '/' + c.database : '' }}</td>
           <td class="muted"><Folder :size="13" /> {{ folderName[c.project_id] ?? `#${c.project_id}` }}</td>
           <td class="right">

@@ -44,6 +44,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void; (e: 'applied', name: string): void }>()
 const store = useDesign()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const designApi = useReportDesign()
 const word = useDesignWords()
 const onBoard = inject(ON_A_BOARD, false)
@@ -69,8 +70,8 @@ const draft = ref<Draft | null>(null)
 const opNotes = ref(new Map<DFilter, string>())
 let opened = ''
 /** An Esc or a click beside the dialog: what was written here is not lost without asking. */
-function closing() {
-  if (JSON.stringify(draft.value) === opened || confirm(t('reportDesigner.discardDraft'))) emit('close')
+async function closing() {
+  if (JSON.stringify(draft.value) === opened || await confirmAction(t('reportDesigner.discardDraft'), 'discard')) emit('close')
 }
 const original = ref<string | null>(null)
 /** the source the draft's fields were read from: another source, and they are read again */
@@ -156,7 +157,7 @@ const kinds = computed(() => [
 const dbLabel = (dbType: string) => DB_TYPES.find((d) => d.value === dbType)?.label ?? dbType
 const sourceOptions = computed(() => [
   { value: null, label: t('sqlScript.sourceCatalog'), hint: t('sqlScript.sourceCatalogHint') },
-  ...connections.value.map((c) => ({ value: c.id, label: c.name, hint: dbLabel(c.db_type) })),
+  ...connections.value.map((c) => ({ value: c.id, label: c.name, hint: dbLabel(c.db_type), connType: c.db_type })),
 ])
 const usable = computed(() => engineCatalog.value.filter((e) => e.available && !e.disabled_by_admin))
 const engineOptions = computed(() => [

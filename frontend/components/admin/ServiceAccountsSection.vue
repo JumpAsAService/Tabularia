@@ -20,6 +20,7 @@ const props = defineProps<{ canWrite: boolean; groups: GroupOut[] }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useIntegrations()
 const projectsApi = useProjects()
@@ -61,7 +62,7 @@ async function create() {
 }
 
 async function remove(a: ServiceAccount) {
-  if (!confirm(t('integrations.confirmDeleteAccount', { name: a.name }))) return
+  if (!(await confirmAction(t('integrations.confirmDeleteAccount', { name: a.name }), 'delete'))) return
   try {
     await api.deleteServiceAccount(a.id)
     if (isOpen.value === a.id) isOpen.value = null
@@ -99,7 +100,7 @@ async function createToken(a: ServiceAccount, body: TokenRequest) {
 }
 
 async function revokeToken(a: ServiceAccount, tk: ApiToken) {
-  if (!confirm(t('integrations.confirmRevoke', { name: tk.name }))) return
+  if (!(await confirmAction(t('integrations.confirmRevoke', { name: tk.name }), 'revoke'))) return
   busy.value = true
   try {
     await api.revokeAccountToken(a.id, tk.id)
@@ -113,7 +114,7 @@ async function revokeToken(a: ServiceAccount, tk: ApiToken) {
 }
 
 async function revokeAny(tk: AdminApiToken) {
-  if (!confirm(t('integrations.confirmRevokeOf', { name: tk.name, who: tk.user_name || tk.user_email }))) return
+  if (!(await confirmAction(t('integrations.confirmRevokeOf', { name: tk.name, who: tk.user_name || tk.user_email }), 'revoke'))) return
   try {
     await api.revokeAnyToken(tk.id)
     await load()

@@ -34,6 +34,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'apply', change: { definition: string; touched: string[] }): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const { locale } = useLocale()
 const ai = useAi()
 const { accepted, read, accept } = useAiDisclosure()
@@ -259,7 +260,7 @@ function applyAnyway(turn: Turn) {
 
 async function removeConversation() {
   if (busy.value || chatId.value == null) return
-  if (!confirm(t('flowAssistant.deleteConfirm'))) return
+  if (!(await confirmAction(t('flowAssistant.deleteConfirm'), 'delete'))) return
   try {
     await ai.removeChat(chatId.value)
   } catch {

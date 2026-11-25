@@ -42,6 +42,7 @@ import {
 definePageMeta({ key: (route) => `${route.path}?id=${route.query.id ?? ''}` })
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const route = useRoute()
 const toast = useToast()
 const api = useReportDesign()
@@ -125,7 +126,7 @@ async function save(force = false): Promise<boolean> {
       const now = code === 409 && !force && version.value != null ? await newerVersion() : null
       if (now == null) {
         toast.error(errMessage(e))
-      } else if (confirm(t('reportDesigner.savedElsewhere', { mine: version.value!, now }))) {
+      } else if (await confirmAction(t('reportDesigner.savedElsewhere', { mine: version.value!, now }), 'overwrite')) {
         saving.value = false
         return save(true)
       } // «Cancel» keeps the changes here, with nothing more to say
@@ -334,22 +335,22 @@ function onDatasetApplied(dataset: string) {
   const ds = store.doc.value.datasets.find((d) => d.name === dataset)
   if (ds && !(ds.fields ?? []).length) refreshFields(dataset)
 }
-function removeDataset(dataset: string) {
+async function removeDataset(dataset: string) {
   const users = (['page_header', 'body', 'page_footer'] as const).flatMap((b) => store.doc.value.sections[b].items)
     .filter((it) => 'dataset' in it && it.dataset === dataset).map((it) => it.id)
   const msg = users.length ? t('reportDesigner.data.removeDatasetUsed', { name: dataset, items: users.join(', ') }) : t('reportDesigner.data.removeDatasetConfirm', { name: dataset })
-  if (!confirm(msg)) return
+  if (!(await confirmAction(msg, 'remove'))) return
   store.doc.value.datasets = store.doc.value.datasets.filter((d) => d.name !== dataset)
   keepRowCount(dataset, null, null)
 }
-function removeParameter(param: string) {
+async function removeParameter(param: string) {
   const uses = usesOfParam(store.doc.value, param)
   const said = [
     t('reportDesigner.data.removeParameterConfirm', { name: param }),
     ...(uses.filters.length ? [t('reportDesigner.data.removeParameterFilters', { datasets: uses.filters.join(', ') })] : []),
     ...(uses.sql.length ? [t('reportDesigner.data.removeParameterSql', { datasets: uses.sql.join(', ') })] : []),
   ]
-  if (!confirm(said.join(' '))) return
+  if (!(await confirmAction(said.join(' '), 'remove'))) return
   store.doc.value.parameters = store.doc.value.parameters.filter((p) => p.name !== param)
   dropParamFilters(store.doc.value, param)
 }
@@ -456,11 +457,11 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 // a session gone takes the page to the sign-in: whoever stays here can sign in again in
 // another tab and save, and is told so
 const signedIn = useSessionPresent()
-onBeforeRouteLeave(() => !dirty.value || confirm(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone')))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone'), 'leave'))
 // another one opened from here (the search, a link) gets its own designer (definePageMeta
 // above): the same question as leaving
-onBeforeRouteUpdate((to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
-  || confirm(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone')))
+onBeforeRouteUpdate(async (to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
+  || await confirmAction(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone'), 'leave'))
 
 onMounted(() => {
   document.addEventListener('keydown', onKey)

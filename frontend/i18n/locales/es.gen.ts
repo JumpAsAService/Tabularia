@@ -2738,6 +2738,73 @@ export default {
     "rowsCount": "{n} fila | {n} filas",
     "title": "Fuente"
   },
+  "confirmDialog": {
+    "cancel": "Cancelar",
+    "confirm": {
+      "title": "Confirma, por favor",
+      "label": "Confirmar"
+    },
+    "delete": {
+      "title": "¿Eliminar?",
+      "label": "Eliminar"
+    },
+    "remove": {
+      "title": "¿Quitar?",
+      "label": "Quitar"
+    },
+    "revoke": {
+      "title": "¿Revocar el acceso?",
+      "label": "Revocar"
+    },
+    "discard": {
+      "title": "¿Descartar los cambios?",
+      "label": "Descartar"
+    },
+    "leave": {
+      "title": "¿Salir sin guardar?",
+      "label": "Salir"
+    },
+    "restore": {
+      "title": "¿Restaurar esta versión?",
+      "label": "Restaurar"
+    },
+    "stop": {
+      "title": "¿Detenerlo?",
+      "label": "Detener"
+    },
+    "disable": {
+      "title": "¿Apagarlo?",
+      "label": "Apagar"
+    },
+    "grant": {
+      "title": "¿Cambiar los permisos?",
+      "label": "Conceder"
+    },
+    "replace": {
+      "title": "¿Sustituir lo que hay?",
+      "label": "Sustituir"
+    },
+    "reset": {
+      "title": "¿Restablecer?",
+      "label": "Restablecer"
+    },
+    "rotate": {
+      "title": "¿Rotar el secreto?",
+      "label": "Rotar"
+    },
+    "overwrite": {
+      "title": "¿Guardar sobre la versión más reciente?",
+      "label": "Guardar igualmente"
+    },
+    "forget": {
+      "title": "¿Olvidarla?",
+      "label": "Olvidar"
+    },
+    "close": {
+      "title": "¿Cerrar las sesiones?",
+      "label": "Cerrar sesiones"
+    }
+  },
   "toastHost": {
     "dismiss": "Cerrar"
   },

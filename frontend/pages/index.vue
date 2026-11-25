@@ -38,6 +38,7 @@ import {
 } from '~/composables/homeLayout'
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const { apiFetch } = useApiClient()
 const toast = useToast()
 const fmt = useFormat()
@@ -221,7 +222,7 @@ function saveOptions(options: Record<string, any>) {
   if (w) change(withOptions(widgets.value, w.id, options), t('home.optionsSaved', { name: nameOf(w) }))
 }
 async function reset() {
-  if (!confirm(t('home.resetConfirm'))) return
+  if (!(await confirmAction(t('home.resetConfirm'), 'reset'))) return
   try {
     clearTimeout(saveTimer)
     unsaved = false // what waited to be saved is what the reset throws away

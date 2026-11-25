@@ -34,6 +34,7 @@ import DataApiDocs from '~/components/dataapi/DataApiDocs.vue'
 import DataApiRuntimeForm from '~/components/dataapi/DataApiRuntimeForm.vue'
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -320,7 +321,7 @@ async function loadVersions() {
 const restoring = ref<number | null>(null)
 async function restore(version: number) {
   if (apiId.value == null || restoring.value != null) return
-  if (dirty.value && !confirm(t('dataApi.restoreDiscards'))) return
+  if (dirty.value && !(await confirmAction(t('dataApi.restoreDiscards'), 'discard'))) return
   restoring.value = version
   try {
     apply(await api.restore(apiId.value, version))
@@ -421,8 +422,8 @@ onMounted(() => {
   load()
 })
 onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
-onBeforeRouteLeave(() => !guard() || confirm(t('dataApi.leaveConfirm')))
-onBeforeRouteUpdate((to) => (Number(to.query.id) || null) === apiId.value || !guard() || confirm(t('dataApi.leaveConfirm')))
+onBeforeRouteLeave(async () => !guard() || await confirmAction(t('dataApi.leaveConfirm'), 'leave'))
+onBeforeRouteUpdate(async (to) => (Number(to.query.id) || null) === apiId.value || !guard() || await confirmAction(t('dataApi.leaveConfirm'), 'leave'))
 watch(() => route.query.id, (id) => {
   const next = Number(id) || null
   if (next === apiId.value) return // a data API just created took its address

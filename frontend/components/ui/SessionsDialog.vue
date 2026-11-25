@@ -14,6 +14,7 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useApi()
 
@@ -52,7 +53,7 @@ async function close(s: MySession) {
 
 async function closeOthers() {
   const n = others().length
-  if (!confirm(t('sessions.confirmCloseOthers', { n }, n))) return
+  if (!(await confirmAction(t('sessions.confirmCloseOthers', { n }, n), 'close'))) return
   busy.value = true
   error.value = ''
   try {

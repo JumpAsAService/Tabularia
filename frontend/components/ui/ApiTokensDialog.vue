@@ -15,6 +15,7 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useIntegrations()
 const apiBase = useRuntimeConfig().public.apiBase as string
@@ -53,7 +54,7 @@ async function create(body: TokenRequest) {
 }
 
 async function revoke(tk: ApiToken) {
-  if (!confirm(t('integrations.confirmRevoke', { name: tk.name }))) return
+  if (!(await confirmAction(t('integrations.confirmRevoke', { name: tk.name }), 'revoke'))) return
   busy.value = true
   try {
     await api.revokeMyToken(tk.id)

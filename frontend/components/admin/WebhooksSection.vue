@@ -21,6 +21,7 @@ const props = defineProps<{ canWrite: boolean; projects: Project[] }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useIntegrations()
 const toast = useToast()
@@ -84,7 +85,7 @@ async function test(w: Webhook) {
 }
 
 async function rotate(w: Webhook) {
-  if (!confirm(t('integrations.confirmRotate', { name: w.name }))) return
+  if (!(await confirmAction(t('integrations.confirmRotate', { name: w.name }), 'rotate'))) return
   try {
     const r = await api.rotateWebhookSecret(w.id)
     secret.value = { name: r.name, value: r.secret }
@@ -94,7 +95,7 @@ async function rotate(w: Webhook) {
 }
 
 async function remove(w: Webhook) {
-  if (!confirm(t('integrations.confirmDeleteWebhook', { name: w.name }))) return
+  if (!(await confirmAction(t('integrations.confirmDeleteWebhook', { name: w.name }), 'delete'))) return
   try {
     await api.deleteWebhook(w.id)
     if (isOpen.value === w.id) isOpen.value = null

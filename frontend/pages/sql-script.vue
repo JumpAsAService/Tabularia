@@ -37,6 +37,7 @@ import DataGrid from '~/components/ui/DataGrid.vue'
 const SqlEditor = defineAsyncComponent(() => import('~/components/sql/SqlEditor.vue'))
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -98,7 +99,7 @@ const foreignConnection = computed(() => {
 const dbType = computed(() => connection.value?.db_type ?? foreignConnection.value?.db_type ?? null)
 const sourceOptions = computed(() => [
   { value: null, label: t('sqlScript.sourceCatalog'), hint: t('sqlScript.sourceCatalogHint') },
-  ...connections.value.map((c) => ({ value: c.id, label: c.name, hint: dbLabel(c.db_type) })),
+  ...connections.value.map((c) => ({ value: c.id, label: c.name, hint: dbLabel(c.db_type), connType: c.db_type })),
   ...(foreignConnection.value
     ? [{ value: foreignConnection.value.id, label: foreignConnection.value.name || t('sqlScript.connectionGone'),
          hint: foreignConnection.value.db_type ? dbLabel(foreignConnection.value.db_type) : '' }]
@@ -460,8 +461,8 @@ async function viewVersion(v: SqlScriptVersion) {
 
 async function restore(version: number) {
   if (scriptId.value == null || restoring.value != null) return
-  if (dirty.value && !confirm(t('sqlScript.restoreDiscards'))) return
-  if (!confirm(t('sqlScript.restoreConfirm', { n: version }))) return
+  if (dirty.value && !(await confirmAction(t('sqlScript.restoreDiscards'), 'discard'))) return
+  if (!(await confirmAction(t('sqlScript.restoreConfirm', { n: version }), 'restore'))) return
   restoring.value = version
   try {
     apply(await api.restore(scriptId.value, version))
@@ -510,8 +511,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKey)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
-onBeforeRouteLeave(() => !guard() || confirm(t('sqlScript.leaveConfirm')))
-onBeforeRouteUpdate((to) => (Number(to.query.id) || null) === scriptId.value || !guard() || confirm(t('sqlScript.leaveConfirm')))
+onBeforeRouteLeave(async () => !guard() || await confirmAction(t('sqlScript.leaveConfirm'), 'leave'))
+onBeforeRouteUpdate(async (to) => (Number(to.query.id) || null) === scriptId.value || !guard() || await confirmAction(t('sqlScript.leaveConfirm'), 'leave'))
 watch(() => route.query.id, (id) => {
   const next = Number(id) || null
   if (next === scriptId.value) return // a script just created took its address

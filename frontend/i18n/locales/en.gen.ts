@@ -2766,6 +2766,73 @@ export default {
     "rowsCount": "{n} row | {n} rows",
     "title": "Source"
   },
+  "confirmDialog": {
+    "cancel": "Cancel",
+    "confirm": {
+      "title": "Please confirm",
+      "label": "Confirm"
+    },
+    "delete": {
+      "title": "Delete?",
+      "label": "Delete"
+    },
+    "remove": {
+      "title": "Remove?",
+      "label": "Remove"
+    },
+    "revoke": {
+      "title": "Revoke access?",
+      "label": "Revoke"
+    },
+    "discard": {
+      "title": "Discard the changes?",
+      "label": "Discard"
+    },
+    "leave": {
+      "title": "Leave without saving?",
+      "label": "Leave"
+    },
+    "restore": {
+      "title": "Restore this version?",
+      "label": "Restore"
+    },
+    "stop": {
+      "title": "Stop it?",
+      "label": "Stop"
+    },
+    "disable": {
+      "title": "Turn it off?",
+      "label": "Turn off"
+    },
+    "grant": {
+      "title": "Change the rights?",
+      "label": "Grant"
+    },
+    "replace": {
+      "title": "Replace what is there?",
+      "label": "Replace"
+    },
+    "reset": {
+      "title": "Reset it?",
+      "label": "Reset"
+    },
+    "rotate": {
+      "title": "Rotate the secret?",
+      "label": "Rotate"
+    },
+    "overwrite": {
+      "title": "Save over the newer version?",
+      "label": "Save anyway"
+    },
+    "forget": {
+      "title": "Forget it?",
+      "label": "Forget"
+    },
+    "close": {
+      "title": "Close the sessions?",
+      "label": "Close sessions"
+    }
+  },
   "toastHost": {
     "dismiss": "Dismiss"
   },

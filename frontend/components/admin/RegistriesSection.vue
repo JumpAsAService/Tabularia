@@ -22,6 +22,7 @@ const props = defineProps<{ groups: GroupOut[]; users: UserOut[] }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useRegistries()
 const toast = useToast()
@@ -147,7 +148,7 @@ async function save(): Promise<boolean> {
 }
 
 async function forgetPassword() {
-  if (!reg.value || !confirm(t('registries.confirmForgetPassword'))) return
+  if (!reg.value || !(await confirmAction(t('registries.confirmForgetPassword'), 'forget'))) return
   try {
     reg.value = await api.update(reg.value.id, { password: '' })
     fill(reg.value)
@@ -158,7 +159,7 @@ async function forgetPassword() {
 
 async function remove() {
   const r = reg.value
-  if (!r || !confirm(t('registries.confirmDelete', { name: r.name }))) return
+  if (!r || !(await confirmAction(t('registries.confirmDelete', { name: r.name }), 'delete'))) return
   try {
     await api.remove(r.id)
     toast.success(t('registries.deleted', { name: r.name }))
@@ -285,7 +286,7 @@ async function saveVariable() {
 }
 
 async function deleteVariable(name: string) {
-  if (!reg.value || !confirm(t('registries.confirmDeleteVariable', { name }))) return
+  if (!reg.value || !(await confirmAction(t('registries.confirmDeleteVariable', { name }), 'delete'))) return
   try {
     reg.value = await api.deleteVariable(reg.value.id, name)
     if (editingVariable.value === name) clearVariable()

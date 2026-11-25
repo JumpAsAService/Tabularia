@@ -2766,6 +2766,73 @@ export default {
     "rowsCount": "{n} riga | {n} righe",
     "title": "Sorgente"
   },
+  "confirmDialog": {
+    "cancel": "Annulla",
+    "confirm": {
+      "title": "Conferma richiesta",
+      "label": "Conferma"
+    },
+    "delete": {
+      "title": "Eliminare?",
+      "label": "Elimina"
+    },
+    "remove": {
+      "title": "Rimuovere?",
+      "label": "Rimuovi"
+    },
+    "revoke": {
+      "title": "Revocare l'accesso?",
+      "label": "Revoca"
+    },
+    "discard": {
+      "title": "Scartare le modifiche?",
+      "label": "Scarta"
+    },
+    "leave": {
+      "title": "Uscire senza salvare?",
+      "label": "Esci"
+    },
+    "restore": {
+      "title": "Ripristinare questa versione?",
+      "label": "Ripristina"
+    },
+    "stop": {
+      "title": "Fermarlo?",
+      "label": "Ferma"
+    },
+    "disable": {
+      "title": "Spegnerlo?",
+      "label": "Spegni"
+    },
+    "grant": {
+      "title": "Cambiare i diritti?",
+      "label": "Concedi"
+    },
+    "replace": {
+      "title": "Sostituire quello che c'è?",
+      "label": "Sostituisci"
+    },
+    "reset": {
+      "title": "Ripristinare i valori iniziali?",
+      "label": "Reimposta"
+    },
+    "rotate": {
+      "title": "Ruotare il segreto?",
+      "label": "Ruota"
+    },
+    "overwrite": {
+      "title": "Salvare sopra la versione più recente?",
+      "label": "Salva comunque"
+    },
+    "forget": {
+      "title": "Dimenticarla?",
+      "label": "Dimentica"
+    },
+    "close": {
+      "title": "Chiudere le sessioni?",
+      "label": "Chiudi le sessioni"
+    }
+  },
   "toastHost": {
     "dismiss": "Chiudi"
   },

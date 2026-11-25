@@ -23,6 +23,7 @@ const props = defineProps<{ open: boolean; datasource: DatasourceInfo | null }>(
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
 
 const { t, locale } = useI18n()
+const { confirmAction } = useConfirm()
 const api = useContracts()
 const toast = useToast()
 
@@ -267,7 +268,7 @@ async function verify() {
 
 async function propose() {
   if (!props.datasource) return
-  if (rows.value.length && !confirm(t('contracts.proposeReplace'))) return
+  if (rows.value.length && !(await confirmAction(t('contracts.proposeReplace'), 'replace'))) return
   busy.value = 'propose'
   try {
     const { document } = await api.propose(props.datasource.id)
@@ -281,7 +282,7 @@ async function propose() {
 }
 
 async function remove() {
-  if (!props.datasource || !confirm(t('contracts.removeConfirm'))) return
+  if (!props.datasource || !(await confirmAction(t('contracts.removeConfirm'), 'remove'))) return
   busy.value = 'remove'
   try {
     await api.remove(props.datasource.id)
@@ -323,8 +324,8 @@ async function exportIt() {
   }
 }
 
-function close() {
-  if (changed.value && !confirm(t('contracts.discardConfirm'))) return
+async function close() {
+  if (changed.value && !(await confirmAction(t('contracts.discardConfirm'), 'discard'))) return
   emit('close')
 }
 </script>

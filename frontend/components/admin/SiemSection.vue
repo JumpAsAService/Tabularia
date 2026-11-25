@@ -13,6 +13,7 @@ import { useSiem, type SiemState, type SiemTest } from '~/composables/useSiem'
 const emit = defineEmits<{ (e: 'state', isOn: boolean): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useSiem()
 const toast = useToast()
@@ -87,13 +88,13 @@ async function save(extra: Record<string, unknown> = {}) {
   }
 }
 
-function turnOn(isOn: boolean) {
-  if (!isOn && !confirm(t('siem.confirmOff'))) return
+async function turnOn(isOn: boolean) {
+  if (!isOn && !(await confirmAction(t('siem.confirmOff'), 'disable'))) return
   save({ enabled: isOn })
 }
 
-function removeToken() {
-  if (!confirm(t('siem.confirmRemoveToken'))) return
+async function removeToken() {
+  if (!(await confirmAction(t('siem.confirmRemoveToken'), 'remove'))) return
   save({ token: '', enabled: false })
 }
 

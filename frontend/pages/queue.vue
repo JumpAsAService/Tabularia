@@ -14,6 +14,7 @@ const router = useRouter()
 const toast = useToast()
 const queueApi = useQueue()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 
 // UX guard (the gateway enforces the real RBAC: /queue is require_superuser)
 watchEffect(() => {
@@ -52,7 +53,7 @@ async function tick() {
 }
 
 async function stop(taskId: string) {
-  if (!confirm(t('queue.confirmStopJob', { id: taskId.slice(0, 8) }))) return
+  if (!(await confirmAction(t('queue.confirmStopJob', { id: taskId.slice(0, 8) }), 'stop'))) return
   stopping.value[taskId] = true
   try {
     await queueApi.stopJob(taskId)

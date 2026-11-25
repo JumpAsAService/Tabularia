@@ -2738,6 +2738,73 @@ export default {
     "rowsCount": "{n} ligne | {n} lignes",
     "title": "Source"
   },
+  "confirmDialog": {
+    "cancel": "Annuler",
+    "confirm": {
+      "title": "Confirmation demandée",
+      "label": "Confirmer"
+    },
+    "delete": {
+      "title": "Supprimer ?",
+      "label": "Supprimer"
+    },
+    "remove": {
+      "title": "Retirer ?",
+      "label": "Retirer"
+    },
+    "revoke": {
+      "title": "Révoquer l'accès ?",
+      "label": "Révoquer"
+    },
+    "discard": {
+      "title": "Abandonner les modifications ?",
+      "label": "Abandonner"
+    },
+    "leave": {
+      "title": "Quitter sans enregistrer ?",
+      "label": "Quitter"
+    },
+    "restore": {
+      "title": "Restaurer cette version ?",
+      "label": "Restaurer"
+    },
+    "stop": {
+      "title": "L’arrêter ?",
+      "label": "Arrêter"
+    },
+    "disable": {
+      "title": "L’éteindre ?",
+      "label": "Éteindre"
+    },
+    "grant": {
+      "title": "Changer les droits ?",
+      "label": "Accorder"
+    },
+    "replace": {
+      "title": "Remplacer l’existant ?",
+      "label": "Remplacer"
+    },
+    "reset": {
+      "title": "Réinitialiser ?",
+      "label": "Réinitialiser"
+    },
+    "rotate": {
+      "title": "Renouveler le secret ?",
+      "label": "Renouveler"
+    },
+    "overwrite": {
+      "title": "Enregistrer par-dessus la version plus récente ?",
+      "label": "Enregistrer quand même"
+    },
+    "forget": {
+      "title": "L’oublier ?",
+      "label": "Oublier"
+    },
+    "close": {
+      "title": "Fermer les sessions ?",
+      "label": "Fermer les sessions"
+    }
+  },
   "toastHost": {
     "dismiss": "Fermer"
   },

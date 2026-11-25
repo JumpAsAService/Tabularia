@@ -24,6 +24,7 @@ const props = defineProps<{ groups: GroupOut[] }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
 
 const { t, te } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useModelsAdmin()
 const toast = useToast()
@@ -114,7 +115,7 @@ function onToggle(g: ModelGroupAdmin, ev: Event) {
 
 async function act(g: ModelGroupAdmin, what: 'enable' | 'disable' | 'rebuild') {
   if (busy[g.id]) return
-  if (what === 'disable' && !confirm(t('modelsAdmin.confirmDisable', { name: groupName(g.id) }))) return
+  if (what === 'disable' && !(await confirmAction(t('modelsAdmin.confirmDisable', { name: groupName(g.id) }), 'disable'))) return
   // a click that queues a build of a group with weights carries the acceptance the box holds
   const asks = what !== 'disable' && boxShown(g)
   if (asks && !(licence[g.id] && licenceReady(licence[g.id]))) return

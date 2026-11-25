@@ -37,6 +37,7 @@ import AgentQuestionCard from '~/components/agent/AgentQuestionCard.vue'
 import AgentPlanCard from '~/components/agent/AgentPlanCard.vue'
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 // A chat without a title yet (or with the Italian default written before 1.2.0)
 // is «New conversation» in the language of the interface.
 function chatTitle(title: string): string {
@@ -364,7 +365,7 @@ async function openChat(id: number) {
 }
 
 async function removeChat(id: number) {
-  if (!confirm(t('chat.confirmDelete'))) return
+  if (!(await confirmAction(t('chat.confirmDelete'), 'delete'))) return
   try {
     await ai.removeChat(id)
     if (chatId.value === id) reset()

@@ -2,7 +2,7 @@
 // Administration (superuser only), split into SECTIONS with navigation on the left:
 // users, groups, banners. Before, everything was stacked on one screen and the
 // destructive actions sat next to the creation forms. The feedback goes through the
-// toasts; the confirmations through the browser's confirm(), as in the rest of the app.
+// toasts; the confirmations through the app's own dialog (useConfirm), as in the rest of the app.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -66,15 +66,16 @@ const { user: me } = useAuth()
 // (services/masking.py).
 const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 
 type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share' | 'dataapis' | 'models'
 const section = ref<Section>('users')
 // the Settings section with changes not saved: asked before going to another section
 const settingsToSave = ref(false)
-function goTo(id: Section) {
+async function goTo(id: Section) {
   if (id === section.value) return
-  if (section.value === 'settings' && settingsToSave.value && !confirm(t('panelSettings.leaveConfirm'))) return
+  if (section.value === 'settings' && settingsToSave.value && !(await confirmAction(t('panelSettings.leaveConfirm'), 'leave'))) return
   section.value = id
 }
 
@@ -283,7 +284,7 @@ async function toggleActive(u: UserOut) {
 const selfLockout = (u: UserOut) => u.id === me.value?.id && u.is_superuser && !u.admin_groups.length
 
 async function toggleAdmin(u: UserOut) {
-  if (!u.is_superuser && !confirm(t('adminPanel.confirmPromoteUser', { email: u.email }))) return
+  if (!u.is_superuser && !(await confirmAction(t('adminPanel.confirmPromoteUser', { email: u.email }), 'grant'))) return
   try {
     await api.updateUser(u.id, { is_superuser: !u.is_superuser })
     toast.success(t(u.is_superuser ? 'adminPanel.userDemoted' : 'adminPanel.userPromoted', { email: u.email }))
@@ -298,7 +299,7 @@ async function toggleAdmin(u: UserOut) {
 // account's flag: a guest can look at everything without touching anything. Independent
 // from admin, which reads by definition already.
 async function toggleObserver(u: UserOut) {
-  if (!u.is_observer && !confirm(t('adminPanel.confirmObserveUser', { email: u.email }))) return
+  if (!u.is_observer && !(await confirmAction(t('adminPanel.confirmObserveUser', { email: u.email }), 'grant'))) return
   try {
     await api.updateUser(u.id, { is_observer: !u.is_observer })
     toast.success(t(u.is_observer ? 'adminPanel.observerRevoked' : 'adminPanel.observerGranted', { email: u.email }))
@@ -313,7 +314,7 @@ async function toggleObserver(u: UserOut) {
 const passwordFor = ref<UserOut | null>(null)
 
 async function deleteUser(u: UserOut) {
-  if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
+  if (!(await confirmAction(t('adminPanel.confirmDeleteUser', { email: u.email }), 'delete'))) return
   try {
     await api.deleteUser(u.id)
     toast.success(t('adminPanel.userDeleted', { email: u.email }))
@@ -341,7 +342,7 @@ async function createGroup() {
 
 // Administrators' group: all the members, present and future, are admins
 async function toggleGroupAdmin(g: GroupOut) {
-  if (!g.is_admin && !confirm(t('adminPanel.confirmPromoteGroup', { name: g.name, n: g.member_count }))) return
+  if (!g.is_admin && !(await confirmAction(t('adminPanel.confirmPromoteGroup', { name: g.name, n: g.member_count }), 'grant'))) return
   try {
     await api.updateGroup(g.id, { is_admin: !g.is_admin })
     toast.success(t(g.is_admin ? 'adminPanel.groupDemoted' : 'adminPanel.groupPromoted', { name: g.name }))
@@ -354,7 +355,7 @@ async function toggleGroupAdmin(g: GroupOut) {
 // As above, for all the members present and future: it is the way to use with SSO, where
 // the IdP rewrites the personal flag at every login
 async function toggleGroupObserver(g: GroupOut) {
-  if (!g.is_observer && !confirm(t('adminPanel.confirmObserveGroup', { name: g.name, n: g.member_count }))) return
+  if (!g.is_observer && !(await confirmAction(t('adminPanel.confirmObserveGroup', { name: g.name, n: g.member_count }), 'grant'))) return
   try {
     await api.updateGroup(g.id, { is_observer: !g.is_observer })
     toast.success(t(g.is_observer ? 'adminPanel.groupObserverRevoked' : 'adminPanel.groupObserverGranted', { name: g.name }))
@@ -365,7 +366,7 @@ async function toggleGroupObserver(g: GroupOut) {
 }
 
 async function deleteGroup(g: GroupOut) {
-  if (!confirm(t('adminPanel.confirmDeleteGroup', { name: g.name }))) return
+  if (!(await confirmAction(t('adminPanel.confirmDeleteGroup', { name: g.name }), 'delete'))) return
   try {
     await api.deleteGroup(g.id)
     if (selectedGroup.value === g.id) selectedGroup.value = null
@@ -438,7 +439,7 @@ async function createBanner() {
 }
 
 async function deleteBanner(b: Banner) {
-  if (!confirm(t('adminPanel.confirmDeleteBanner'))) return
+  if (!(await confirmAction(t('adminPanel.confirmDeleteBanner'), 'delete'))) return
   try {
     await bannersApi.remove(b.id)
     banners.value = banners.value.filter((x) => x.id !== b.id)

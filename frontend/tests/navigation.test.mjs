@@ -41,7 +41,7 @@ test('the designers are one per report and per dashboard, and ask before another
   for (const page of ['pages/report-design.vue', 'pages/dashboard-design.vue']) {
     const src = read(page)
     assert.ok(src.includes("definePageMeta({ key: (route) => `${route.path}?id=${route.query.id ?? ''}` })"), page)
-    assert.match(src, /onBeforeRouteUpdate\(\(to, from\) => String\(to\.query\.id \?\? ''\) === String\(from\.query\.id \?\? ''\) \|\| !dirty\.value/, page)
+    assert.match(src, /onBeforeRouteUpdate\(async \(to, from\) => String\(to\.query\.id \?\? ''\) === String\(from\.query\.id \?\? ''\) \|\| !dirty\.value/, page)
   }
 })
 

@@ -84,6 +84,7 @@ import { useDataApis, type DataApi } from '~/composables/useDataApis'
 import { starterReport, useReports, type Report } from '~/composables/useReports'
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
+import ConnIcon from '~/components/ui/ConnIcon.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import { listState, rowActions, primaryAction, keyCommand, stepRow, dependentsOf, lineageType, DEPENDENT_TYPES, type DependentType, type RowAction, type RowFacts } from '~/composables/exploreList'
 import Modal from '~/components/ui/Modal.vue'
@@ -989,7 +990,7 @@ function runAction(id: string, r: Row) {
 }
 
 // ── Deletion: the app's dialog, naming the object and what uses it ───────────────
-// No undo: the dialog is the safeguard, so it says what the browser's confirm() could not —
+// No undo: the dialog is the safeguard, so it says what a bare yes-or-no question could not —
 // the consequence for this kind (its versions, its parquet file) and the objects that use it
 // as the lineage graph knows them (exploreList.dependentsOf). Cancel has the focus.
 const CONFIRM_KEY: Record<Kind, string> = {
@@ -1916,7 +1917,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <component :is="KIND_ICON[r.kind]" v-else :size="15" class="kicon" /> {{ r.name }}
               </button>
               <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                <ConnIcon :type="r.raw.db_type" :size="15" class="kicon" /> {{ r.name }}
               </button>
               <a v-else-if="r.kind === 'datasource'" :href="r.to" class="asname" @click="onDsLinkClick($event, r)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}

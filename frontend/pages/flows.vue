@@ -33,6 +33,7 @@ const api = useApi()
 const connectionsApi = useConnections()
 const toast = useToast()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 
 /** A version's note in the language of the interface. The gateway writes stable
  *  English codes; versions saved before 1.2.0 have the Italian ones. */
@@ -230,7 +231,7 @@ function toggle(f: FlowSummary) {
 }
 
 async function promote(id: number, version: number) {
-  if (!confirm(t('flows.confirmPromote', { version }))) return
+  if (!(await confirmAction(t('flows.confirmPromote', { version })))) return
   try {
     await flowsApi.promote(id, version)
     toast.success(t('flows.promoteSuccess', { version }))
@@ -241,7 +242,7 @@ async function promote(id: number, version: number) {
 }
 
 async function deleteFlow(f: FlowSummary) {
-  if (!confirm(t('flows.confirmDelete', { name: f.name }))) return
+  if (!(await confirmAction(t('flows.confirmDelete', { name: f.name }), 'delete'))) return
   try {
     await flowsApi.remove(f.id)
     toast.success(t('flows.deleteSuccess', { name: f.name }))

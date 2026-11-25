@@ -27,6 +27,7 @@ import {
 const emit = defineEmits<{ (e: 'count', n: number): void; (e: 'dirty', d: boolean): void }>()
 
 const { t, te, locale } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = usePanelSettings()
 const toast = useToast()
@@ -331,7 +332,7 @@ const changeCount = computed(() => Object.keys(changes.value.gateway).length + O
 // Changes typed and not saved were lost without a word on going to another section (the
 // panel asks, told by «dirty»), to another page, or closing the tab.
 watch(changeCount, (n) => emit('dirty', n > 0), { immediate: true })
-onBeforeRouteLeave(() => !changeCount.value || confirm(t('panelSettings.leaveConfirm')))
+onBeforeRouteLeave(async () => !changeCount.value || await confirmAction(t('panelSettings.leaveConfirm'), 'leave'))
 function warnLeaving(e: BeforeUnloadEvent) {
   if (changeCount.value) e.preventDefault()
 }

@@ -17,6 +17,7 @@ import {
 const props = defineProps<{ editable: boolean }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useModelsAdmin()
 const toast = useToast()
@@ -76,7 +77,7 @@ async function save() {
 
 async function empty() {
   if (busy.value || !card.value) return
-  if (!confirm(t('modelsAdmin.bayes.confirmEmpty'))) return
+  if (!(await confirmAction(t('modelsAdmin.bayes.confirmEmpty'), 'remove'))) return
   busy.value = 'empty'
   try {
     const a = await api.emptyBayesCache()

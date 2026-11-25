@@ -489,7 +489,7 @@ function confirm() {
         <label>{{ $t('dbDatasourceDialog.connectionLabel') }}</label>
         <Select
           v-model="connectionId"
-          :options="connections.map((c) => ({ value: c.id, label: `${c.name} (${c.db_type})`, hint: pathOf(c.project_id) }))"
+          :options="connections.map((c) => ({ value: c.id, label: `${c.name} (${c.db_type})`, hint: pathOf(c.project_id), connType: c.db_type }))"
           :placeholder="$t('dbDatasourceDialog.connectionPlaceholder')"
         />
         <p v-if="!connections.length" class="muted dd-hint">

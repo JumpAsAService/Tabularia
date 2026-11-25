@@ -15,6 +15,7 @@ const props = defineProps<{ canWrite: boolean }>()
 const MAX_CHARS = 20_000
 
 const { t, locale } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const api = useAi()
 const toast = useToast()
@@ -70,7 +71,7 @@ async function save(p: AiPrompt) {
 }
 
 async function restore(p: AiPrompt) {
-  if (!confirm(t('aiPrompts.restoreConfirm', { agent: t(`aiPrompts.agents.${p.agent}.name`) }))) return
+  if (!(await confirmAction(t('aiPrompts.restoreConfirm', { agent: t(`aiPrompts.agents.${p.agent}.name`) }), 'reset'))) return
   busy.value = p.agent
   try {
     take(await api.resetPrompt(p.agent, locale.value))

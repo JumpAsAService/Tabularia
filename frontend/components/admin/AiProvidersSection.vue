@@ -17,6 +17,7 @@ const props = defineProps<{ canWrite: boolean; status: AiStatus | null }>()
 const emit = defineEmits<{ (e: 'count', n: number): void; (e: 'settings'): void }>()
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const api = useAi()
 const toast = useToast()
 
@@ -153,7 +154,7 @@ async function testRow(p: AiProvider) {
 const inUse = (p: AiProvider) => p.chats > 0 || p.enabled_models > 0
 
 async function setActive(p: AiProvider, active: boolean) {
-  if (!active && inUse(p) && !confirm(t('adminPanel.aiProviderOffConfirm', { name: p.name, chats: p.chats, models: p.enabled_models }))) return
+  if (!active && inUse(p) && !(await confirmAction(t('adminPanel.aiProviderOffConfirm', { name: p.name, chats: p.chats, models: p.enabled_models }), 'disable'))) return
   try {
     await refreshRow(await api.updateProvider(p.id!, { active }))
     toast.success(t(active ? 'adminPanel.aiProviderOn' : 'adminPanel.aiProviderOff', { name: p.name }))
@@ -166,7 +167,7 @@ async function remove(p: AiProvider) {
   const question = inUse(p)
     ? t('adminPanel.aiProviderDeleteInUse', { name: p.name, chats: p.chats, models: p.enabled_models })
     : t('adminPanel.aiProviderDeleteConfirm', { name: p.name })
-  if (!confirm(question)) return
+  if (!(await confirmAction(question, 'delete'))) return
   try {
     await api.removeProvider(p.id!, inUse(p))
     providers.value = (providers.value ?? []).filter((x) => x.key !== p.key)

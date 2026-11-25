@@ -24,6 +24,7 @@ const props = defineProps<{ open: boolean; name: string | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 const store = useDesign()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const word = useDesignWords()
 
 interface Draft {
@@ -44,8 +45,8 @@ interface Draft {
 const draft = ref<Draft | null>(null)
 let opened = ''
 /** An Esc or a click beside the dialog: what was written here is not lost without asking. */
-function closing() {
-  if (JSON.stringify(draft.value) === opened || confirm(t('reportDesigner.discardDraft'))) emit('close')
+async function closing() {
+  if (JSON.stringify(draft.value) === opened || await confirmAction(t('reportDesigner.discardDraft'), 'discard')) emit('close')
 }
 const original = ref<string | null>(null)
 

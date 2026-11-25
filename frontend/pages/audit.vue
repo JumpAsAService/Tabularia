@@ -20,6 +20,7 @@ import { deviceLabel } from '~/composables/sessionDevice'
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 
 const { user } = useAuth()
@@ -142,7 +143,7 @@ function showAllGroups(id: number) { groupsAll.value = new Set([...groupsAll.val
 async function revokeGroup(p: SessionPerson, g: SessionGroup) {
   const ids = g.ids.filter((id) => !p.sessions.find((x) => x.id === id)?.current)
   if (!ids.length) return
-  if (!confirm(t('audit.revokeGroupConfirm', { who: p.name, device: g.device, n: ids.length }, ids.length))) return
+  if (!(await confirmAction(t('audit.revokeGroupConfirm', { who: p.name, device: g.device, n: ids.length }, ids.length), 'revoke'))) return
   revoking.value = g.key
   try {
     for (const id of ids) await api.revokeSession(id)

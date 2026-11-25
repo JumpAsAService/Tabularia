@@ -90,7 +90,7 @@ test('the card is one of the group bayes\'s only, read when opened, and every ac
   assert.doesNotMatch(component, /<(div|span|li|dd|dt)[^>]*@click/)
   assert.doesNotMatch(component, /tabindex=/)
   // «Empty the cache» asks first, with the sentence that says what follows
-  assert.match(component, /confirm\(t\('modelsAdmin\.bayes\.confirmEmpty'\)\)/)
+  assert.match(component, /confirmAction\(t\('modelsAdmin\.bayes\.confirmEmpty'\), 'remove'\)/)
   // each default is written beside its field and each field can go back to it
   assert.match(component, /modelsAdmin\.bayes\.default/)
   assert.match(component, /modelsAdmin\.bayes\.resetField/)

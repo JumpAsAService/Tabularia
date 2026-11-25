@@ -8,6 +8,11 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- Every question the app asks before a deletion, a revocation or a discarded draft is now the
+  app's own dialog instead of the browser's: the button names the action, a destructive one is
+  red with the focus on Cancel, Esc and a click outside cancel. The browser's warning on closing
+  a tab remains, and only appears when there are unsaved changes.
+
 ## 1.5.0 «Augustus» — 2026-11-24
 
 Sixth release, named «Augustus» after the first emperor, who found Rome a city of brick and

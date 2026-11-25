@@ -42,6 +42,7 @@ import { useViewerHost } from '~/composables/viewerHost'
 import { useShareLinks } from '~/composables/shareLinks'
 
 const { t, te } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -412,7 +413,7 @@ async function openVersions() {
 }
 async function restore(v: ReportVersion) {
   if (reportId.value == null || restoring.value != null || !detail.value?.editable) return
-  if (!confirm(t('report.restoreConfirm', { n: v.version }))) return
+  if (!(await confirmAction(t('report.restoreConfirm', { n: v.version }), 'restore'))) return
   restoring.value = v.version
   try {
     detail.value = await api.restore(reportId.value, v.version)

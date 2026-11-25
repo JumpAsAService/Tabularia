@@ -49,6 +49,7 @@ import { paramsOfForm, withChoices, type ReportFormValue, type ReportParameter }
 definePageMeta({ key: (route) => `${route.path}?id=${route.query.id ?? ''}` })
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const route = useRoute()
 const toast = useToast()
 const api = useDashboards()
@@ -144,7 +145,7 @@ async function save(force = false): Promise<boolean> {
       const now = code === 409 && !force && version.value != null ? await newerVersion() : null
       if (now == null) {
         toast.error(errMessage(e))
-      } else if (confirm(t('dashboardDesigner.savedElsewhere', { mine: version.value!, now }))) {
+      } else if (await confirmAction(t('dashboardDesigner.savedElsewhere', { mine: version.value!, now }), 'overwrite')) {
         saving.value = false
         return save(true)
       } // «Cancel» keeps the changes here, with nothing more to say
@@ -467,21 +468,21 @@ function onDatasetApplied(dataset: string) {
   if (ds && !(ds.fields ?? []).length) refreshFields(dataset)
   store.sideTab.value = 'data'
 }
-function removeDataset(dataset: string) {
+async function removeDataset(dataset: string) {
   const users = tiles.value.filter((it) => it.dataset === dataset).map((it) => it.id)
   const msg = users.length ? t('reportDesigner.data.removeDatasetUsed', { name: dataset, items: users.join(', ') }) : t('reportDesigner.data.removeDatasetConfirm', { name: dataset })
-  if (!confirm(msg)) return
+  if (!(await confirmAction(msg, 'remove'))) return
   store.doc.value.datasets = store.doc.value.datasets.filter((d) => d.name !== dataset)
   keepRowCount(dataset, null, null)
 }
-function removeParameter(param: string) {
+async function removeParameter(param: string) {
   const uses = usesOfParam(store.doc.value, param)
   const said = [
     t('reportDesigner.data.removeParameterConfirm', { name: param }),
     ...(uses.filters.length ? [t('reportDesigner.data.removeParameterFilters', { datasets: uses.filters.join(', ') })] : []),
     ...(uses.sql.length ? [t('reportDesigner.data.removeParameterSql', { datasets: uses.sql.join(', ') })] : []),
   ]
-  if (!confirm(said.join(' '))) return
+  if (!(await confirmAction(said.join(' '), 'remove'))) return
   store.doc.value.parameters = store.doc.value.parameters.filter((p) => p.name !== param)
   dropParamFilters(store.doc.value, param)
 }
@@ -577,11 +578,11 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
   e.returnValue = ''
 }
 const signedIn = useSessionPresent()
-onBeforeRouteLeave(() => !dirty.value || confirm(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone')))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone'), 'leave'))
 // another one opened from here (the search, a link) gets its own designer (definePageMeta
 // above): the same question as leaving
-onBeforeRouteUpdate((to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
-  || confirm(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone')))
+onBeforeRouteUpdate(async (to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
+  || await confirmAction(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone'), 'leave'))
 
 onMounted(() => {
   document.addEventListener('keydown', onKey)

@@ -35,6 +35,7 @@ const ScriptEditor = defineAsyncComponent(() => import('~/components/scripting/S
 const FILE = 'notebook.py'
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -212,7 +213,7 @@ function openMarimo() {
 // the app keeps the version it started with: stopping it lets the next opening run the
 // current one
 async function stopApp() {
-  if (notebookId.value == null || stoppingApp.value || !confirm(t('notebook.stopAppConfirm'))) return
+  if (notebookId.value == null || stoppingApp.value || !(await confirmAction(t('notebook.stopAppConfirm'), 'stop'))) return
   stoppingApp.value = true
   try {
     await api.stopSession(notebookId.value, 'app')
@@ -275,7 +276,7 @@ function useDraft() {
   source.value = detail.value.draft
 }
 async function discardDraft() {
-  if (notebookId.value == null || discarding.value || !confirm(t('notebook.discardConfirm'))) return
+  if (notebookId.value == null || discarding.value || !(await confirmAction(t('notebook.discardConfirm'), 'discard'))) return
   discarding.value = true
   try {
     const d = await api.discardDraft(notebookId.value)
@@ -311,8 +312,8 @@ async function viewVersion(v: NotebookVersion) {
 
 async function restore(v: NotebookVersion) {
   if (notebookId.value == null || restoring.value != null) return
-  if (dirty.value && !confirm(t('notebook.restoreDiscards'))) return
-  if (!confirm(t('notebook.restoreConfirm', { n: v.version }))) return
+  if (dirty.value && !(await confirmAction(t('notebook.restoreDiscards'), 'discard'))) return
+  if (!(await confirmAction(t('notebook.restoreConfirm', { n: v.version }), 'restore'))) return
   restoring.value = v.version
   try {
     apply(await api.restore(notebookId.value, v.version))
@@ -350,10 +351,10 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisible)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
-onBeforeRouteLeave(() => !dirty.value || !canEdit.value || confirm(t('notebook.leaveConfirm')))
+onBeforeRouteLeave(async () => !dirty.value || !canEdit.value || await confirmAction(t('notebook.leaveConfirm'), 'leave'))
 // another notebook from the search: the same page with another id
-onBeforeRouteUpdate((to) => (Number(to.query.id) || null) === notebookId.value || !dirty.value || !canEdit.value
-  || confirm(t('notebook.leaveConfirm')))
+onBeforeRouteUpdate(async (to) => (Number(to.query.id) || null) === notebookId.value || !dirty.value || !canEdit.value
+  || await confirmAction(t('notebook.leaveConfirm'), 'leave'))
 watch(() => route.query.id, (id) => {
   const next = Number(id) || null
   if (next === notebookId.value) return // a notebook just created took its address

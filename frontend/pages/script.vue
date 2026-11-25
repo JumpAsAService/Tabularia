@@ -32,6 +32,7 @@ import Select from '~/components/ui/Select.vue'
 const ScriptEditor = defineAsyncComponent(() => import('~/components/scripting/ScriptEditor.vue'))
 
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
@@ -206,8 +207,8 @@ async function viewVersion(v: ScriptVersion) {
 
 async function restore(v: ScriptVersion) {
   if (scriptId.value == null || restoring.value != null) return
-  if (dirty.value && !confirm(t('scripts.restoreDiscards'))) return
-  if (!confirm(t('scripts.restoreConfirm', { n: v.version }))) return
+  if (dirty.value && !(await confirmAction(t('scripts.restoreDiscards'), 'discard'))) return
+  if (!(await confirmAction(t('scripts.restoreConfirm', { n: v.version }), 'restore'))) return
   restoring.value = v.version
   try {
     apply(await scriptsApi.restore(scriptId.value, v.version))
@@ -429,9 +430,9 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKey)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
-onBeforeRouteLeave(() => !dirty.value || confirm(t('scripts.leaveConfirm')))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction(t('scripts.leaveConfirm'), 'leave'))
 // another script from the search: the same page with another id
-onBeforeRouteUpdate((to) => (Number(to.query.id) || null) === scriptId.value || !dirty.value || confirm(t('scripts.leaveConfirm')))
+onBeforeRouteUpdate(async (to) => (Number(to.query.id) || null) === scriptId.value || !dirty.value || await confirmAction(t('scripts.leaveConfirm'), 'leave'))
 watch(() => route.query.id, (id) => {
   const next = Number(id) || null
   if (next === scriptId.value) return // a script just created took its address

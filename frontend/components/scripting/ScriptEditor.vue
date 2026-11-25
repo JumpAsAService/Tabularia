@@ -53,6 +53,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 const { t } = useI18n()
+const { confirmAction } = useConfirm()
 const fmt = useFormat()
 const { theme } = useTheme()
 const scripting = useScriptingEditor()
@@ -262,8 +263,8 @@ function rename() {
   nextTick(() => show(to))
 }
 
-function remove(path: string) {
-  if (!confirm(t('scripting.editor.confirmDelete', { path }))) return
+async function remove(path: string) {
+  if (!(await confirmAction(t('scripting.editor.confirmDelete', { path }), 'delete'))) return
   local.value = local.value.filter((f) => f.path !== path)
   models.get(path)?.dispose()
   models.delete(path)
