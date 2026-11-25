@@ -1,9 +1,9 @@
 package pod
 
 // POST /data/{api}/xmla: the XMLA interface (docs/specs/xmla.md), a second way a data API with
-// it switched on answers, for pivot tables. This is piece 1: the route, its admission and the
-// envelope; DISCOVER_PROPERTIES is answered, every other request with a fault that names what
-// is not served yet. The rowsets, the model and the MDX come in the pieces after it.
+// it switched on answers, for pivot tables. The route, its admission and the envelope are piece
+// 1, the Discover rowsets piece 2 (xmla_discover.go); Execute is answered with a fault that says
+// it is not served yet.
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ func (s *Server) xmla(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, &Problem{Status: 405, Code: "method_not_allowed", Detail: "XMLA is SOAP over POST"})
 		return
 	}
-	snap, _, ok := s.admit(w, r)
+	snap, key, ok := s.admit(w, r)
 	if !ok {
 		return
 	}
@@ -49,23 +49,12 @@ func (s *Server) xmla(w http.ResponseWriter, r *http.Request) {
 		s.fault(w, r, err)
 		return
 	}
-	if req.Method == xmla.MethodDiscover && req.RequestType == xmla.RowsetProperties {
-		rows := xmla.PropertiesRowset(snap.m.Name, req.Restrictions)
-		var out bytes.Buffer
-		if err := xmla.WriteRowset(&out, xmla.PropertiesColumns, rows); err != nil {
-			s.fault(w, r, xmla.NewFault(xmla.CodeInternal, "The answer could not be written"))
-			return
-		}
-		recordOf(r).rows = len(rows)
-		writeXML(w, http.StatusOK, out.Bytes())
+	if req.Method == xmla.MethodDiscover {
+		s.discover(w, r, snap, key, req)
 		return
 	}
-	what := "Execute"
-	if req.Method == xmla.MethodDiscover {
-		what = "Discover of " + req.RequestType
-	}
 	recordOf(r).code = "xmla_not_served"
-	s.fault(w, r, xmla.NewFault(xmla.CodeNotServed, what+" is not served yet by this interface"))
+	s.fault(w, r, xmla.NewFault(xmla.CodeNotServed, "Execute is not served yet by this interface"))
 }
 
 // fault answers a SOAP fault with HTTP 500, as SOAP 1.1 says.

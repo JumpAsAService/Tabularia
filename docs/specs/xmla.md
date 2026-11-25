@@ -232,6 +232,56 @@ dialect, the pods' way to the engine, the administrator's choice per data API).
 - `DISCOVER_PROPERTIES` is answered; every other request gets a fault that names what is not
   served yet. A request body is 1 MB at most.
 
+**Piece 2** (Discover), 2026-11-25. The model is `gateway-go/internal/xmlamodel` (pure, shared by the
+pod and, later, the gateway's documentation); the rowsets are `gateway-go/dataapi/internal/xmla`
+(`discover.go`, `structure.go`, `members.go`); the members are read by `pod/xmla_data.go`.
+
+- **Unique names**, every name between brackets with `]` doubled: measure `[Measures].[amount]` (the
+  sum, named as the column; `[Measures].[amount (Average)]`, `(Min)`, `(Max)`; `[Measures].[Rows]`),
+  all four of a column in the display folder `amount`; dimension `[country]`; hierarchy
+  `[country].[country]`; level `[country].[country].[country]` and `[country].[country].[(All)]` for
+  level 0; All member `[country].[country].[All]`; null member `[country].[country].[(null)]`; a member
+  `[country].[country].[country].&[IT]`. A date has the hierarchy `[day].[Year-Quarter-Month-Day]`
+  (levels Year, Quarter, Month, Day; keys `2026`, `2026-Q1`, `2026-01`, `2026-01-15`) and the plain
+  value as `[day].[day]` (key `2026-01-15`; a timestamp `2026-01-15 08:30:00`, the fraction only when
+  there is one, a zone read in UTC). The null of a date is the member `…[(null)]` of the first level.
+  The measures are the members of `[Measures]`, level `[Measures].[MeasuresLevel]`.
+- **Keys**: the value as it is, except that the empty text is `\` (a bracket cannot be empty in MDX) and
+  a text starting with `\` gets another one in front. An integer key is canonical (`+042` reads as
+  `42`); a boolean is `true` or `false`. Names match without regard to case, keys do not.
+- **Collisions** (names are case-insensitive): in column order the first gets the plain name, the
+  next `name (2)`. The sums' names (the columns') are taken before the Average, Min and Max ones,
+  and `Rows`, `Measures`, `All`, `(All)` and `(null)` are reserved: a column called so is renamed,
+  never the other way.
+- **Types** (`KindOfDuckDB`): all integers (`HUGEINT` too) are a dimension and the four measures;
+  `DECIMAL`, `FLOAT`, `DOUBLE` the measures only; `VARCHAR`, `JSON`, enums, `BOOLEAN`, `UUID` and
+  `TIME` a one-level dimension (the last three by their text); `DATE`, `TIMESTAMP` (any unit) and
+  `TIMESTAMP WITH TIME ZONE` (in UTC) the calendar. Lists, structs, maps, blobs and intervals are left
+  out of the cube (nothing sensible to group on or sum): the model lists them in `Cube.Skipped`.
+- A sum of a decimal is a decimal, of an integer an integer, an average a float; the format strings
+  (`#,0`, `#,0.00`, the decimal's scale) are the model's, for `DEFAULT_FORMAT_STRING` and Execute's
+  `FORMAT_STRING`.
+- **Rowsets served**: every one of the list in «The interface», plus `DISCOVER_PROPERTIES` of piece 1.
+  Empty, with the columns of the standard: `MDSCHEMA_SETS`, `MDSCHEMA_KPIS` and
+  `MDSCHEMA_PROPERTIES` (no member properties beyond the intrinsic ones). `MDSCHEMA_FUNCTIONS` lists
+  the functions the parser reads. `HIERARCHY_CARDINALITY`, `LEVEL_CARDINALITY` and
+  `DIMENSION_CARDINALITY` of a data dimension are left out (a client may not rely on it): counting
+  them is a scan of the table for each level at every Discover.
+- **Members** are read from the pod's table, in order (a null last), each with the count of its
+  children (`CHILDREN_CARDINALITY`), through the same turns and timeout as the REST interface. A
+  `MEMBER_UNIQUE_NAME` with `TREE_OP` (children 1, siblings 2, parent 4, self 8, descendants 16,
+  ancestors 32, as a sum; self when absent) gives the relations, each member once, a member the data
+  does not have giving nothing. Past `MaxMembers` the answer is a fault that names the cap and its
+  value, before any byte of the answer is sent: the answer is held (at most the cap's rows) until it
+  is whole, so a timeout is a clean fault too.
+- A key limited to some resources sees only those cubes, in every rowset. A resource whose table is
+  still loading makes the rowsets that list cubes answer a fault («still loading»), not a short list;
+  a resource with no data or whose publisher lost the right to read it is left out.
+- An unknown rowset is a fault that names it (cut at 64 characters) and a log line with its name only.
+- The conversation of connecting and listing the fields is `pod/testdata/xmla/connect.txt`: written from
+  the documentation, **not recorded from a client**; its format (request, answer expected) is at its
+  head, ready for the owner's recordings.
+
 **Piece 3** (the MDX parser), 2026-11-25: `gateway-go/dataapi/internal/xmla/mdx`. A statement is
 1 MiB at most, 64 levels deep, 128 axes. An empty argument is allowed between two others, never
 first or last. `Filter` compares a measure with a number, joined by AND and OR. `a * b * c` and

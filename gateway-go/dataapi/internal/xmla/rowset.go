@@ -12,6 +12,12 @@ type Column struct {
 	Name     string
 	Type     string
 	Nullable bool
+	// an array column: Inner is the XML Schema of what one element holds, and the row's value is
+	// XML already (escaped by whoever wrote it), written inside the column's element; with Repeat
+	// the value is the elements themselves, as many as the array has (DISCOVER_SCHEMA_ROWSETS'
+	// Restrictions)
+	Inner  string
+	Repeat bool
 }
 
 // Str, Int, Bool and UInt are the columns' types the rowsets of Discover use.
@@ -20,6 +26,11 @@ const (
 	Int  = "xsd:int"
 	UInt = "xsd:unsignedInt"
 	Bool = "xsd:boolean"
+	// the types of the schema rowsets' numbers and dates
+	UShort   = "xsd:unsignedShort"
+	Short    = "xsd:short"
+	ULong    = "xsd:unsignedLong"
+	DateTime = "xsd:dateTime"
 )
 
 // RowsetWriter writes a Discover answer a row at a time, so that a large one (the members of a
@@ -60,7 +71,14 @@ func (rw *RowsetWriter) Row(values ...string) {
 		if v == "" && c.Nullable {
 			continue
 		}
-		rw.puts("<" + c.Name + ">" + escape(v) + "</" + c.Name + ">")
+		switch {
+		case c.Inner != "" && c.Repeat:
+			rw.puts(v)
+		case c.Inner != "":
+			rw.puts("<" + c.Name + ">" + v + "</" + c.Name + ">")
+		default:
+			rw.puts("<" + c.Name + ">" + escape(v) + "</" + c.Name + ">")
+		}
 	}
 	rw.puts("</row>")
 	rw.rows++
@@ -99,11 +117,21 @@ func schema(cols []Column) string {
 		`<xsd:complexType name="xmlDocument"><xsd:sequence><xsd:any/></xsd:sequence></xsd:complexType>` +
 		`<xsd:complexType name="row"><xsd:sequence>`)
 	for _, c := range cols {
-		b.WriteString(`<xsd:element sql:field="` + c.Name + `" name="` + c.Name + `" type="` + c.Type + `"`)
-		if c.Nullable {
+		b.WriteString(`<xsd:element sql:field="` + c.Name + `" name="` + c.Name + `"`)
+		if c.Inner == "" {
+			b.WriteString(` type="` + c.Type + `"`)
+		}
+		if c.Nullable || c.Inner != "" {
 			b.WriteString(` minOccurs="0"`)
 		}
-		b.WriteString(`/>`)
+		if c.Inner != "" && c.Repeat {
+			b.WriteString(` maxOccurs="unbounded"`)
+		}
+		if c.Inner != "" {
+			b.WriteString(`>` + c.Inner + `</xsd:element>`)
+		} else {
+			b.WriteString(`/>`)
+		}
 	}
 	b.WriteString(`</xsd:sequence></xsd:complexType></xsd:schema>`)
 	return b.String()

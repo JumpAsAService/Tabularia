@@ -1,0 +1,191 @@
+# A conversation of Discover requests, played against the pod by TestXMLAConversations
+# (xmla_conversation_test.go) with the «sales» table of xmla_discover_test.go.
+#
+# NOT RECORDED FROM A REAL CLIENT. It is written from the protocol's documentation, in the order
+# a spreadsheet's pivot table is documented to ask when it connects, lists the cubes and the fields
+# of one, and expands a field. The owner's trials with the real client replace it: put the
+# request exactly as the pod received it under a new «===» step and say what the answer must be.
+#
+# Format. A step starts with a line «=== name». Lines starting with «@» come next, and say how it
+# is sent: «@key orders» sends the key of that name in the test fixture (main is the default).
+# The request, the SOAP envelope as sent, follows up to the line «--- expect», and then come the
+# expectations, one to a line:
+#
+#   status 200                 the HTTP status (200 when not said)
+#   columns A B C              the rowset's columns, exactly, in this order
+#   rows N                     how many rows
+#   row A=x | B=y              the next row, the columns it names only (a value may be empty)
+#   fault some text            the answer is a SOAP fault (HTTP 500) with this text in it
+#
+# The «row» lines check the first rows, in order; «rows» says how many there are in all.
+
+=== the pivot asks which data sources there are
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>DISCOVER_DATASOURCES</RequestType><Restrictions><RestrictionList/></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+columns DataSourceName DataSourceDescription URL DataSourceInfo ProviderName ProviderType AuthenticationMode
+rows 1
+row DataSourceName=Tabularia | ProviderName=Tabularia | ProviderType=MDP | AuthenticationMode=Authenticated
+
+=== the properties of the server
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>DISCOVER_PROPERTIES</RequestType><Restrictions><RestrictionList><PropertyName>ProviderVersion</PropertyName></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 1
+row PropertyName=ProviderVersion | PropertyAccessType=Read
+
+=== the rowsets the server answers
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>DISCOVER_SCHEMA_ROWSETS</RequestType><Restrictions><RestrictionList/></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+columns SchemaName SchemaGuid Restrictions Description RestrictionsMask
+rows 19
+row SchemaName=DISCOVER_PROPERTIES
+
+=== what a Format may be
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>DISCOVER_ENUMERATORS</RequestType><Restrictions><RestrictionList><EnumName>Format</EnumName></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 3
+row EnumName=Format | ElementName=Tabular | ElementValue=1
+row ElementName=Multidimensional
+row ElementName=Native
+
+=== the catalogs
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>DBSCHEMA_CATALOGS</RequestType><Restrictions><RestrictionList/></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+columns CATALOG_NAME DESCRIPTION ROLES DATE_MODIFIED
+rows 1
+row CATALOG_NAME=CRM
+
+=== the cubes of the catalog
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_CUBES</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_SOURCE>3</CUBE_SOURCE></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 3
+row CUBE_NAME=customers | CUBE_TYPE=CUBE | CUBE_SOURCE=1
+row CUBE_NAME=orders
+row CUBE_NAME=Sales | CUBE_CAPTION=Sales | LAST_DATA_UPDATE=2026-11-07T06:00:00Z | IS_WRITE_ENABLED=false
+
+=== the measure groups of the cube
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEASUREGROUPS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 1
+row CUBE_NAME=Sales | MEASUREGROUP_NAME=Sales
+
+=== the dimensions of the cube
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_DIMENSIONS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><CUBE_SOURCE>1</CUBE_SOURCE></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 11
+row DIMENSION_UNIQUE_NAME=[Measures] | DIMENSION_TYPE=2 | DIMENSION_ORDINAL=0
+row DIMENSION_UNIQUE_NAME=[id] | DIMENSION_TYPE=3 | DEFAULT_HIERARCHY=[id].[id]
+row DIMENSION_UNIQUE_NAME=[country]
+
+=== the hierarchies of the cube
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_HIERARCHIES</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 14
+row HIERARCHY_UNIQUE_NAME=[Measures] | DEFAULT_MEMBER=[Measures].[Rows]
+row HIERARCHY_UNIQUE_NAME=[id].[id] | ALL_MEMBER=[id].[id].[All] | HIERARCHY_ORIGIN=2
+
+=== the levels of the date hierarchy
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_LEVELS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><HIERARCHY_UNIQUE_NAME>[day].[Year-Quarter-Month-Day]</HIERARCHY_UNIQUE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 5
+row LEVEL_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[(All)] | LEVEL_NUMBER=0 | LEVEL_TYPE=1
+row LEVEL_NAME=Year | LEVEL_NUMBER=1 | LEVEL_TYPE=20
+row LEVEL_NAME=Quarter | LEVEL_NUMBER=2 | LEVEL_TYPE=68
+row LEVEL_NAME=Month | LEVEL_NUMBER=3 | LEVEL_TYPE=132
+row LEVEL_NAME=Day | LEVEL_NUMBER=4 | LEVEL_TYPE=516
+
+=== the measures of the cube
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEASURES</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 21
+row MEASURE_UNIQUE_NAME=[Measures].[Rows] | MEASURE_AGGREGATOR=2
+row MEASURE_UNIQUE_NAME=[Measures].[id] | MEASURE_DISPLAY_FOLDER=id | MEASURE_AGGREGATOR=1
+row MEASURE_UNIQUE_NAME=[Measures].[id (Average)] | MEASURE_AGGREGATOR=5
+
+=== the member properties: none
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_PROPERTIES</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 0
+
+=== the named sets: none
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_SETS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 0
+
+=== the KPIs: none
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_KPIS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 0
+
+=== the measures as members
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><DIMENSION_UNIQUE_NAME>[Measures]</DIMENSION_UNIQUE_NAME><HIERARCHY_UNIQUE_NAME>[Measures]</HIERARCHY_UNIQUE_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 21
+row MEMBER_UNIQUE_NAME=[Measures].[Rows] | MEMBER_TYPE=3 | LEVEL_UNIQUE_NAME=[Measures].[MeasuresLevel]
+row MEMBER_UNIQUE_NAME=[Measures].[id]
+
+=== the pivot lists the dimensions and their All members
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><HIERARCHY_UNIQUE_NAME>[country].[country]</HIERARCHY_UNIQUE_NAME><LEVEL_NUMBER>0</LEVEL_NUMBER></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 1
+row MEMBER_UNIQUE_NAME=[country].[country].[All] | MEMBER_TYPE=2 | MEMBER_CAPTION=All | CHILDREN_CARDINALITY=7 | LEVEL_NUMBER=0
+
+=== a field dragged to the rows is expanded: the children of All
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><MEMBER_UNIQUE_NAME>[country].[country].[All]</MEMBER_UNIQUE_NAME><TREE_OP>1</TREE_OP></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 7
+row MEMBER_UNIQUE_NAME=[country].[country].[country].&[\] | MEMBER_CAPTION= | PARENT_UNIQUE_NAME=[country].[country].[All]
+row MEMBER_UNIQUE_NAME=[country].[country].[country].&[Città] | MEMBER_CAPTION=Città
+row MEMBER_CAPTION=FR
+row MEMBER_CAPTION=IT
+row MEMBER_CAPTION=\x
+row MEMBER_CAPTION=a]b
+row MEMBER_UNIQUE_NAME=[country].[country].[(null)] | MEMBER_CAPTION=null
+
+=== the date field: its years
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><MEMBER_UNIQUE_NAME>[day].[Year-Quarter-Month-Day].[All]</MEMBER_UNIQUE_NAME><TREE_OP>1</TREE_OP></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 3
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Year].&[2025] | CHILDREN_CARDINALITY=1 | LEVEL_NUMBER=1
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Year].&[2026] | CHILDREN_CARDINALITY=2
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[(null)]
+
+=== a year is drilled down: its quarters
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><MEMBER_UNIQUE_NAME>[day].[Year-Quarter-Month-Day].[Year].&amp;[2026]</MEMBER_UNIQUE_NAME><TREE_OP>1</TREE_OP></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 2
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Quarter].&[2026-Q1] | PARENT_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Year].&[2026] | LEVEL_NUMBER=2 | PARENT_LEVEL=1
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Quarter].&[2026-Q2]
+
+=== a member and the path to it
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><MEMBER_UNIQUE_NAME>[day].[Year-Quarter-Month-Day].[Month].&amp;[2026-05]</MEMBER_UNIQUE_NAME><TREE_OP>40</TREE_OP></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 4
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[All]
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Year].&[2026]
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Quarter].&[2026-Q2]
+row MEMBER_UNIQUE_NAME=[day].[Year-Quarter-Month-Day].[Month].&[2026-05] | CHILDREN_CARDINALITY=2
+
+=== the functions of the MDX
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_FUNCTIONS</RequestType><Restrictions><RestrictionList><FUNCTION_NAME>CrossJoin</FUNCTION_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 1
+row FUNCTION_NAME=CrossJoin | LIBRARY_NAME=MDX
+
+=== a rowset that is not served
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_ACTIONS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+status 500
+fault «MDSCHEMA_ACTIONS» is not served by this interface
+
+=== a key that may read one resource sees one cube
+@key orders
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_CUBES</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 1
+row CUBE_NAME=orders
+
+=== and cannot list the members of another cube
+@key orders
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Discover xmlns="urn:schemas-microsoft-com:xml-analysis"><RequestType>MDSCHEMA_MEMBERS</RequestType><Restrictions><RestrictionList><CATALOG_NAME>CRM</CATALOG_NAME><CUBE_NAME>Sales</CUBE_NAME><MEMBER_UNIQUE_NAME>[country].[country].[All]</MEMBER_UNIQUE_NAME><TREE_OP>1</TREE_OP></RestrictionList></Restrictions><Properties><PropertyList><Catalog>CRM</Catalog><Content>SchemaData</Content><Format>Tabular</Format><LocaleIdentifier>1033</LocaleIdentifier></PropertyList></Properties></Discover></soap:Body></soap:Envelope>
+--- expect
+rows 0

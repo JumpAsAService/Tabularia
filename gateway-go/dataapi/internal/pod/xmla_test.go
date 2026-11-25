@@ -246,7 +246,7 @@ func TestXMLAFaultsNameWhatIsNotServed(t *testing.T) {
 			t.Errorf("want %q in %s", want, a.body)
 		}
 	}
-	fault(strings.Replace(discoverProperties, "DISCOVER_PROPERTIES", "MDSCHEMA_CUBES", 1), "Discover of MDSCHEMA_CUBES is not served yet")
+	fault(strings.Replace(discoverProperties, "DISCOVER_PROPERTIES", "DISCOVER_NOPE", 1), "The rowset «DISCOVER_NOPE» is not served by this interface")
 	fault(executeStatement, "Execute is not served yet")
 	fault("<not xml", "not well-formed")
 	fault(`<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"><soap:Body/></soap:Envelope>`, "SOAP 1.2")
