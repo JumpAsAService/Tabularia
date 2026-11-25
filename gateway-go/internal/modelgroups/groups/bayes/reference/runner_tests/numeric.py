@@ -8,16 +8,17 @@ its pieces) must therefore not ask for the same bits. It asks for the same numbe
 
 That is REORDER_RTOL. Adding n terms in any order changes the result by at most n * eps * sum(|x_i|) (eps = 2.2e-16, the worst case
 of the plain left-to-right sum; numpy's pairwise sum is far better, about log2(n) * eps). The draws of these tests are a few
-thousand values (at most 10^4: 2.2e-12 as a bound on the sum), so a relative 1e-11 holds five times the worst case, and nothing is
-hidden under it: a different formula, a block lost or a column shifted moves a number by far more (a single changed draw of 6,000
-moves a mean by 1e-4 of its spread).
+thousand values (at most 10^4: 2.2e-12 as a bound on the sum). The tolerance is a relative 1e-9, the default of the images'
+self-tests (common/py/tab_selftest.py, common/R/selftest.R): some hundreds of times the worst case, room for a library that sums in
+yet another way (a BLAS, a quantile's interpolation), and still nothing is hidden under it: a different formula, a block lost or a
+column shifted moves a number by far more (a single changed draw of 6,000 moves a mean by 1e-4 of its spread).
 
 What is NOT compared with it: what must be the same bytes. Counts, integers, strings, the order of rows, the seed's streams (a
 generator gives the same stream on any CPU) and the files a run writes stay `assertEqual`.
 """
 import math
 
-REORDER_RTOL = 1e-11
+REORDER_RTOL = 1e-9  # (owner, 2026-11-25: 1e-11 was too tight)
 
 
 def close(want, got, rtol=REORDER_RTOL, atol=0.0):

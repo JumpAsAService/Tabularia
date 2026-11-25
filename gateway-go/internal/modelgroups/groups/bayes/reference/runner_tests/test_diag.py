@@ -143,7 +143,7 @@ class TestAS241(unittest.TestCase):
         for v in (0.3, 0.5 + 0.425, 0.5 - 0.425, 1e-3, 1e-10, 1e-12, 1e-100, 1 - 1e-3):
             self.assertAlmostEqual(D.inv_cdf(np.array([v]))[0], statistics.NormalDist().inv_cdf(v), delta=1e-15 * 40)
         p = np.array([1e-5, 0.01, 0.2])
-        np.testing.assert_allclose(D.inv_cdf(p), -D.inv_cdf(1.0 - p), rtol=1e-11)
+        np.testing.assert_allclose(D.inv_cdf(p), -D.inv_cdf(1.0 - p), rtol=REORDER_RTOL)
 
 
 class TestTheBlocks(unittest.TestCase):

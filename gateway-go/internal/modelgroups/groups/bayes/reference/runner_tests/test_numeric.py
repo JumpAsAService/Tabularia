@@ -31,7 +31,7 @@ class TestReorderedSums(unittest.TestCase):
         assert_same_numbers(self, a, {"quantity": ["mu", "tau"], "mean": [np.nextafter(1.0, 2.0), None], "n": [3, 4]})
         for bad in ({"quantity": ["mu", "tau2"], "mean": [1.0, None], "n": [3, 4]},
                     {"quantity": ["mu", "tau"], "mean": [1.0, 2.0], "n": [3, 4]},
-                    {"quantity": ["mu", "tau"], "mean": [1.0 + 1e-9, None], "n": [3, 4]},
+                    {"quantity": ["mu", "tau"], "mean": [1.0 + 1e-7, None], "n": [3, 4]},
                     {"quantity": ["mu", "tau"], "mean": [1.0, None], "n": [3, 5]},
                     {"quantity": ["mu", "tau"], "mean": [1.0], "n": [3, 4]}):
             with self.assertRaises(AssertionError):
