@@ -98,12 +98,12 @@ const exists = (id: string): boolean => props.doc.nodes.some(n => n.id === id) |
 .count .w { color: var(--text); }
 .count .w :deep(svg) { color: var(--warning); }
 .lead { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
-.none { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg-soft); }
+.none { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 12px; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--bg-soft); }
 .none .ic { margin-top: 1px; color: var(--accent-2); }
 .none p { margin: 0; font-size: 12.5px; line-height: 1.5; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .item {
-  display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 10px 12px; border-radius: 10px;
+  display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 10px 12px; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--bg-soft); font-size: 12.5px; line-height: 1.45;
 }
 .item.e { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: var(--tint-danger); }

@@ -43,9 +43,9 @@ function key(e: KeyboardEvent) {
 </template>
 
 <style scoped>
-.rseg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--control-border); min-width: 0; }
+.rseg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--control-border); min-width: 0; }
 .rseg button {
-  flex: 1; border: 0; background: transparent; padding: 4px 9px; font-size: 12px; color: var(--muted); border-radius: 6px;
+  flex: 1; border: 0; background: transparent; padding: 4px 9px; font-size: 12px; color: var(--muted); border-radius: var(--radius-small);
   box-shadow: none; white-space: nowrap; min-width: 0;
 }
 .rseg button.icon { padding: 4px 7px; }

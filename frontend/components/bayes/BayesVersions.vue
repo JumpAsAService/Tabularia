@@ -73,7 +73,7 @@ const noteOf = (v: BayesVersionListed) => {
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .list li {
   display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
-  border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel);
+  border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--panel);
 }
 .list li.shown { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
 .top { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; min-width: 0; }

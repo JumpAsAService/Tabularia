@@ -122,7 +122,7 @@ async function revoke(tk: ApiToken) {
 .tk tr:last-child td { border-bottom: none; }
 .tk-name { font-weight: 550; }
 .tk-prefix { font-size: 11.5px; color: var(--muted); }
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 6px; padding: 1px 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border-radius: var(--radius-small); padding: 1px 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
 .tag.write { color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--tint-accent); }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; }

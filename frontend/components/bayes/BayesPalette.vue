@@ -118,17 +118,17 @@ defineExpose({ focusFirst })
 .sic { flex: none; color: var(--muted); }
 .searchbar input {
   flex: 1; min-width: 0; padding: 6px 8px; font: inherit; font-size: 13px; color: var(--text);
-  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: 8px;
+  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: var(--radius-control);
 }
 .searchbar input::placeholder { color: var(--muted); }
-.clear { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); }
+.clear { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--radius-small); background: none; color: var(--muted); }
 @media (hover: hover) and (pointer: fine) { .clear:hover { color: var(--text); background: var(--panel-2); } }
 .none { margin: 8px 6px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .grp { display: flex; flex-direction: column; gap: 1px; }
 .gt { margin: 0; padding: 10px 6px 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .item {
   position: relative; display: flex; align-items: flex-start; gap: 9px; padding: 6px 6px 7px 8px;
-  border: 1px solid transparent; border-radius: 8px; cursor: grab; user-select: none;
+  border: 1px solid transparent; border-radius: var(--radius-control); cursor: grab; user-select: none;
   transition: background var(--dur-tint), border-color var(--dur-tint);
 }
 .item:active { cursor: grabbing; }

@@ -124,7 +124,7 @@ const icon = computed(() => (isPredict.value ? Sparkles : modelIconOf(props.node
 .model-panel { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row h3 { flex: 1; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
-.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: var(--radius-small); }
 .del:hover { color: var(--danger); background: var(--bg-soft); }
 .unknown { margin: 0; font-size: 12px; }
 </style>

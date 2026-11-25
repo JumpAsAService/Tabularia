@@ -1382,7 +1382,7 @@ onMounted(async () => {
    short type), grabbed and dragged; a check on the ones in the table */
 .flds {
   display: flex; flex-direction: column; min-height: 0; margin-right: 10px; padding: 10px 6px 6px;
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
 }
 .flds.out { border-color: var(--danger); border-style: dashed; }
 .flds-head { display: flex; align-items: center; gap: 4px; padding: 0 4px; margin-bottom: 8px; }
@@ -1391,7 +1391,7 @@ onMounted(async () => {
 .flds-head .mini { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 11.5px; white-space: nowrap; }
 .flds-search {
   display: flex; align-items: center; gap: 6px; margin: 0 4px 6px; padding: 0 8px;
-  border: 1px solid var(--control-border); border-radius: 8px; background: var(--bg-soft); color: var(--muted);
+  border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--bg-soft); color: var(--muted);
 }
 .flds-search:focus-within { border-color: var(--accent); }
 .flds-search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 5px 0; font-size: 12.5px; box-shadow: none; outline: none; }
@@ -1400,7 +1400,7 @@ onMounted(async () => {
 .flds-list { list-style: none; margin: 0; padding: 0 0 2px; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .flds-list li { position: relative; }
 .fld {
-  display: flex; align-items: flex-start; gap: 7px; width: 100%; padding: 4px 6px; border: 0; border-radius: 6px;
+  display: flex; align-items: flex-start; gap: 7px; width: 100%; padding: 4px 6px; border: 0; border-radius: var(--radius-small);
   background: transparent; box-shadow: none; font-size: 12px; text-align: left; cursor: grab; color: var(--text);
   touch-action: manipulation;
 }
@@ -1425,10 +1425,10 @@ li.calc .fld-kind { color: var(--violet, var(--accent-hi)); }
 .fld-more[aria-expanded="true"] { display: inline-flex; }
 .fld-menu {
   position: absolute; top: 26px; right: 3px; z-index: 30; min-width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 1px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-2, 0 8px 24px rgb(0 0 0 / 0.18));
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-2, 0 8px 24px rgb(0 0 0 / 0.18));
 }
 .fld-menu button {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent;
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-small); background: transparent;
   box-shadow: none; font-size: 12.5px; text-align: left; color: var(--text);
 }
 .fld-menu button:hover:not(:disabled) { background: var(--panel-2); box-shadow: none; }
@@ -1490,7 +1490,7 @@ li.calc .fld-kind { color: var(--violet, var(--accent-hi)); }
 .resizer:hover::before { background: var(--accent); }
 
 .cfg { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 0 10px 0 2px; }
-.cfg-sec { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+.cfg-sec { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
 .cfg-head { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
 .cfg-head .add { margin-left: auto; padding: 2px 6px; }
 .toggle { margin-left: auto; font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
@@ -1516,7 +1516,7 @@ li.calc .fld-kind { color: var(--violet, var(--accent-hi)); }
 .add-dim { font-size: 11px; padding: 3px 8px; margin: 2px 0 4px; }
 .checkline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); margin-top: 8px; cursor: pointer; }
 
-.result { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.result { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .rtabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .rtabs button { padding: 5px 10px; }
 .rtabs button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }

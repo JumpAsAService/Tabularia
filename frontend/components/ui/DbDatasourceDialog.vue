@@ -741,7 +741,7 @@ function confirm() {
 .dd-check { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 6px; }
 .dd-row input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .dd-row button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.dd-files { margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); font-size: 12px; }
+.dd-files { margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); font-size: 12px; }
 .dd-files { display: flex; flex-direction: column; gap: 6px; }
 .dd-files p { margin: 0; }
 .dd-files ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
@@ -752,7 +752,7 @@ function confirm() {
 .dd-gs-title { color: var(--text); }
 .dd-gs-tab { display: grid; grid-template-columns: minmax(0, 1fr) 11em; gap: 6px 10px; }
 .dd-gs-tab > div { display: flex; flex-direction: column; gap: 3px; }
-.dd-gs-table { max-height: 220px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); font-size: 12px; }
+.dd-gs-table { max-height: 220px; overflow: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); font-size: 12px; }
 .dd-gs-table table { border-collapse: collapse; width: max-content; min-width: 100%; }
 .dd-gs-table th, .dd-gs-table td { padding: 4px 10px; border-bottom: 1px solid var(--border-soft); text-align: left; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dd-gs-table th { position: sticky; top: 0; background: var(--panel-2); font-weight: 600; }

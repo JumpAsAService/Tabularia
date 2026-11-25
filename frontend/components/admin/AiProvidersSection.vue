@@ -356,7 +356,7 @@ async function toggleModel(p: AiProvider, m: AiModel) {
 .small { font-size: 12px; }
 .page-error { color: var(--danger); font-size: 13px; margin: 0; }
 /* metadata-only mode: what a model gets */
-.data-mode { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.data-mode { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
 .data-mode p { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12.5px; color: var(--muted); }
 .data-mode p svg { flex: none; margin-top: 2px; }
 .data-mode p.on { color: var(--text); }
@@ -367,7 +367,7 @@ async function toggleModel(p: AiProvider, m: AiModel) {
 td.actions { white-space: nowrap; width: 1%; }
 td.address { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tag {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 8px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: var(--radius-control);
   background: var(--panel-2); border: 1px solid var(--border); color: var(--accent-hi); margin-left: 6px; white-space: nowrap;
 }
 .tag.off { color: var(--muted); }

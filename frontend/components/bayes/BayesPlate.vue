@@ -54,7 +54,7 @@ const params = (e: { params: BayesResizeParams }) => ({ x: e.params.x, y: e.para
 
 <style scoped>
 .plate {
-  width: 100%; height: 100%; box-sizing: border-box; border-radius: 10px;
+  width: 100%; height: 100%; box-sizing: border-box; border-radius: var(--radius);
   border: 1px solid var(--edge); background: color-mix(in srgb, var(--panel) 38%, transparent);
   transition: border-color var(--dur-2), background-color var(--dur-2);
 }

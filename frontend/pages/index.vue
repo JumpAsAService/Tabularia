@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
 [data-tone="own"] { --tone: var(--accent); }
 [data-tone="admin"] { --tone: var(--warning); }
 .chip {
-  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-small); flex-shrink: 0;
   color: var(--tone, var(--accent)); background: color-mix(in srgb, var(--tone, var(--accent)) 14%, transparent);
 }
 
@@ -442,7 +442,7 @@ onBeforeUnmount(() => {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: 340px; max-height: min(70vh, 560px); overflow: auto; padding: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2);
 }
-.menu-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: none; text-align: left; }
+.menu-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: var(--radius-control); background: none; text-align: left; }
 .menu-item:hover, .menu-item:focus-visible { background: var(--tint-accent); box-shadow: none; }
 .mi-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mi-name { font-size: 13px; font-weight: 600; color: var(--text); }

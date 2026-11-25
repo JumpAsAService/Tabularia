@@ -907,7 +907,7 @@ legend.lbl { margin-bottom: 4px; }
 .share input { width: 96px; flex: none; }
 .share .why { flex-basis: 100%; }
 .sharel { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.icon { flex-shrink: 0; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.icon { flex-shrink: 0; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: var(--radius-small); }
 .icon:hover { color: var(--danger); background: var(--bg-soft); }
 .add { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
 .block { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }

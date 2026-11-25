@@ -41,7 +41,7 @@ const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, i
   padding: 10px 12px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   cursor: pointer;
   font-size: 13px;

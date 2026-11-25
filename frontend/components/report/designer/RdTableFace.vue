@@ -131,7 +131,7 @@ const tagMode = computed(() => (rowPx.value >= 18 ? 'full' : rowPx.value >= 11 ?
 .ttag {
   position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; pointer-events: none;
   font: 600 9.5px/1 'IBM Plex Sans', system-ui, sans-serif; letter-spacing: 0.03em; text-transform: uppercase;
-  color: var(--muted); padding: 3px 6px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border);
+  color: var(--muted); padding: 3px 6px; border-radius: var(--radius-small); background: var(--panel); border: 1px solid var(--border);
 }
 .ttag.small { font-size: 8.5px; padding: 0 4px; border-radius: 4px; }
 </style>

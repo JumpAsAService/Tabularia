@@ -182,7 +182,6 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 /* explicit font-size/margin: the title was an <h2> and took the browser's defaults
    (1.5em, margin 0.83em). Promoted to <h1> for the navigation by headings, it fixes them
    here to render exactly as before. */
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .count { font-weight: 400; font-size: 14px; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }
@@ -198,7 +197,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .segmented button.on { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .runs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.run { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.run { border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--panel); overflow: hidden; }
 .run.open { border-color: var(--border); }
 .run-row { width: 100%; display: grid; grid-template-columns: 18px 78px minmax(150px, 1fr) minmax(0, 2fr) 120px 130px; align-items: center; gap: 10px; padding: 9px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
 .run-row:hover { background: var(--panel-2); }
@@ -229,7 +228,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .same-run { padding: 2px 8px; border: 1px solid var(--border); border-radius: 20px; background: var(--panel); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; box-shadow: none; }
 .same-run:hover { color: var(--text); border-color: var(--control-border); box-shadow: none; }
 .same-run.on { border-color: var(--accent); background: var(--tint-accent); color: var(--accent-hi); }
-.trace { margin: 0; padding: 10px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 340px; overflow: auto; }
+.trace { margin: 0; padding: 10px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius-small); font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 340px; overflow: auto; }
 .small { font-size: 12.5px; }
 .mini { padding: 6px 8px; }
 /* a phone: the name beside the status, the message, who and when under them (the six

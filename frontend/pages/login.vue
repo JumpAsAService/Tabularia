@@ -278,7 +278,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--muted);
   box-shadow: none;
@@ -346,7 +346,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
   color: var(--muted);
   /* the values pass under here too: a background, or the label cannot be read */
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: var(--bg);
 }
 .side.raw { left: 26px; }

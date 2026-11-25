@@ -523,7 +523,7 @@ onMounted(async () => {
   min-width: 230px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   padding: 8px;
   display: flex;
@@ -616,7 +616,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 7px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   font-size: 13px;
   color: var(--text);
   text-decoration: none;

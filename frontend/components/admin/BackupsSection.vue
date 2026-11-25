@@ -252,9 +252,9 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
 .hint { margin: 0; line-height: 1.5; }
 .small { font-size: 12px; }
 .page-error { color: var(--danger); font-size: 13px; margin: 0; }
-.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 
-.state { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-soft); font-size: 13px; }
+.state { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius-control); border: 1px solid var(--border); background: var(--bg-soft); font-size: 13px; }
 .state span { flex: 1; }
 .state.ok { border-color: color-mix(in srgb, var(--accent-2) 45%, var(--border)); }
 .state.ok svg { color: var(--accent-2); }
@@ -265,7 +265,7 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 
 .numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
-.numbers div { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-soft); }
+.numbers div { padding: 8px 10px; border-radius: var(--radius-control); border: 1px solid var(--border-soft); }
 .numbers dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .numbers dd { margin: 2px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 .last-error { margin: 0; font-size: 12px; color: var(--muted); }

@@ -58,7 +58,7 @@ useDialogA11y(card, () => props.open, () => emit('close'))
 }
 .modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border-soft); }
 .modal-head h2 { margin: 0; font-size: 15px; font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-close { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.modal-close { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); cursor: pointer; }
 .modal-close:hover { background: var(--panel-2); color: var(--text); }
 .modal-body { padding: 16px 20px; overflow-y: auto; }
 .modal-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--border-soft); }

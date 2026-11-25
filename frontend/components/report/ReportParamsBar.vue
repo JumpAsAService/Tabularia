@@ -143,7 +143,7 @@ const anyRequired = (ps: ReportParameter[]) => ps.some((p) => p.required)
 <style scoped>
 .pbar {
   display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 14px;
-  padding: 10px 14px 4px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel);
+  padding: 10px 14px 4px; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel);
 }
 .pf { display: flex; flex-direction: column; gap: 4px; flex: 0 1 210px; min-width: 150px; }
 .pl { display: flex; align-items: baseline; gap: 3px; font-size: 12px; font-weight: 500; color: var(--muted); min-width: 0; }

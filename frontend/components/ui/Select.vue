@@ -303,7 +303,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   background: var(--bg-soft);
   /* the same border as the native fields: it is a control, not a decorative box */
   border: 1px solid var(--control-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   font: inherit;
   color: var(--text);
@@ -340,7 +340,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   padding: 4px;
 }
@@ -382,7 +382,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   align-items: center;
   gap: 7px;
   padding: 5px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   font-size: 13px;
   color: var(--text);
   cursor: pointer;

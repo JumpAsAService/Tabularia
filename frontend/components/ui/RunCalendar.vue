@@ -264,12 +264,12 @@ const dailyTotal = computed(() =>
 </template>
 
 <style scoped>
-.cal-card { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); padding: 12px 14px; margin-bottom: 16px; }
+.cal-card { border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel); padding: 12px 14px; margin-bottom: 16px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
 .cal-title { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
 .cal-title .muted { font-weight: 400; }
 .day-title { text-transform: capitalize; }
-.back { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-2); color: var(--text); cursor: pointer; }
+.back { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--panel-2); color: var(--text); cursor: pointer; }
 .back:hover { background: var(--panel); }
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 4px 10px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 12px; cursor: pointer; }
@@ -281,7 +281,7 @@ const dailyTotal = computed(() =>
 .cal-scroll { overflow-x: auto; overflow-y: hidden; }
 .hour-wrap { margin-top: 4px; }
 .hour-chart { height: 220px; width: 100%; }
-.cal-skel { height: 150px; border-radius: 8px; background: linear-gradient(90deg, var(--panel-2), var(--panel), var(--panel-2)); background-size: 200% 100%; animation: sh 1.2s ease-in-out infinite; }
+.cal-skel { height: 150px; border-radius: var(--radius-control); background: linear-gradient(90deg, var(--panel-2), var(--panel), var(--panel-2)); background-size: 200% 100%; animation: sh 1.2s ease-in-out infinite; }
 .cal-skel.small { height: 220px; }
 @keyframes sh { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>

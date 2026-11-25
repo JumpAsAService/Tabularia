@@ -81,7 +81,7 @@ watch(asked, (now, was) => {
 .cm-line svg { flex: none; align-self: center; color: var(--accent); }
 .cm-stale {
   flex: none; margin: 0; padding: 1px 6px; display: flex; align-items: center; gap: 4px; align-self: flex-start; max-width: 100%; box-sizing: border-box;
-  font-size: 11px; line-height: 1.35; color: var(--warning); background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: 6px;
+  font-size: 11px; line-height: 1.35; color: var(--warning); background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius-small);
 }
 .cm-stale svg { flex: none; }
 .cm-state {

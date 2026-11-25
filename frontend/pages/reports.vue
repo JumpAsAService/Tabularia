@@ -237,7 +237,7 @@ a.iconbtn {
   min-height: 24px;
   padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   color: var(--text);
   vertical-align: middle;

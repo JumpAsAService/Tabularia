@@ -247,8 +247,8 @@ const updated = computed(() => {
           <Play v-if="paused" :size="14" /><Pause v-else :size="14" />
         </button>
       </div>
+      <p class="muted lead">{{ $t('cluster.lead') }}</p>
     </div>
-    <p class="muted lead">{{ $t('cluster.lead') }}</p>
 
     <SkeletonRows v-if="!data && !error" :rows="6" />
     <p v-else-if="data?.disabled_reason" class="off" role="note">
@@ -381,7 +381,8 @@ const updated = computed(() => {
 </template>
 
 <style scoped>
-.lead { margin: 4px 0 0; max-width: 80ch; }
+/* the description sits inside the shared page head, on its own row right under the title */
+.head-actions { display: flex; align-items: center; gap: 10px; }
 .hint { margin: 4px 0 0; font-size: 12px; }
 .small { font-size: 12px; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent-2); font-variant-numeric: tabular-nums; }
@@ -417,7 +418,7 @@ const updated = computed(() => {
 /* ── where they run ── */
 .map { margin-top: 26px; }
 .map h2, .sec-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
-.lanes { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.lanes { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
 .lane { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); align-items: center; gap: 14px; padding: 9px 14px; }
 .lane + .lane { border-top: 1px solid var(--border-soft); }
 .lane.unscheduled { background: color-mix(in srgb, var(--warning) 7%, transparent); }
@@ -446,7 +447,7 @@ const updated = computed(() => {
 .sec-head h2 { display: flex; align-items: baseline; gap: 8px; }
 .ns { font-size: 11.5px; color: var(--muted); font-weight: 400; }
 .scroll { overflow-x: auto; }
-table.pods { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); font-size: 12.5px; overflow: hidden; }
+table.pods { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); font-size: 12.5px; overflow: hidden; }
 .pods thead th {
   background: var(--panel-2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.05em; text-align: left; padding: 7px 12px; white-space: nowrap; border-bottom: 1px solid var(--border);
@@ -493,6 +494,8 @@ th.num { text-align: right; }
 .idle { margin: 14px 0 0; }
 
 table.data { width: 100%; }
+/* the events table rests on a sheet like the pods table, not on the page */
+.scroll:has(> table.events) { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1); }
 .nowrap { white-space: nowrap; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
 .reason { font-weight: 600; white-space: nowrap; }
@@ -529,7 +532,7 @@ table.data { width: 100%; }
   .events thead { display: none; }
   .events tr {
     display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 3px;
-    padding: 9px 0; border-top: 1px solid var(--border-soft);
+    padding: 9px 12px; border-top: 1px solid var(--border-soft);
   }
   /* the app's tables keep a cell on one line (white-space: nowrap): here a cell wraps */
   .events td, .events td code { display: block; padding: 0; border: 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; }

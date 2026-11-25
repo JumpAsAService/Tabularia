@@ -235,7 +235,7 @@ const numeric = (k: keyof BayesCardValues) => k === 'compile_seconds' || k === '
 .small { font-size: 12px; }
 .page-error { color: var(--danger); font-size: 13px; margin: 0; }
 .notice { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--warning); }
-.field-group { border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field-group { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .field-group legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; align-items: start; }
 .cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -255,7 +255,7 @@ button.mini.ghost { background: none; }
 button.mini.danger { border-color: var(--danger); color: var(--danger-text); }
 button.mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 .compiles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.compiles li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.compiles li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .compiles .line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; }
 .compiles p { margin: 0; }
 .compiles code { font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }

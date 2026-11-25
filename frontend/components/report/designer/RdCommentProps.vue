@@ -102,7 +102,7 @@ const tried = computed(() => trial?.tried(id.value) ?? null)
 .cmp-kind { flex: none; font-size: 11px; color: var(--muted); }
 .cmp-note {
   margin: 0; padding: 6px 8px; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.4; color: var(--text); overflow-wrap: anywhere;
-  background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: 6px;
+  background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius-small);
 }
 .cmp-note svg { flex: none; margin-top: 2px; color: var(--warning); }
 .cmp-try { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }

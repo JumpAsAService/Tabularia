@@ -803,7 +803,7 @@ watch(() => route.query.id, (id) => {
 <style scoped>
 .da { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; flex: 0 1 380px; min-width: 0; }
+.page-head h1 { flex: 0 1 380px; min-width: 0; }
 .dname { font-size: 16px; font-weight: 600; padding: 4px 9px; min-width: 0; width: 100%; }
 .dname[readonly] { border-color: transparent; background: transparent; padding-left: 0; }
 .where { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
@@ -811,7 +811,7 @@ watch(() => route.query.id, (id) => {
 .head-actions button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tag {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px;
-  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
 }
 .tag.unsaved { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
 .tag.st.active, .tag.k-active { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 45%, var(--border)); }
@@ -820,9 +820,9 @@ watch(() => route.query.id, (id) => {
 .err { color: var(--danger); }
 .work { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .main, .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .card h2 { margin: 0; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
+.note { margin: 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
 .note.warn { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); min-width: 0; border: 0; padding: 0; margin: 0; }
 .field input, .field textarea { font: inherit; color: var(--text); }
@@ -832,7 +832,7 @@ watch(() => route.query.id, (id) => {
 .mono, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .slugline { display: flex; align-items: center; gap: 4px; }
 .slugline input { flex: 1; min-width: 0; }
-.res { border: 1px solid var(--border-soft); border-radius: 8px; }
+.res { border: 1px solid var(--border-soft); border-radius: var(--radius-control); }
 .res.isopen { border-color: var(--border); }
 .res-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-width: 0; }
 .res-head .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -847,7 +847,7 @@ watch(() => route.query.id, (id) => {
 .cn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .ct { font-size: 11px; }
 .ops { display: flex; flex-wrap: wrap; gap: 4px; }
-.op { min-height: 0; padding: 1px 7px; font-size: 11px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.op { min-height: 0; padding: 1px 7px; font-size: 11px; border-radius: var(--radius-small); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .op.on { background: var(--tint-accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); color: var(--text); }
 .sortline { display: flex; gap: 6px; align-items: center; }
 .sortline > :first-child { flex: 1; min-width: 0; }
@@ -861,11 +861,11 @@ watch(() => route.query.id, (id) => {
 .rtsum dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .mini { display: inline-flex; align-items: center; gap: 4px; }
 .danger { color: var(--danger); }
-.keyform, .renew { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--border-soft); border-radius: 8px; }
+.keyform, .renew { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); }
 .formacts, .kacts { display: flex; gap: 6px; flex-wrap: wrap; }
 .formacts button { display: inline-flex; align-items: center; gap: 6px; }
 .keys, .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.keys li, .versions li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 9px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.keys li, .versions li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 7px 9px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .keys li.dead { opacity: 0.7; }
 .ktop, .vtop { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .versions { max-height: 40vh; overflow: auto; }

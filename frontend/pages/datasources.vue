@@ -471,7 +471,7 @@ async function saveSchedule(cron: string) {
 <style scoped src="~/assets/listpage.css" />
 <style scoped>
 .dsl { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.ds { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.ds { border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--panel); overflow: hidden; }
 .ds.open { border-color: var(--border); }
 .ds-row { display: flex; align-items: center; }
 .ds-head { flex: 1; display: grid; grid-template-columns: 18px minmax(200px, 1.6fr) minmax(90px, 1fr) 110px 120px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; color: inherit; font: inherit; }
@@ -491,15 +491,15 @@ async function saveSchedule(cron: string) {
 .section-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 8px 0 0; }
 .hint { font-size: 12px; margin: 0; }
 .noteline { color: var(--warning); display: inline-flex; align-items: center; vertical-align: -2px; margin-right: 3px; }
-.ds-notes { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); border-radius: 8px; }
-.cd-table { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); max-height: 420px; overflow-y: auto; }
+.ds-notes { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); border-radius: var(--radius-control); }
+.cd-table { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel); max-height: 420px; overflow-y: auto; }
 .cd-row { display: grid; grid-template-columns: minmax(140px, 220px) 100px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--border-soft); }
 .cd-row:first-child { border-top: 0; }
 .cd-headrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel); }
 .ready-badge {
   display: inline-flex; align-items: center; gap: 4px; margin-left: 8px;
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 1px 7px; border-radius: 8px;
+  padding: 1px 7px; border-radius: var(--radius-control);
   background: var(--tint-accent); border: 1px solid var(--accent); color: var(--accent-hi);
 }
 .cd-name { font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -518,12 +518,12 @@ async function saveSchedule(cron: string) {
 .sched { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
 .sk-checks {
   display: flex; flex-wrap: wrap; gap: 4px 14px; max-height: 180px; overflow-y: auto;
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel);
 }
 .sk-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; max-width: 100%; cursor: pointer; }
 .sk-chk code { font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sk-pos {
-  min-width: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; text-align: center;
+  min-width: 16px; padding: 0 4px; border-radius: var(--radius-control); font-size: 10.5px; text-align: center;
   font-variant-numeric: tabular-nums; background: var(--tint-accent); color: var(--accent-hi);
 }
 .sk-missing code { text-decoration: line-through; }

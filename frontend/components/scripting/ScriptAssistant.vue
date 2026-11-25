@@ -331,7 +331,7 @@ function onKey(e: KeyboardEvent) {
 .sa-mini { padding: 2px 6px; }
 .sa-stream { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
 .sa-empty p { margin: 2px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.sa-example, .sa-fix { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left; line-height: 1.4; border-radius: 8px; }
+.sa-example, .sa-fix { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left; line-height: 1.4; border-radius: var(--radius-control); }
 .sa-fix { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .sa-you { display: flex; flex-direction: column; align-items: flex-end; margin-top: 12px; }
 .sa-q { margin: 0 0 6px; width: fit-content; max-width: 92%; padding: 7px 10px; border-radius: 10px 10px 3px 10px;
@@ -359,7 +359,7 @@ function onKey(e: KeyboardEvent) {
 .sa-chev { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
 .sa-file[aria-expanded="true"] .sa-chev { transform: rotate(90deg); }
 /* the difference: the changed lines with two unchanged around them, in the editor's own face */
-.sa-diff { list-style: none; margin: 4px 0 6px; padding: 6px 0; max-height: 280px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 6px;
+.sa-diff { list-style: none; margin: 4px 0 6px; padding: 6px 0; max-height: 280px; overflow: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-small);
   background: var(--panel); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5; }
 .sa-diff li { padding: 0 8px; white-space: pre; min-width: max-content; }
 .sa-diff li.added { color: color-mix(in srgb, var(--accent-2) 70%, var(--text)); background: color-mix(in srgb, var(--accent-2) 10%, transparent); }

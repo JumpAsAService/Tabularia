@@ -601,7 +601,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
   display: flex; align-items: center; gap: 10px; padding: 7px 12px; min-width: 0; flex: none;
   background: var(--topbar-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-soft); position: relative; z-index: 10;
 }
-.rdz-back { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--muted); flex: none; }
+.rdz-back { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-control); color: var(--muted); flex: none; }
 .rdz-back:hover { color: var(--text); background: var(--panel-2); }
 .rdz-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rdz-name { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 380px; }

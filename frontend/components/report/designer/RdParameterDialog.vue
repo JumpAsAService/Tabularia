@@ -320,13 +320,13 @@ function rename(old: string, name: string) {
 .rpd-checks { justify-content: flex-end; gap: 7px; padding-bottom: 2px; }
 .rpd-need { color: var(--warning); }
 .rpd-alert {
-  padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
+  padding: 8px 10px; border-radius: var(--radius-control); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
   color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .rpd-follow { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
 .rpd-line { display: flex; align-items: center; gap: 8px; }
 .rpd-line code {
-  flex: 1; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--bg-soft);
+  flex: 1; min-width: 0; padding: 6px 8px; border-radius: var(--radius-small); background: var(--bg-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text); overflow-wrap: anywhere;
 }
 .rpd-line button { flex-shrink: 0; white-space: nowrap; }

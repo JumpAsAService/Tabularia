@@ -590,7 +590,7 @@ function testIcon(ok: boolean | null) {
 .small { font-size: 12px; }
 .page-error, .error { color: var(--danger); margin: 0; }
 .page-error { font-size: 13px; }
-.note { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 .heading { display: flex; align-items: center; gap: 10px; }
 .heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
@@ -603,7 +603,7 @@ button.align-start { align-self: flex-start; }
 .field.largo { grid-column: 1 / -1; }
 .field small { font-size: 11.5px; line-height: 1.45; }
 .pem { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; resize: vertical; }
-.field-group { border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.field-group { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .field-group legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .sign-ins { width: 100%; border-collapse: collapse; font-size: 13px; }
 .sign-ins td { padding: 6px 8px; border-top: 1px solid var(--border-soft); vertical-align: top; }
@@ -624,7 +624,7 @@ button.align-start { align-self: flex-start; }
 .registry {
   width: 100%; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border-soft);
-  border-radius: 8px; background: var(--bg-soft); font-size: 13px; min-height: 0;
+  border-radius: var(--radius-control); background: var(--bg-soft); font-size: 13px; min-height: 0;
 }
 .registry:hover { border-color: var(--border); }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

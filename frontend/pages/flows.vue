@@ -481,14 +481,13 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .lock { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 .prod-engine { font-size: 12px; padding: 2px 6px; max-width: 220px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; }
 .count { font-weight: 400; font-size: 14px; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }
 .searchbox input { border: none; background: transparent; outline: none; color: var(--text); width: 220px; }
 
 .flows { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.flow { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.flow { border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--panel); overflow: hidden; }
 .flow.open { border-color: var(--border); }
 .flow-row { display: flex; align-items: center; }
 .flow-head { flex: 1; min-width: 0; display: grid; grid-template-columns: 18px minmax(160px, 1.4fr) minmax(90px, 1fr) auto 150px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
@@ -536,7 +535,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 16px 0 6px; }
 
 .versions { display: flex; flex-direction: column; gap: 2px; }
-.ver { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; font-size: 13px; }
+.ver { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: var(--radius-small); font-size: 13px; }
 .ver:hover { background: var(--panel); }
 .vnum { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 34px; }
 .vnote { flex: 1; }

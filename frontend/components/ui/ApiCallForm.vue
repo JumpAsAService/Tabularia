@@ -256,7 +256,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
 .ac-two > div, .ac-three > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 @media (max-width: 520px) { .ac-two, .ac-three { grid-template-columns: 1fr; } }
 .ac-sep { width: 4.5em; text-align: center; }
-.ac-box { border: 1px solid var(--border-soft); border-radius: 8px; padding: 6px 10px 8px; margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ac-box { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 6px 10px 8px; margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .ac-box legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .ac-check { display: inline-flex; align-items: flex-start; gap: 6px; }
 .ac-check input { margin-top: 2px; }
@@ -264,7 +264,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
 .ac-more[open] { display: flex; flex-direction: column; gap: 4px; }
 .ac-try { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
 .ac-try button { display: inline-flex; align-items: center; gap: 6px; }
-.ac-result { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; min-width: 0; }
+.ac-result { border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; min-width: 0; }
 .ac-result p { margin: 0; }
 .ac-req { overflow-wrap: anywhere; }
 .ac-headers { list-style: none; margin: 0; padding: 0; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
@@ -274,7 +274,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
 .ac-status.ok { color: var(--accent-2); }
 .ac-status.ko { color: var(--danger); }
 .ac-err { color: var(--danger); font-size: 12px; margin: 0; overflow-wrap: anywhere; }
-.ac-table { overflow: auto; max-height: 220px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--panel); }
+.ac-table { overflow: auto; max-height: 220px; border: 1px solid var(--border-soft); border-radius: var(--radius-small); background: var(--panel); }
 .ac-table table { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .ac-table th, .ac-table td { padding: 3px 8px; border-bottom: 1px solid var(--border-soft); white-space: nowrap; text-align: left; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
 .ac-table th { position: sticky; top: 0; background: var(--panel); font-weight: 600; }

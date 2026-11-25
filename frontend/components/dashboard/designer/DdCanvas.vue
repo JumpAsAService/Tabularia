@@ -340,7 +340,7 @@ watch(() => store.selectedId.value, async (id) => {
 .ddc-board { position: relative; min-width: 700px; }
 /* twelve columns and their rows: only so much that the eye finds a cell */
 .ddc-cells {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0.35; transition: opacity 0.12s ease; border-radius: 6px;
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.35; transition: opacity 0.12s ease; border-radius: var(--radius-small);
   background-image:
     linear-gradient(to bottom, transparent 40px, var(--bg) 40px),
     linear-gradient(to right, var(--panel-2) calc(100% - 10px), transparent calc(100% - 10px));
@@ -348,7 +348,7 @@ watch(() => store.selectedId.value, async (id) => {
 }
 .ddc-board.dragging .ddc-cells { opacity: 1; }
 .ddc-tile {
-  position: absolute; box-sizing: border-box; cursor: grab; border-radius: 10px; outline: none; touch-action: none; user-select: none;
+  position: absolute; box-sizing: border-box; cursor: grab; border-radius: var(--radius); outline: none; touch-action: none; user-select: none;
   transition: left 0.12s ease, top 0.12s ease;
 }
 .ddc-tile:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--accent) 60%, transparent); }
@@ -368,7 +368,7 @@ watch(() => store.selectedId.value, async (id) => {
 }
 .ddc-need { background: color-mix(in srgb, var(--panel) 70%, transparent); }
 .ddc-kind { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.ddc-target { position: absolute; pointer-events: none; border: 1.5px dashed var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); z-index: 1; }
+.ddc-target { position: absolute; pointer-events: none; border: 1.5px dashed var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 10%, transparent); z-index: 1; }
 .ddc-handle {
   position: absolute; z-index: 7; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 2px;
   background: var(--panel); border: 1.5px solid var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
@@ -385,7 +385,7 @@ watch(() => store.selectedId.value, async (id) => {
 .ddc-handle.w { left: 0; top: 50%; cursor: ew-resize; }
 .ddc-badge {
   position: absolute; left: 0; top: calc(100% + 6px); z-index: 8; pointer-events: none; white-space: nowrap;
-  font-size: 11px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--on-accent); background: var(--accent); padding: 4px 7px; border-radius: 6px; box-shadow: var(--shadow-1);
+  font-size: 11px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--on-accent); background: var(--accent); padding: 4px 7px; border-radius: var(--radius-small); box-shadow: var(--shadow-1);
 }
 .ddc-start {
   position: relative; z-index: 1; max-width: 460px; margin: 10vh auto 0; padding: 26px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;

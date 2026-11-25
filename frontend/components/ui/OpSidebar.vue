@@ -382,7 +382,7 @@ function onDragStart(ev: DragEvent, kind: string) {
   min-width: 0;
   background: var(--bg-soft);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 6px 8px;
   font: inherit;
   font-size: 13px;
@@ -417,7 +417,7 @@ function onDragStart(ev: DragEvent, kind: string) {
   width: 100%;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   font: inherit;
   font-size: 10px;
   text-align: left;
@@ -445,7 +445,7 @@ function onDragStart(ev: DragEvent, kind: string) {
   gap: 8px;
   padding: 7px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: 13px;
   cursor: grab;
   user-select: none;

@@ -667,10 +667,7 @@ const notesOpen = ref(false)
   height: calc(100dvh - 52px - 44px); min-height: 460px;
 }
 .page-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.page-head h1 {
-  display: inline-flex; align-items: center; gap: 8px; margin: 0; min-width: 0;
-  font-size: 16px; font-weight: 600; flex: 0 1 auto;
-}
+.page-head h1 { min-width: 0; flex: 0 1 auto; }
 .page-head h1 svg { flex-shrink: 0; color: var(--accent); }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
@@ -683,7 +680,7 @@ const notesOpen = ref(false)
 
 .frame {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
-  border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; background: var(--bg);
+  border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden; background: var(--bg);
 }
 .tools {
   display: flex; align-items: center; gap: 10px; padding: 6px 10px; min-height: 40px; box-sizing: border-box;
@@ -720,7 +717,7 @@ const notesOpen = ref(false)
 }
 .state h2 { margin: 4px 0 0; font-size: 15px; font-weight: 600; }
 .state .msg {
-  margin: 4px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border-soft);
+  margin: 4px 0 0; padding: 8px 12px; border-radius: var(--radius-control); background: var(--panel); border: 1px solid var(--border-soft);
   font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; text-align: left;
 }
 .state .hint { margin: 0; font-size: 12.5px; line-height: 1.5; max-width: 62ch; }
@@ -744,14 +741,14 @@ const notesOpen = ref(false)
 .err { color: var(--danger); }
 .vsk { display: flex; flex-direction: column; gap: 8px; }
 .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.versions li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+.versions li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
 .versions li.current { border-color: var(--accent); }
 .vtop { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .vacts { display: flex; gap: 6px; margin-top: 4px; }
 .vacts .mini { display: inline-flex; align-items: center; gap: 4px; }
 .tag {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px;
-  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
 }
 
 /* narrower: the labels of the secondary actions give way to their icons */

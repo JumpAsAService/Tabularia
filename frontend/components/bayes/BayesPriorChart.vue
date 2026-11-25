@@ -266,6 +266,6 @@ h4 .sub { margin-left: auto; flex: none; text-transform: none; letter-spacing: 0
 .compact .say { font-size: 12px; color: var(--muted); }
 .drawrow { display: flex; align-items: center; gap: 8px; }
 .drawrow .muted { font-size: 11.5px; color: var(--muted); }
-.sk-plot { border-radius: 6px; background: var(--panel-2); }
+.sk-plot { border-radius: var(--radius-small); background: var(--panel-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 </style>

@@ -352,7 +352,7 @@ defineExpose({ focus: () => ta.value?.focus() })
 .rx-box { position: relative; min-width: 0; }
 .rx-mirror, .rx-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px;
-  padding: 5px 8px; border-width: 1px; border-style: solid; border-radius: 8px;
+  padding: 5px 8px; border-width: 1px; border-style: solid; border-radius: var(--radius-control);
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0; tab-size: 2;
   box-sizing: border-box; width: 100%; margin: 0;
 }
@@ -386,11 +386,11 @@ defineExpose({ focus: () => ta.value?.focus() })
 
 .rx-list {
   position: fixed; z-index: 2600; margin: 0; padding: 4px; list-style: none; max-height: 260px; overflow: auto;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-2);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-2);
 }
 .rx-list li {
   display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; column-gap: 6px; row-gap: 2px;
-  padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
+  padding: 5px 7px; border-radius: var(--radius-small); cursor: pointer; font-size: 12.5px;
 }
 .rx-list li.on { background: var(--panel-2); }
 .rx-oicon {

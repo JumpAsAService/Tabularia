@@ -287,7 +287,7 @@ table.rows tr.detail td { background: var(--bg-soft); padding: 12px; }
 .toklist { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .toklist li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; }
 .tk-name { font-weight: 550; }
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 6px; padding: 1px 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border-radius: var(--radius-small); padding: 1px 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
 .tag.write { color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--tint-accent); }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; }

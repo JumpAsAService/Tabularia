@@ -773,7 +773,7 @@ const zones = computed(() => {
 .hint { margin: 0; line-height: 1.5; }
 .small { font-size: 12px; }
 .legend { display: inline-flex; align-items: center; gap: 6px; }
-.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 .page-error { color: var(--danger); font-size: 13px; }
 .rollout-icon { display: inline-flex; align-items: center; color: var(--accent-hi); }
 
@@ -786,7 +786,7 @@ const zones = computed(() => {
 
 .search {
   display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--control-border);
-  border-radius: 8px; background: var(--bg-soft); color: var(--muted); max-width: 420px;
+  border-radius: var(--radius-control); background: var(--bg-soft); color: var(--muted); max-width: 420px;
 }
 .search:focus-within { border-color: var(--accent); }
 .search input { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; padding: 7px 0; }
@@ -830,7 +830,7 @@ const zones = computed(() => {
 
 .value { display: flex; flex-direction: column; gap: 4px; }
 .field {
-  display: flex; align-items: stretch; border: 1px solid var(--control-border); border-radius: 8px;
+  display: flex; align-items: stretch; border: 1px solid var(--control-border); border-radius: var(--radius-control);
   background: var(--bg-soft); overflow: hidden;
 }
 .field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }

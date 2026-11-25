@@ -57,7 +57,7 @@ const onlyRead = computed(() => ordered.value.length === 1 && ordered.value[0] =
 .sheets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
 .sheets label {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px;
-  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer;
   font-size: 13px; color: var(--text); transition: border-color 0.12s, background 0.12s;
 }
 .sheets label:hover { border-color: var(--accent); }

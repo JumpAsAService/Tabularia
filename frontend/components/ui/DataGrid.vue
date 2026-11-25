@@ -1219,14 +1219,14 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
 .datagrid { height: 100%; min-height: 0; display: flex; flex-direction: column; --dg-bg: var(--panel); }
 /* focused from outside (back to the preview after «Compute again»): a ring on the region */
 .datagrid:focus { outline: none; }
-.datagrid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.datagrid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-small); }
 .datagrid .dg-table { --dg-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .dg-skeleton { overflow: hidden; }
 .pad { padding: 8px; }
 .dg-note { color: var(--muted); padding-bottom: 0; }
 .dg-summary { font-variant-numeric: tabular-nums; font-size: 12px; padding: 7px 9px; color: var(--muted); flex: none; }
 .dg-frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.dg-scroll { flex: 1; min-height: 0; overflow: auto; border-radius: 6px; }
+.dg-scroll { flex: 1; min-height: 0; overflow: auto; border-radius: var(--radius-small); }
 /* the rows of what is being replaced: still there, plainly not the answer. The header keeps
    its contrast when it names the columns being computed, and dims with the rows when it
    cannot */
@@ -1352,7 +1352,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
 .dg-error {
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--tint-danger);
   color: var(--danger-text);
   white-space: pre-wrap;
@@ -1396,7 +1396,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
 .dg-pop-acts { flex: none; display: inline-flex; gap: 2px; }
 .dg-pop-act {
   display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 22px; height: 22px; padding: 0 4px;
-  border: 1px solid transparent; border-radius: 6px; background: none; box-shadow: none; color: var(--muted); font-size: 11.5px;
+  border: 1px solid transparent; border-radius: var(--radius-small); background: none; box-shadow: none; color: var(--muted); font-size: 11.5px;
 }
 .dg-pop-act:hover { color: var(--text); border-color: var(--border); background: var(--panel-2); box-shadow: none; }
 .dg-pop-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }

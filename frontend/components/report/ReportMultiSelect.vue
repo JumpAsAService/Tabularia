@@ -124,7 +124,7 @@ const uid = Math.random().toString(36).slice(2, 9)
 .ms { position: relative; min-width: 0; }
 .ms-trigger {
   width: 100%; display: flex; align-items: center; gap: 6px; justify-content: space-between;
-  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: 8px;
+  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: var(--radius-control);
   padding: 6px 10px; text-align: left; font: inherit; color: var(--text);
 }
 .ms-trigger:hover { border-color: var(--accent); box-shadow: none; }
@@ -142,12 +142,12 @@ const uid = Math.random().toString(36).slice(2, 9)
 .ms-panel {
   position: absolute; z-index: 60; top: calc(100% + 4px); left: 0; min-width: 100%; max-width: 340px;
   display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: var(--shadow-2); padding: 4px;
+  border-radius: var(--radius); box-shadow: var(--shadow-2); padding: 4px;
 }
 .ms-search { display: flex; align-items: center; gap: 6px; padding: 4px 6px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; color: var(--muted); }
 .ms-search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 2px 0; outline: none; box-shadow: none; }
 .ms-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
-.ms-opt { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.ms-opt { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-small); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .ms-opt:hover { background: var(--panel-2); }
 .ms-opt input { width: auto; margin: 0; accent-color: var(--accent); }
 .ms-opt span { overflow: hidden; text-overflow: ellipsis; }

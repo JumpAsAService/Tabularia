@@ -284,7 +284,7 @@ table.rows tr.detail > td { background: var(--bg-soft); padding: 12px; }
 tr.off > td:first-child .rowpick { color: var(--muted); }
 .rowpick { padding: 0; border: 0; background: none; font: inherit; font-weight: 550; color: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .rowpick:hover { color: var(--accent); box-shadow: none; }
-.tag { display: inline-block; font-size: 10.5px; border-radius: 6px; padding: 1px 7px; margin: 1px 4px 1px 0; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+.tag { display: inline-block; font-size: 10.5px; border-radius: var(--radius-small); padding: 1px 7px; margin: 1px 4px 1px 0; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
 .outcome { display: inline-flex; align-items: center; gap: 4px; }
 .outcome.delivered { color: var(--accent-2); }
 .outcome.failed { color: var(--danger); }

@@ -198,7 +198,7 @@ watch(() => props.copied, (c) => { if (c && props.open) shownCopied() })
 .copy { flex-shrink: 0; white-space: nowrap; }
 .copy.ok { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 50%, var(--border)); }
 .code {
-  margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-soft);
+  margin: 0; padding: 10px 12px; border-radius: var(--radius-control); border: 1px solid var(--border-soft);
   background: var(--bg-soft); color: var(--text); overflow: auto; max-height: 300px; line-height: 1.55;
   white-space: pre; tab-size: 4;
 }

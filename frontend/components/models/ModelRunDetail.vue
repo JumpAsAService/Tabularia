@@ -161,7 +161,7 @@ dt { font-size: 11px; color: var(--muted); }
 dd { margin: 2px 0 0; font-size: 12.5px; overflow-wrap: anywhere; }
 dd.bad { color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-.log { margin: 6px 0 0; max-height: 320px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.log { margin: 6px 0 0; max-height: 320px; overflow: auto; font-size: 11px; padding: 6px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { margin: 0; font-size: 12px; }
 .mlflow { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .mlflow h5 { margin: 0; font-size: 12px; font-weight: 600; }

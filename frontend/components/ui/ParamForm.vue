@@ -798,7 +798,7 @@ label { font-size: 12px; color: var(--muted); }
 .phbtn { padding: 4px 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
 .chk.ph { color: color-mix(in srgb, #f472b6 var(--enc-text-mix), var(--text)); font-family: ui-monospace, monospace; font-size: 12px; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
-.rowsearch { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--muted); }
+.rowsearch { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel-2); color: var(--muted); }
 .rowsearch input { flex: 1; border: none; background: transparent; outline: none; color: var(--text); font-size: 12.5px; min-width: 0; }
 .rowsearch .count { font-size: 11px; font-variant-numeric: tabular-nums; }
 .rowsearch .x { padding: 1px 6px; }

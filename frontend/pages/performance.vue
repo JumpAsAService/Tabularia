@@ -91,8 +91,8 @@ const minuteOptions = computed(() => [15, 60, 360, 1440].map((m) => ({ value: m,
             <RefreshCw :size="14" :class="{ spin: loading }" />
           </button>
         </div>
+        <p class="muted lead">{{ $t('performance.lead') }}</p>
       </div>
-      <p class="muted lead">{{ $t('performance.lead') }}</p>
       <p v-if="error" class="err"><CircleAlert :size="14" /> {{ error }}</p>
 
       <!-- ── Run ─────────────────────────────────────────────────────────── -->
@@ -116,9 +116,11 @@ const minuteOptions = computed(() => [15, 60, 360, 1440].map((m) => ({ value: m,
           </tr></thead>
           <tbody>
             <tr v-for="i in runs.items" :key="i.kind + i.id">
-              <td class="what" :title="i.last_error ?? ''">
-                <Database v-if="i.kind === 'ingest'" :size="12" /><Workflow v-else :size="12" /> <span :class="{ muted: !i.name }">{{ i.name ?? $t('performance.deleted') }}</span>
-                <span v-if="i.last_error" class="lasterr">{{ i.last_error }}</span>
+              <td :title="i.last_error ?? ''">
+                <div class="what">
+                  <Database v-if="i.kind === 'ingest'" :size="12" /><Workflow v-else :size="12" /> <span :class="{ muted: !i.name }">{{ i.name ?? $t('performance.deleted') }}</span>
+                  <span v-if="i.last_error" class="lasterr">{{ i.last_error }}</span>
+                </div>
               </td>
               <td class="r">{{ nf.format(i.runs) }}</td>
               <td class="r" :class="{ bad: i.failures > 0 }">{{ i.failures || '' }}</td>
@@ -190,21 +192,26 @@ const minuteOptions = computed(() => [15, 60, 360, 1440].map((m) => ({ value: m,
 </template>
 
 <style scoped>
-.lead { margin: 4px 0 0; max-width: 78ch; }
+/* the description sits inside the shared page head, on its own row right under the title */
+.head-actions { display: flex; align-items: center; gap: 10px; }
 .hint { margin: 6px 0 10px; font-size: 12px; max-width: 86ch; }
 .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 30px 0 8px; }
 .sec-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
 h3 { margin: 20px 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .win { width: 170px; }
 .stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0; }
-.stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); min-width: 140px; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel); min-width: 140px; }
 .stat .n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat .l { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.scroll { overflow-x: auto; }
+/* a table rests on a sheet of its own, not on the page (whose finish would show through) */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.scroll > p { margin: 0; padding: 12px 14px; }
+.scroll table.data { border-radius: var(--radius); overflow: hidden; }
 table.data td, table.data th { font-variant-numeric: tabular-nums; }
 .r { text-align: right; white-space: nowrap; }
 .strong { font-weight: 600; }
 .bad { color: var(--danger); }
+/* the flex row lives in a div: `display: flex` on the td itself stopped it being a table cell */
 .what { display: flex; align-items: center; gap: 6px; min-width: 220px; }
 .what svg { flex: none; color: var(--muted); }
 .lasterr { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 36ch; }

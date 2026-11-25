@@ -84,7 +84,7 @@ onMounted(async () => {
 .pv-btn {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 7px 16px; min-height: 34px;
-  border: 1px solid transparent; border-radius: 8px;
+  border: 1px solid transparent; border-radius: var(--radius-control);
   background: var(--grad-accent); color: var(--on-accent); /* white on --accent: 1.65 in monokai */
   font: inherit; font-size: 13.5px; font-weight: 600;
   text-decoration: none; cursor: pointer; white-space: nowrap;

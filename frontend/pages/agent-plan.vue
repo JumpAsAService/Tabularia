@@ -128,7 +128,6 @@ async function act(kind: 'confirm' | 'cancel') {
 <style scoped>
 .plan-page { max-width: 880px; min-width: 0; }
 .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .state { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border-soft); }
 .state.pending, .state.applying { background: var(--tint-accent); color: color-mix(in srgb, var(--accent) 70%, var(--text)); }
 .state.applied { background: color-mix(in srgb, var(--accent-2) 15%, transparent); color: color-mix(in srgb, var(--accent-2) 70%, var(--text)); }

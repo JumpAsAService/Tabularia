@@ -904,14 +904,6 @@ async function toggleEngine(m: EnginePolicy) {
 .rowpick { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .rowpick:hover { color: var(--accent); box-shadow: none; }
 .page-head { margin-bottom: 16px; }
-.page-head h1 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
 .layout { display: grid; grid-template-columns: 210px 1fr; gap: 16px; align-items: start; }
 .sidenav {
   display: flex;
@@ -963,7 +955,7 @@ async function toggleEngine(m: EnginePolicy) {
   gap: 6px;
   padding: 4px 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   color: var(--muted);
 }
@@ -985,7 +977,7 @@ async function toggleEngine(m: EnginePolicy) {
   font-size: 11px;
   padding: 1px 7px;
   margin: 0 4px 2px 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   border: 1px solid var(--border);
 }
@@ -994,7 +986,7 @@ async function toggleEngine(m: EnginePolicy) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 1px 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--accent-hi);

@@ -344,7 +344,7 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
 .swrow { display: flex; align-items: center; gap: 9px; font-size: 13px; cursor: pointer; }
 .note { min-height: 52px; resize: vertical; font-family: inherit; font-size: 12.5px; line-height: 1.45; }
 .finding {
-  display: grid; grid-template-columns: 16px 1fr; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  display: grid; grid-template-columns: 16px 1fr; gap: 8px; padding: 8px 10px; border-radius: var(--radius-control);
   font-size: 12.5px; line-height: 1.45; border: 1px solid var(--border); background: var(--bg-soft);
 }
 .finding.e { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: var(--tint-danger); }
@@ -355,14 +355,14 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
 .members:empty { display: none; }
 .member {
   width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; text-align: left;
-  border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); color: var(--text); font-size: 12.5px;
+  border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); color: var(--text); font-size: 12.5px;
 }
 .member .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member code { font-size: 11.5px; color: var(--muted); }
 .member .k { margin-left: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 @media (hover: hover) and (pointer: fine) { .member:hover { border-color: var(--accent); } }
 .cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.hyper { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--bg-soft); }
+.hyper { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border-soft); background: var(--bg-soft); }
 .hh { display: flex; align-items: center; gap: 6px; font-size: 12.5px; min-width: 0; }
 .hh span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hh .link { margin-left: auto; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

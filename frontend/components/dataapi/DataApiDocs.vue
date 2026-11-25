@@ -309,7 +309,7 @@ function download() {
 
 <style scoped>
 .docs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .card h2 { margin: 0; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
 .card h3 { margin: 4px 0 0; font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .dhead { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
@@ -317,13 +317,13 @@ function download() {
 .small { font-size: 12px; }
 .help { margin: 0; line-height: 1.5; }
 .err { color: var(--danger); }
-.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 .mono, code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; }
 .facts > div { display: contents; }
 .facts dt { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.code { position: relative; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); min-width: 0; }
+.code { position: relative; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); min-width: 0; }
 .code pre { margin: 0; padding: 9px 40px 9px 11px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .code .copy { position: absolute; top: 5px; right: 5px; padding: 3px 6px; min-height: 0; }
 .example { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -334,11 +334,11 @@ function download() {
 .cols th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 4px 6px; border-bottom: 1px solid var(--border-soft); }
 .cols td { padding: 4px 6px; border-bottom: 1px solid var(--border-soft); vertical-align: top; overflow-wrap: anywhere; }
 .cols td.pname { white-space: nowrap; width: 1%; }
-.kind { font-size: 11.5px; padding: 0 6px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border-soft); white-space: nowrap; }
+.kind { font-size: 11.5px; padding: 0 6px; border-radius: var(--radius-small); background: var(--panel-2); border: 1px solid var(--border-soft); white-space: nowrap; }
 .kind.unknown { color: var(--warning); }
 .param { display: inline-block; font-size: 11.5px; margin: 0 6px 2px 0; padding: 0 5px; border-radius: 5px; background: var(--tint-accent); }
 .answer summary { cursor: pointer; color: var(--muted); }
-.answer pre { margin: 6px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border-soft);
+.answer pre { margin: 6px 0 0; padding: 9px 11px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border-soft);
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; line-height: 1.5; }
 .steps { list-style: decimal; }

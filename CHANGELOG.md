@@ -8,6 +8,13 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- One look across the pages: every page's title has the same size and place, with its description
+  under it (Performance, Cluster, Scripting and the Bayesian models had a larger one, with the
+  description or the refresh button out of place); the tables of Performance and of the cluster's
+  events sit in a box instead of on the page; the tables inside a box no longer come out darker
+  than the box when a finish is on; the first column of Performance's table is a column again.
+- The corners of containers, controls and small things are three tokens, so the neo-brutal finish
+  squares all of them, and its hard shadow stays off the buttons that are only text.
 - Explore shows a folder's content on one rounded sheet, with the kind filter as its heading, and
   the band of recent items above it is the same surface: with a finish on, the list was a square
   slab against the page.

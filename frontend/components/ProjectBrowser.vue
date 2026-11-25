@@ -2190,7 +2190,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
   box-sizing: border-box;
   padding: 0 4px 0 9px;
   border: 1px solid var(--control-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   color: var(--muted);
   flex-shrink: 0;
@@ -2215,7 +2215,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
    primary action. Values copied from listpage.css so that Explore's `New` is identical
    to the Flows and Datasources ones. */
 .btn-link:disabled { opacity: 0.6; cursor: progress; }
-.crumb-sk { display: inline-block; width: 120px; height: 14px; border-radius: 6px; }
+.crumb-sk { display: inline-block; width: 120px; height: 14px; border-radius: var(--radius-small); }
 .btn-link {
   display: inline-flex;
   align-items: center;
@@ -2223,7 +2223,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
   height: 32px;
   box-sizing: border-box;
   padding: 0 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   text-decoration: none;
   background: var(--grad-accent);
   color: var(--on-accent);
@@ -2360,7 +2360,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   padding: 3px 8px;
   outline: none;
   box-shadow: 0 0 0 3px var(--tint-accent);
@@ -2383,7 +2383,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
   letter-spacing: 0.04em;
   padding: 0 6px;
   margin-left: 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--muted);
@@ -2411,7 +2411,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
   background: none;
   color: var(--accent);
   font-size: 13px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .everywhere:hover { background: var(--tint-accent); box-shadow: none; }
 .everywhere.solo { margin: 14px 2px; }
@@ -2480,7 +2480,7 @@ table.perm { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.perm td { padding: 5px 6px; border-bottom: 1px solid var(--border-soft); }
 table.perm td.subject { display: flex; align-items: center; gap: 6px; }
 table.perm td.right { text-align: right; width: 32px; }
-.cap { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.cap { font-size: 11px; padding: 1px 8px; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--border); }
 .grant { display: flex; gap: 6px; flex-wrap: wrap; }
 /* the deletion sits at the bottom of the panel, apart: it is not met by chance */
 .dangerzone { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-soft); }

@@ -941,9 +941,9 @@ function pickDatasource(id: number | null) {
 </template>
 
 <style scoped>
-.filtersbox { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.filtersbox { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); }
 .filtersbox > label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
-.filterrow { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 6px; }
+.filterrow { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-small); }
 .filterrow.incomplete { border-style: dashed; }
 .filterhead { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 .filterhead .warn { margin-left: auto; text-transform: none; letter-spacing: 0; color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text)); }
@@ -951,7 +951,7 @@ function pickDatasource(id: number | null) {
 .filterhead .warn + .x { margin-left: 0; }
 .filterhead .x:hover { color: var(--danger, #f87171); }
 .addfilter { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
-.samplebox { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; }
+.samplebox { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--radius-control); }
 .samplebox > label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
 .samplerow { display: flex; align-items: center; gap: 6px; }
 .samplerow .samplenum { width: 110px; }
@@ -966,7 +966,7 @@ label { font-size: 12px; color: var(--muted); }
 .dspick { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 5px; }
 .dspick > label { display: inline-flex; align-items: center; gap: 5px; }
 .outhint { font-size: 12px; margin: 2px 0 0; }
-.retired { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.45; margin: 6px 0 2px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); }
+.retired { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.45; margin: 6px 0 2px; padding: 7px 9px; border-radius: var(--radius-control); border: 1px solid var(--border); background: var(--panel-2); color: var(--text); }
 .retired svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .outhint code { font-size: 11px; }
 .commenttext { font-family: inherit; }
@@ -1005,7 +1005,7 @@ label { font-size: 12px; color: var(--muted); }
   font-size: 12px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   padding: 8px 10px;
 }
 .joinhelp ol { margin: 6px 0 0; padding-left: 18px; }

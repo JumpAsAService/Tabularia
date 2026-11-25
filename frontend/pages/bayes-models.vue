@@ -385,10 +385,8 @@ async function remove () {
 
 <style scoped>
 .st { display: flex; flex-direction: column; gap: 14px; }
-.page-head h1 { margin: 0; display: inline-flex; align-items: center; gap: 8px; }
 .count { font-size: 13px; font-weight: 500; color: var(--muted); }
-.intro { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 780px; }
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
 .card h2 { margin: 0; font-size: 13.5px; display: inline-flex; align-items: center; gap: 7px; }
 .n { font-size: 11px; color: var(--muted); font-weight: 500; }
 .sec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -444,7 +442,7 @@ async function remove () {
 .when span { display: block; font-size: 11px; color: var(--muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .acts { display: inline-flex; gap: 4px; }
 .acts .mini { display: inline-grid; place-items: center; width: 26px; min-height: 26px; padding: 0; }
-.ilink { color: var(--text); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.ilink { color: var(--text); text-decoration: none; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel-2); }
 @media (hover: hover) and (pointer: fine) { .ilink:hover { border-color: var(--accent); } }
 .ilink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .foot { margin: 2px 0 0; display: flex; gap: 7px; align-items: flex-start; font-size: 11.5px; line-height: 1.45; color: var(--muted); }

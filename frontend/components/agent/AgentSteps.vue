@@ -77,7 +77,7 @@ function shownArgs(s: AgentStep): string {
 .linkish:hover { color: var(--text); box-shadow: none; }
 .details { margin: 5px 0 0 19px; }
 .details-head { margin: 6px 0 3px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
-.code { margin: 0 0 5px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); font-size: 12px; overflow-x: auto; max-height: 240px; }
+.code { margin: 0 0 5px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); font-size: 12px; overflow-x: auto; max-height: 240px; }
 .code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { font-size: 12px; margin: 0; }
 </style>

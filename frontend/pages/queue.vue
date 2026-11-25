@@ -199,7 +199,6 @@ const reserved = computed(() => data.value?.reserved ?? [])
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 /* fixed sizes: see the note in runs.vue — <h1> must render like the <h2> */
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 1.6s ease-in-out infinite; }
@@ -207,7 +206,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 .mini { padding: 6px 8px; }
 
 .stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 4px; }
-.stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); min-width: 130px; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel); min-width: 130px; }
 .stat.sub { background: var(--panel-2); }
 .stat .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat .l { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
@@ -215,7 +214,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 22px 0 8px; }
 
 .workers { display: flex; flex-wrap: wrap; gap: 10px; }
-.worker { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); padding: 12px 14px; min-width: 220px; }
+.worker { border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel); padding: 12px 14px; min-width: 220px; }
 .wname { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; word-break: break-all; }
 .wmeta { font-size: 12.5px; margin: 6px 0 8px; }
 .wbar { display: flex; gap: 3px; flex-wrap: wrap; }
@@ -223,7 +222,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 .slot.busy { background: #34d399; }
 
 .jobs { display: flex; flex-direction: column; gap: 4px; }
-.job { display: grid; grid-template-columns: 20px minmax(140px, 1.3fr) 70px minmax(120px, 1fr) 70px auto; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); }
+.job { display: grid; grid-template-columns: 20px minmax(140px, 1.3fr) 70px minmax(120px, 1fr) 70px auto; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--panel); }
 .jspin { color: #facc15; display: inline-flex; }
 .jspin :deep(svg) { animation: spin 1.4s linear infinite; }
 .jspin.waiting { color: var(--muted); font-size: 18px; justify-content: center; animation: none; }

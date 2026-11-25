@@ -509,7 +509,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
 .rdd-need { color: var(--warning); }
 .rdd-agg code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--text); overflow-wrap: anywhere; }
 .rdd-alert {
-  padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
+  padding: 8px 10px; border-radius: var(--radius-control); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
   color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .rdd-grow { flex: 1; }

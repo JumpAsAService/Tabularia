@@ -692,12 +692,12 @@ const miniClass = (n: { type?: string }) => (n.type === 'plate' ? 'mm-plate' : '
 /* Vue Flow's pieces in the app's tokens: the pattern from --border-soft (never a literal), the
    minimap's nodes neutral and its boxes outlined */
 .bayes-canvas :deep(.vue-flow__background pattern circle) { fill: var(--border-soft); }
-.bayes-canvas :deep(.vue-flow__minimap) { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-1); overflow: hidden; }
+.bayes-canvas :deep(.vue-flow__minimap) { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-control); box-shadow: var(--shadow-1); overflow: hidden; }
 .bayes-canvas :deep(.vue-flow__minimap-node.mm-node) { fill: var(--panel-2); stroke: var(--edge); stroke-width: 1; }
 .bayes-canvas :deep(.vue-flow__minimap-node.mm-plate) { fill: none; stroke: var(--edge); stroke-width: 1; }
 .bayes-canvas :deep(.vue-flow__node-plate),
-.bayes-canvas :deep(.vue-flow__node-bayes) { padding: 0; border: 0; background: none; box-shadow: none; border-radius: 10px; }
-.bayes-canvas :deep(.vue-flow__node-bayes) { border-radius: 6px; }
+.bayes-canvas :deep(.vue-flow__node-bayes) { padding: 0; border: 0; background: none; box-shadow: none; border-radius: var(--radius); }
+.bayes-canvas :deep(.vue-flow__node-bayes) { border-radius: var(--radius-small); }
 .bayes-canvas :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
 .bayes-canvas :deep(.vue-flow__node-plate:focus-visible) { outline-offset: 1px; }
 .bayes-canvas :deep(.vue-flow__edge .vue-flow__edge-path) { stroke: var(--bayes-edge); stroke-width: 1.4; transition: stroke var(--dur-hover); }

@@ -755,7 +755,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .dv { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
-.head h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; min-width: 0; color: var(--text); }
+/* the size of every page's title (main.css, PAGE HEAD): this head is the viewer's own, with the same title */
+.head h1 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 19px; font-weight: 700; min-width: 0; color: var(--text); }
 .head h1 svg { flex-shrink: 0; color: var(--accent); }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
@@ -767,7 +768,7 @@ onBeforeUnmount(() => {
 .description { margin: -4px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; max-width: 110ch; }
 .notice {
   margin: 0; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; line-height: 1.4; color: var(--text);
-  background: var(--panel); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: 8px;
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius-control);
 }
 .notice svg { flex-shrink: 0; color: var(--warning); }
 .notice span { flex: 1; min-width: 0; }
@@ -793,7 +794,6 @@ onBeforeUnmount(() => {
 .dv.wall {
   position: fixed; inset: 0; z-index: 200; padding: 14px 16px; overflow: auto; box-sizing: border-box; background: var(--bg);
 }
-.wall .head h1 { font-size: 19px; font-weight: 700; }
 .wall .when { font-size: 13px; }
 .leave { opacity: 0.6; }
 .leave:hover, .leave:focus-visible { opacity: 1; }

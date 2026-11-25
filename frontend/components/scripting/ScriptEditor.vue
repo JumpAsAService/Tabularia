@@ -612,7 +612,7 @@ onBeforeUnmount(() => {
 .files, .env { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
 .side-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }
 ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.files li { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.files li { display: flex; align-items: center; gap: 2px; border-radius: var(--radius-small); }
 .files li.is-on { background: var(--bg-soft); }
 .file { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 5px; border: 0; background: none; padding: 5px 6px; text-align: left;
   font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; color: var(--text); cursor: pointer; min-height: 0; }
@@ -627,7 +627,7 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 .error { margin: 0; font-size: 12px; color: var(--danger); }
 .middle { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-.code { position: relative; flex: 1; min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.code { position: relative; flex: 1; min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .last { flex: none; font-size: 12px; }
 .last summary { display: flex; align-items: center; gap: 6px; cursor: pointer; flex-wrap: wrap; }
 .last .ok { color: var(--accent-2); }
@@ -635,7 +635,7 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .go { margin-left: auto; border: 0; background: none; min-height: 0; padding: 2px 6px; font-size: 12px; color: var(--danger);
   font-family: var(--font-mono, ui-monospace, monospace); cursor: pointer; border-radius: 5px; text-decoration: underline; }
 .go:hover { background: var(--bg-soft); }
-.last .log { margin: 6px 0 0; max-height: 22vh; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px;
+.last .log { margin: 6px 0 0; max-height: 22vh; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: var(--radius-small);
   background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .problems { margin-left: auto; flex: none; font-size: 10.5px; min-width: 16px; padding: 0 5px; border-radius: 999px; text-align: center;
   color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--border)); }
@@ -644,7 +644,7 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .monaco.hidden { visibility: hidden; }
 .state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; z-index: 1; }
 .vars .var, .mods .mod { width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: 6px; flex-wrap: wrap; border: 0; background: none; padding: 4px 6px;
-  border-radius: 6px; text-align: left; cursor: pointer; min-height: 0; font-size: 12px; color: var(--text); }
+  border-radius: var(--radius-small); text-align: left; cursor: pointer; min-height: 0; font-size: 12px; color: var(--text); }
 .vars .var:hover:not(:disabled), .mods .mod:hover:not(:disabled) { background: var(--bg-soft); }
 .var code { font-size: 11.5px; }
 .tag { font-size: 10.5px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; gap: 3px; }

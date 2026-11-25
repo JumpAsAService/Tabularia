@@ -195,7 +195,7 @@ function submit () {
 .numwrap input::-webkit-inner-spin-button, .numwrap input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .numwrap button { border-radius: 0; border-left: 0; padding: 6px 8px; border-color: var(--control-border); }
 .numwrap button:last-child { border-radius: 0 8px 8px 0; }
-.pv { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg-soft); }
+.pv { border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--bg-soft); }
 .pv h3 { margin: 0; display: flex; align-items: center; gap: 6px; padding: 9px 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .pv table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .pv td { padding: 6px 12px; border-top: 1px solid var(--border-soft); vertical-align: top; }

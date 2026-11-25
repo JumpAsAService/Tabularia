@@ -406,7 +406,7 @@ async function runFromPanel() {
 .container-panel { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row h3 { flex: 1; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
-.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: var(--radius-small); }
 .del:hover { color: var(--danger); background: var(--bg-soft); }
 label { font-size: 12px; color: var(--muted); }
 .outhint { margin: 0; font-size: 12px; line-height: 1.5; }
@@ -425,8 +425,8 @@ label { font-size: 12px; color: var(--muted); }
 .outcome.ko, .outcome.ko svg { color: var(--danger); }
 .error { overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
-.vars { margin: 0; padding: 8px 10px 10px; border: 1px solid var(--border-soft); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.vars { margin: 0; padding: 8px 10px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .vars legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .vars ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .vars li { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 12px; }
@@ -436,7 +436,7 @@ details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .vars li input { min-width: 0; }
 .new-var { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; }
 .new-var input { min-width: 0; font-size: 12px; }
-.guide { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg-soft); }
+.guide { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border: 1px dashed var(--border); border-radius: var(--radius-control); background: var(--bg-soft); }
 .guide-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .guide-labels { margin: 0; font-size: 12px; }
 .guide-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; margin: 0; font-size: 12px; }

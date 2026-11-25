@@ -112,7 +112,7 @@ function addFree() {
   max-height: 170px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg-soft);
   padding: 4px;
   display: flex;
@@ -124,7 +124,7 @@ function addFree() {
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   font-size: 13px;
   cursor: pointer;
 }

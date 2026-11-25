@@ -59,7 +59,7 @@ function commit() {
   flex-direction: column;
   background: rgba(251, 191, 36, 0.1);
   border: 1px solid rgba(251, 191, 36, 0.5);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-1);
   overflow: hidden;
 }

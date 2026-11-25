@@ -482,7 +482,7 @@ function stepLabel(s: Step): string {
 .fa-empty p { margin: 4px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .fa-example {
   display: block; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left;
-  line-height: 1.4; border-radius: 8px;
+  line-height: 1.4; border-radius: var(--radius-control);
 }
 .fa-you { display: flex; flex-direction: column; align-items: flex-end; margin-top: 14px; }
 .fa-a { margin-top: 8px; }
@@ -507,12 +507,12 @@ function stepLabel(s: Step): string {
   text-decoration: underline; text-underline-offset: 2px;
 }
 .fa-link:hover { color: var(--text); box-shadow: none; }
-.fa-table { margin: 4px 0 2px 17px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.fa-table { margin: 4px 0 2px 17px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .fa-table :deep(.datagrid) { max-height: 220px; overflow: auto; }
 .fa-activity { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .fa-note {
   display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 7px 9px;
-  border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: var(--radius-control); font-size: 12px; color: var(--muted);
 }
 .fa-note svg { flex: none; margin-top: 2px; }
 .fa-note.ok { border-color: color-mix(in srgb, var(--accent-2) 40%, transparent); }
@@ -529,7 +529,7 @@ function stepLabel(s: Step): string {
 .fa-composer { padding: 8px 12px 10px; border-top: 1px solid var(--border-soft); }
 .fa-field {
   display: flex; align-items: flex-end; gap: 6px; padding: 4px 4px 4px 9px;
-  border: 1px solid var(--control-border); border-radius: 10px; background: var(--bg-soft);
+  border: 1px solid var(--control-border); border-radius: var(--radius); background: var(--bg-soft);
 }
 .fa-field:focus-within { border-color: var(--accent); }
 .fa-field textarea {
@@ -537,7 +537,7 @@ function stepLabel(s: Step): string {
   font: inherit; font-size: 12.5px; line-height: 1.45; box-shadow: none; caret-color: var(--accent);
 }
 .fa-field textarea:focus { outline: none; box-shadow: none; }
-.fa-send { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border-radius: 8px; }
+.fa-send { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border-radius: var(--radius-control); }
 .fa-under { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; font-size: 11.5px; }
 .fa-model { min-width: 0; max-width: 100%; }
 </style>

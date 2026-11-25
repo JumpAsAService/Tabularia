@@ -81,7 +81,7 @@ watch(() => model.value, (m) => {
 .dyn-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 .dyn-two > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 @media (max-width: 520px) { .dyn-two { grid-template-columns: 1fr; } }
-.dyn-box { border: 1px solid var(--border-soft); border-radius: 8px; padding: 6px 10px 8px; margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.dyn-box { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 6px 10px 8px; margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dyn-box legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .dyn-err { color: var(--danger); font-size: 12px; margin: 0; }
 </style>

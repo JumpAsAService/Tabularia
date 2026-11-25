@@ -157,7 +157,7 @@ function pick(on: ClickSide, path: any[], e: MouseEvent) {
 
 <style scoped>
 .tt { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
-.scroll { flex: 1; min-height: 0; overflow: auto; border-radius: 6px; }
+.scroll { flex: 1; min-height: 0; overflow: auto; border-radius: var(--radius-small); }
 .scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
 thead th {

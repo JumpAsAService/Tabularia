@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sqled { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
-.host { flex: 1; min-height: 0; border: 1px solid var(--border-soft); border-radius: 8px; overflow: hidden; }
+.host { flex: 1; min-height: 0; border: 1px solid var(--border-soft); border-radius: var(--radius-control); overflow: hidden; }
 .host.hidden { visibility: hidden; }
 .err { color: var(--danger); margin: 0; }
 .small { font-size: 12px; }

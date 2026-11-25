@@ -483,7 +483,7 @@ const targetHint = (id: DbtTarget) =>
 .dx-head h3 { margin: 0; font-size: 16px; }
 .dx-x { padding: 3px 7px; }
 .dx-sub { font-size: 12px; margin: 0; }
-.dx-group { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.dx-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .dx-group legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .dx-choice { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
 .dx-choice input { margin-top: 3px; }

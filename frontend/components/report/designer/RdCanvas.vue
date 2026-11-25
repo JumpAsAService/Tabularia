@@ -924,7 +924,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 
 .rdc-blabel {
   position: absolute; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 4px 8px 4px 10px;
-  border-radius: 8px; cursor: pointer; transition: background var(--dur-2), color var(--dur-2); transform: translateY(-1px);
+  border-radius: var(--radius-control); cursor: pointer; transition: background var(--dur-2), color var(--dur-2); transform: translateY(-1px);
   box-sizing: border-box; text-align: right; overflow-wrap: anywhere;
 }
 .rdc-blabel:hover { background: var(--panel); }
@@ -951,7 +951,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 .rdc-refuse {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
   font: 500 11px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #b02525; background: #fff; padding: 3px 8px;
-  border-radius: 6px; border: 1px solid rgba(201, 42, 42, 0.4); white-space: nowrap; max-width: 95%; overflow: hidden; text-overflow: ellipsis;
+  border-radius: var(--radius-small); border: 1px solid rgba(201, 42, 42, 0.4); white-space: nowrap; max-width: 95%; overflow: hidden; text-overflow: ellipsis;
 }
 .rdc-zone {
   position: absolute; pointer-events: none;
@@ -962,7 +962,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 .rdc-break { position: absolute; height: 0; border-top: 1px dashed rgba(107, 117, 144, 0.7); pointer-events: none; }
 .rdc-break span {
   position: absolute; right: 0; top: -9px; font: 500 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #6b7590;
-  background: #fff; padding: 2px 6px; border-radius: 6px; border: 1px solid #e3e6ec;
+  background: #fff; padding: 2px 6px; border-radius: var(--radius-small); border: 1px solid #e3e6ec;
 }
 .rdc-grip { position: absolute; height: 8px; cursor: row-resize; z-index: 5; display: grid; place-items: center; outline: none; }
 .rdc-griptab { width: 34px; height: 4px; border-radius: 2px; background: rgba(59, 91, 219, 0.35); opacity: 0; transition: opacity var(--dur-2), background var(--dur-2); }
@@ -979,13 +979,13 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 .rdc-badge {
   position: absolute; z-index: 8; pointer-events: none; white-space: nowrap;
   font: 500 11px/1 'IBM Plex Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums;
-  color: var(--on-accent); background: var(--accent); padding: 4px 7px; border-radius: 6px; box-shadow: var(--shadow-1);
+  color: var(--on-accent); background: var(--accent); padding: 4px 7px; border-radius: var(--radius-small); box-shadow: var(--shadow-1);
 }
 
 .rdc-pickback { position: fixed; inset: 0; z-index: 2400; }
 .rdc-kinds {
   position: fixed; width: 330px; padding: 10px; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: var(--shadow-2);
+  border-radius: var(--radius); box-shadow: var(--shadow-2);
 }
 .rdc-ktitle { margin: 2px 4px 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .rdc-kgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }

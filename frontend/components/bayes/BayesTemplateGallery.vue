@@ -139,7 +139,7 @@ const families = computed(() => (['glm', 'hierarchical', 'series'] as const).map
 .tcard {
   display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; padding: 10px 11px;
   min-height: 0; white-space: normal; text-align: left; font: inherit; color: var(--text);
-  border: 1px solid var(--border); border-radius: 10px; background: var(--panel); box-shadow: none;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); box-shadow: none;
   transition: border-color var(--dur-hover), box-shadow var(--dur-hover);
 }
 /* a card is a choice, not an action button: no sweep, no press scale */

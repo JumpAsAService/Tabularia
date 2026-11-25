@@ -320,11 +320,11 @@ const fieldTitle = computed(() => {
 .rds-head.params { margin-top: 10px; }
 .rds-head .mini { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap; }
 .rds-empty { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
-.rds-set { border: 1px solid var(--border-soft); border-radius: 8px; padding: 4px; background: var(--bg-soft); }
+.rds-set { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 4px; background: var(--bg-soft); }
 .rds-set.bad, .rds-param.bad { border-color: color-mix(in srgb, var(--danger) 60%, var(--border)); }
 .rds-sethead { display: flex; align-items: center; gap: 2px; }
 .rds-chev, .rds-icon {
-  border: 0; background: transparent; padding: 4px; min-height: 0; box-shadow: none; color: var(--muted); border-radius: 6px;
+  border: 0; background: transparent; padding: 4px; min-height: 0; box-shadow: none; color: var(--muted); border-radius: var(--radius-small);
 }
 .rds-chev:hover, .rds-icon:hover { color: var(--text); background: var(--panel-2); box-shadow: none; }
 .rds-icon.danger:hover { color: var(--danger); }
@@ -339,7 +339,7 @@ const fieldTitle = computed(() => {
 .rds-fields { margin: 2px 0 2px 18px; padding-left: 6px; border-left: 1px solid var(--border-soft); }
 .rds-field {
   width: 100%; justify-content: flex-start; gap: 6px; padding: 3px 6px; border: 0; background: transparent;
-  font-size: 12px; cursor: grab; box-shadow: none; border-radius: 6px;
+  font-size: 12px; cursor: grab; box-shadow: none; border-radius: var(--radius-small);
 }
 .rds-field:hover { background: var(--panel-2); box-shadow: none; }
 .rds-field:active { transform: none; }
@@ -347,7 +347,7 @@ const fieldTitle = computed(() => {
 .rds-field.calc :deep(svg) { color: var(--violet); }
 .rds-fname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .rds-ftype { margin-left: auto; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
-.rds-param { display: flex; align-items: center; gap: 4px; padding: 3px 4px 3px 8px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); }
+.rds-param { display: flex; align-items: center; gap: 4px; padding: 3px 4px 3px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); }
 .rds-pi { color: var(--warning); flex: none; }
 .rds-pname { flex: 1; min-width: 0; border: 0; background: transparent; padding: 2px 4px; display: flex; flex-direction: column; align-items: flex-start; box-shadow: none; }
 .rds-pname:hover { box-shadow: none; }

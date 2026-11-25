@@ -205,7 +205,7 @@ const statusIcon = computed(() => {
   padding: 5px 10px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;

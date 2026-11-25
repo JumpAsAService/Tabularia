@@ -171,7 +171,7 @@ function confirm() {
   gap: 8px;
   padding: 7px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   font-size: 13px;
 }

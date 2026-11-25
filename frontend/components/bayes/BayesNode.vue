@@ -68,7 +68,7 @@ const problems = computed(() => (v.value ? v.value.errors + v.value.warnings : 0
 .l2 .x { overflow: hidden; text-overflow: ellipsis; }
 .pr { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .role {
-  position: absolute; top: -8px; left: 18px; padding: 0 6px; border-radius: 6px;
+  position: absolute; top: -8px; left: 18px; padding: 0 6px; border-radius: var(--radius-small);
   font-size: 9.5px; line-height: 14px; text-transform: uppercase; letter-spacing: 0.05em;
   border: 1px solid var(--edge); background: var(--panel); color: var(--muted);
 }

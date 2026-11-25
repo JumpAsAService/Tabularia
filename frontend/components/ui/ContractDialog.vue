@@ -489,7 +489,7 @@ async function close() {
 .cd-state { margin-bottom: 10px; }
 .cd-state p { margin: 0 0 4px; font-size: 12.5px; }
 .cd-refusal { display: flex; gap: 6px; align-items: flex-start; color: var(--danger); font-weight: 600; }
-.cd-legend { display: grid; gap: 4px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; font-size: 12px; color: var(--muted); }
+.cd-legend { display: grid; gap: 4px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); font-size: 12px; color: var(--muted); }
 .cd-legend strong { color: var(--text); }
 .point { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 .point.warning { background: var(--warning); }
@@ -531,7 +531,7 @@ async function close() {
 .chip { padding: 2px 8px; font-size: 11.5px; border-radius: 999px; color: var(--muted); }
 .chip.on { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
 
-.cd-sev { display: inline-flex; border: 1px solid var(--control-border); border-radius: 8px; overflow: hidden; }
+.cd-sev { display: inline-flex; border: 1px solid var(--control-border); border-radius: var(--radius-control); overflow: hidden; }
 .cd-sev button { border: 0; border-radius: 0; padding: 3px 9px; font-size: 11.5px; background: transparent; color: var(--muted); box-shadow: none; }
 .cd-sev button.on.warning { background: var(--warning); color: var(--on-warning); font-weight: 600; }
 .cd-sev button.on.error { background: var(--danger-fill); color: var(--on-danger); font-weight: 600; }

@@ -167,7 +167,7 @@ watch(notebookId, open)
   border-bottom: 1px solid var(--border);
   min-width: 0;
 }
-.home { display: inline-flex; align-items: center; border-radius: 6px; }
+.home { display: inline-flex; align-items: center; border-radius: var(--radius-small); }
 .home:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .kind { color: var(--muted); flex-shrink: 0; }
 .name {
@@ -197,7 +197,7 @@ watch(notebookId, open)
   gap: 6px;
   padding: 4px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   color: var(--text);
   text-decoration: none;

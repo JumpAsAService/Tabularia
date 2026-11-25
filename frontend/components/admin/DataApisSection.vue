@@ -257,11 +257,13 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
 /* the panel's table (admintable.css), a little taller, with headers on one line */
 .tablewrap { max-height: 520px; }
 table.rows th { white-space: nowrap; }
-.das-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; }
-.das-head p { margin: 4px 0 0; max-width: 72ch; line-height: 1.5; }
-.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); max-width: 720px; }
+/* the intro sits on a card like every other admin section's */
+.das-head { display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.das-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
+.das-head p { margin: 0; max-width: 72ch; line-height: 1.5; font-size: 12px; }
+.note { margin: 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); max-width: 720px; }
 .caps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 0; max-width: 900px; }
-.caps > div { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 10px; background: var(--panel); min-width: 0; }
+.caps > div { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 7px 10px; background: var(--panel); min-width: 0; }
 .caps dt { font-size: 11.5px; color: var(--muted); }
 /* the development switch that lets keys travel in clear text: a whole row, in the warning colour */
 .caps > div.warn { grid-column: 1 / -1; border-color: var(--warning); background: color-mix(in srgb, var(--warning) 10%, var(--panel)); }
@@ -284,7 +286,7 @@ table.rows th { white-space: nowrap; }
 .pods.good { color: var(--accent-2); }
 .pods.wait { color: var(--warning); }
 .pods.bad { color: var(--danger); }
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); margin-left: 4px; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 6px; border-radius: var(--radius-control); border: 1px solid var(--border); margin-left: 4px; }
 .tag.bad { color: var(--danger); }
 .act { white-space: nowrap; text-align: right; }
 .rt { white-space: nowrap; }

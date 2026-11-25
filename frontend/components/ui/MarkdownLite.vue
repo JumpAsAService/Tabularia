@@ -122,8 +122,8 @@ const blocks = computed<Block[]>(() => {
 .md li { margin: 2px 0; }
 .md-code, .md-pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .md-code { padding: 1px 5px; border-radius: 4px; background: var(--panel-2); }
-.md-pre { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); overflow-x: auto; }
-.md-tablewrap { margin: 0 0 10px; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 8px; }
+.md-pre { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); overflow-x: auto; }
+.md-tablewrap { margin: 0 0 10px; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-control); }
 .md-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
 .md-table th { padding: 5px 9px; background: var(--panel-2); color: var(--accent-hi); font-weight: 600; white-space: nowrap; }
 .md-table .al-right { text-align: right; }

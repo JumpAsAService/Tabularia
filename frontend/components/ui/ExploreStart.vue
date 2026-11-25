@@ -151,7 +151,7 @@ const runName = (r: RunInfo) => r.flow_name || r.group_name || r.sql_script_name
   background: none;
   color: var(--muted);
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
 }
 .start.folded .fold { position: static; }
 .fold:hover { color: var(--text); background: var(--panel-2); box-shadow: none; }

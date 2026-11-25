@@ -287,7 +287,7 @@ const downloadLabel = (f: string) => ({ pdf: 'PDF', xlsx: 'Excel', png: t('share
 .hint { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.45; }
 .hint.bad, .warn { color: var(--danger); }
 .form, .made { display: flex; flex-direction: column; gap: 12px; }
-.made { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 10px; background: var(--tint-accent); }
+.made { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: var(--radius); background: var(--tint-accent); }
 .made-head { margin: 0; display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .done { align-self: flex-start; }
 .field { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -308,7 +308,7 @@ textarea { resize: vertical; }
 .links-head { display: flex; align-items: center; justify-content: space-between; }
 .links h3 { margin: 0; font-size: 13px; font-weight: 600; }
 .links ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.link { padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; display: flex; flex-direction: column; gap: 4px; }
+.link { padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius); display: flex; flex-direction: column; gap: 4px; }
 .link.revoked, .link.expired, .link.off { opacity: 0.7; }
 .link-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .name { font-weight: 600; overflow-wrap: anywhere; }

@@ -250,11 +250,11 @@ function cell(v: unknown): string {
 .plain .sub { display: block; margin: 6px 0 3px; font-size: 12.5px; color: var(--muted); }
 .plain { margin: 0; padding-left: 18px; font-size: 13.5px; }
 .plain li { overflow-wrap: anywhere; }
-.code { list-style: none; margin: 0; padding: 8px 10px; background: var(--bg-soft); border: 1px solid var(--border-soft); border-radius: 6px;
+.code { list-style: none; margin: 0; padding: 8px 10px; background: var(--bg-soft); border: 1px solid var(--border-soft); border-radius: var(--radius-small);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; }
 .code li { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* a SQL text or a notebook's source: its lines as written, scrolling inside its own box */
-.code-block { margin: 0; padding: 8px 10px; background: var(--bg-soft); border: 1px solid var(--border-soft); border-radius: 6px;
+.code-block { margin: 0; padding: 8px 10px; background: var(--bg-soft); border: 1px solid var(--border-soft); border-radius: var(--radius-small);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55;
   white-space: pre; overflow: auto; max-height: 360px; max-width: 100%; }
 .code-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -266,7 +266,7 @@ function cell(v: unknown): string {
 .code li.changed { color: color-mix(in srgb, var(--warning) 75%, var(--text)); }
 .small { font-size: 12px; font-weight: 400; }
 /* the table scrolls inside its own box: the page never scrolls sideways */
-.table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 6px; }
+.table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-small); }
 .table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 table { border-collapse: collapse; font-size: 12.5px; width: max-content; min-width: 100%; }
 th, td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border-soft); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }

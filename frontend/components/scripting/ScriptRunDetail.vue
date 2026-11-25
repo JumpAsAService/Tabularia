@@ -96,14 +96,14 @@ const io = computed(() => [
 <style scoped>
 .script-run { display: flex; flex-direction: column; gap: 8px; }
 dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
-dl div { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 8px; min-width: 0; }
+dl div { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); min-width: 0; }
 dl .largo { grid-column: 1 / -1; }
 dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .vars { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
 .vars li { display: flex; gap: 8px; align-items: center; }
-.log { margin: 6px 0 0; max-height: 420px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.log { margin: 6px 0 0; max-height: 420px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { font-size: 12px; margin: 0; }
 .image { overflow-wrap: anywhere; }
 .offline { display: inline-flex; align-items: center; gap: 3px; color: var(--warning); }

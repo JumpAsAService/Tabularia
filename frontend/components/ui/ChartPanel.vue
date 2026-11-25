@@ -927,7 +927,7 @@ button.mini { padding: 4px 8px; }
 }
 .cp-slot {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px;
-  border: 1.5px dashed var(--control-border); border-radius: 8px; text-align: center;
+  border: 1.5px dashed var(--control-border); border-radius: var(--radius-control); text-align: center;
   transition: border-color var(--dur-1) ease-out, background-color var(--dur-1) ease-out;
 }
 .cp-slot.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }

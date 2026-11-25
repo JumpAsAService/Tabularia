@@ -44,7 +44,7 @@ onMounted(async () => {
 .wrap { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg); }
 .card {
   display: flex; align-items: center; gap: 10px;
-  padding: 18px 22px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 22px; border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--panel); color: var(--muted); font-size: 14px;
 }
 </style>

@@ -1109,7 +1109,7 @@ function confirm() {
 .cd-hostkey.ok { color: var(--accent-2); }
 .cd-hostkey.none { color: var(--muted); }
 .cd-hostkey code { font-size: 11.5px; }
-.cd-pending { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; gap: 6px; }
+.cd-pending { border: 1px solid var(--border); border-radius: var(--radius-control); padding: 8px 10px; font-size: 12px; gap: 6px; }
 .cd-pending.changed { border-color: var(--danger); }
 .cd-pending p { margin: 0; overflow-wrap: anywhere; }
 .cd-pending code { font-size: 11.5px; }
@@ -1129,7 +1129,7 @@ function confirm() {
 }
 .cd-info:hover, .cd-info.on { color: var(--accent); background: var(--tint-accent); box-shadow: none; }
 .cd-example {
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--radius);
   background: color-mix(in srgb, var(--accent) 5%, var(--panel)); padding: 10px 12px; font-size: 12px;
   display: flex; flex-direction: column; gap: 8px;
 }

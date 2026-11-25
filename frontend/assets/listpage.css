@@ -1,21 +1,6 @@
 /* Shared style of the list pages (Flows / Datasources / Connections).
    Imported as <style scoped src="~/assets/listpage.css"> in every page. */
-.page-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.page-head h1 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
+/* `.page-head` / `.page-head h1` live in main.css (one page header for every page). */
 .count { font-size: 13px; font-weight: 500; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .searchbox {
@@ -24,7 +9,7 @@
   gap: 7px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 0 10px;
   color: var(--muted);
 }
@@ -40,7 +25,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   text-decoration: none;
   background: var(--grad-accent);
   /* --on-accent, not #fff: on Dracula and Monokai the gradient is light */
@@ -104,7 +89,7 @@ td.muted svg { vertical-align: -2px; margin-right: 4px; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 1px 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--muted);

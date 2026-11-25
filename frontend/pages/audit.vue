@@ -642,13 +642,12 @@ function detailSummary(e: AuditEntry): string {
 <style scoped>
 .audit { display: flex; flex-direction: column; gap: 14px; }
 .page-head { display: flex; align-items: center; gap: 12px; }
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 1.5em; }
 .sub { font-size: 12.5px; }
 .spacer { flex: 1; }
 .mini { padding: 5px 9px; font-size: 12px; }
 
 /* sign-ins 24h */
-.acc { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
+.acc { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
 .acc-head { display: flex; align-items: baseline; gap: 12px; }
 .acc-title { font-size: 13px; font-weight: 600; }
 .acc-stats { font-size: 12px; display: inline-flex; gap: 6px; }
@@ -657,7 +656,7 @@ function detailSummary(e: AuditEntry): string {
 .acc-chart { width: 100%; height: 160px; }
 
 /* sessions: one row a person, opened on its sessions */
-.sess { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
+.sess { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
 .sess-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .sess-title { font-size: 13px; font-weight: 600; margin: 0; }
 .sess-count { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
@@ -675,7 +674,7 @@ function detailSummary(e: AuditEntry): string {
 .sess-person.off .sess-name { color: var(--muted); }
 .sess-toggle {
   all: unset; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-  border-radius: 6px; padding: 2px 4px; margin-left: -4px;
+  border-radius: var(--radius-small); padding: 2px 4px; margin-left: -4px;
 }
 .sess-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sess-toggle .caret { color: var(--muted); transform: rotate(-90deg); transition: transform var(--dur-1, 120ms) ease-out; }
@@ -714,7 +713,7 @@ function detailSummary(e: AuditEntry): string {
 .count { font-size: 12.5px; }
 
 /* table */
-.tbl-wrap { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--panel); }
+.tbl-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); white-space: nowrap; }
 .tbl td { padding: 8px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }

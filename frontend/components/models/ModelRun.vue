@@ -87,5 +87,5 @@ async function runFromPanel() {
 .outcome.ko, .outcome.ko svg { color: var(--danger); }
 .error { overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

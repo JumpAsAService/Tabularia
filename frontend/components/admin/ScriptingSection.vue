@@ -880,7 +880,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
 .small { font-size: 12px; }
 .page-error, .error { color: var(--danger); }
 .page-error { font-size: 13px; margin: 0; }
-.note { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 .heading { display: flex; align-items: center; gap: 10px; }
 .heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
@@ -899,16 +899,16 @@ button.danger-zone { color: var(--danger-text); }
 .combo .waiting { position: absolute; right: 9px; top: 50%; margin-top: -6.5px; color: var(--muted); }
 .found {
   position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
-  max-height: 280px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  max-height: 280px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-control);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 12%, transparent);
 }
-.found li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.found li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: var(--radius-small); font-size: 13px; color: var(--text); cursor: pointer; }
 .found li.is-on { background: var(--bg-soft); }
 .found li.empty { cursor: default; }
 .package-search select { flex: 0 1 260px; min-width: 0; }
 .package-warning { color: var(--warning); }
 .packages { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; resize: vertical; }
-.field-group { border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.field-group { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .field-group legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .resources { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .groups { display: flex; flex-wrap: wrap; gap: 6px 16px; }
@@ -925,7 +925,7 @@ button.danger-zone { color: var(--danger-text); }
 .environment {
   width: 100%; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border-soft);
-  border-radius: 8px; background: var(--bg-soft); font-size: 13px; min-height: 0;
+  border-radius: var(--radius-control); background: var(--bg-soft); font-size: 13px; min-height: 0;
 }
 .environment:hover { border-color: var(--border); }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -944,7 +944,7 @@ button.danger-zone { color: var(--danger-text); }
 .new-variable { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto auto auto; gap: 8px; align-items: center; }
 
 .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.versions li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.versions li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .version-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .label { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); }
 .label.current { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
@@ -957,7 +957,7 @@ button.danger-zone { color: var(--danger-text); }
 .version-error { margin: 0; }
 .version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-details pre { margin: 6px 0 0; max-height: 280px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+details pre { margin: 6px 0 0; max-height: 280px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .image { margin: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {

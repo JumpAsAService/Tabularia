@@ -730,7 +730,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('dashboardDesigner.ti
   display: flex; align-items: center; gap: 10px; padding: 7px 12px; min-width: 0; flex: none;
   background: var(--topbar-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-soft); position: relative; z-index: 10;
 }
-.ddz-back { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--muted); flex: none; }
+.ddz-back { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-control); color: var(--muted); flex: none; }
 .ddz-back:hover { color: var(--text); background: var(--panel-2); }
 .ddz-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ddz-name { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 380px; }
@@ -773,7 +773,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('dashboardDesigner.ti
 .ddz-waiting { flex: none; margin: 8px 14px 0; font-size: 12.5px; color: var(--muted); }
 .ddz-whole {
   flex: none; margin: 8px 14px 0; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere;
-  color: var(--text); background: var(--panel); border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 8px;
+  color: var(--text); background: var(--panel); border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: var(--radius-control);
 }
 .ddz-whole svg { color: var(--danger); flex-shrink: 0; }
 .ddz-whole span { flex: 1; min-width: 0; }

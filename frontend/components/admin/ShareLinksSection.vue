@@ -159,9 +159,11 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
 <style scoped src="~/assets/admintable.css"></style>
 <style scoped>
 .sls { display: flex; flex-direction: column; gap: 16px; }
-.sls-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; }
-.sls-head p { margin: 4px 0 0; max-width: 72ch; line-height: 1.5; }
-.settings { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); max-width: 720px; }
+/* the intro sits on a card like every other admin section's */
+.sls-head { display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.sls-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
+.sls-head p { margin: 0; max-width: 72ch; line-height: 1.5; font-size: 12px; }
+.settings { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--panel); max-width: 720px; }
 .onoff { display: flex; gap: 10px; align-items: flex-start; }
 .onoff input { margin-top: 1px; }
 .onoff > span { display: flex; flex-direction: column; gap: 2px; }

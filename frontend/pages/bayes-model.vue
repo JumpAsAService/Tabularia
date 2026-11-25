@@ -1075,7 +1075,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 /* «← Bayesian models»: the way back to the list, a quiet chip */
 .back {
   display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 10px; font-size: 12.5px; white-space: nowrap;
-  color: var(--text); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2);
+  color: var(--text); text-decoration: none; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel-2);
   transition: border-color var(--dur-hover);
 }
 @media (hover: hover) and (pointer: fine) { .back:hover { border-color: var(--accent); } .back:hover :deep(svg) { transform: translateX(-2px); } }
@@ -1102,7 +1102,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .grow { flex: 1 1 0; min-width: 0; }
 .icon-btn {
   display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; flex: none;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel-2); color: var(--text);
   transition: border-color var(--dur-1), color var(--dur-1);
 }
 .icon-btn:disabled { color: var(--muted); opacity: 0.55; cursor: default; }
@@ -1117,7 +1117,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
   position: absolute; top: 10px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; z-index: 8;
   display: flex; align-items: center; gap: 9px; padding: 7px 8px 7px 12px; font-size: 12.5px; line-height: 1.4;
   color: var(--text); background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-  border-radius: 10px; box-shadow: var(--shadow-2);
+  border-radius: var(--radius); box-shadow: var(--shadow-2);
 }
 .rnote :deep(svg) { flex: none; color: var(--accent-hi); }
 .rnote .mini { flex: none; }
@@ -1155,7 +1155,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .ins { border: 0; margin: 0; padding: 0; min-width: 0; }
 .refused {
   margin: 0 0 12px; display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; font-size: 12.5px; line-height: 1.45;
-  color: var(--text); border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 8px; background: var(--tint-danger);
+  color: var(--text); border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: var(--radius-control); background: var(--tint-danger);
 }
 .refused :deep(svg) { flex: none; margin-top: 2px; color: var(--danger-text); }
 .start { grid-column: 1 / -1; grid-row: 2; background: var(--bg); overflow-y: auto; padding: 40px 24px; }

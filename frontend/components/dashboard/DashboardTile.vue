@@ -197,7 +197,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
 <style scoped>
 .tile {
   position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box;
-  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--text);
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius); color: var(--text);
   /* not at once: an answer from the cache comes back before the eye would notice */
   transition: opacity var(--dur-2) ease 0.15s;
 }
@@ -208,7 +208,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
 .tbody { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; justify-content: inherit; }
 .stale {
   margin: 0 0 4px; padding: 1px 6px; display: flex; align-items: center; gap: 4px; align-self: flex-start; max-width: 100%; flex-shrink: 0;
-  font-size: 11px; color: var(--warning); background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: 6px;
+  font-size: 11px; color: var(--warning); background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius-small);
 }
 .stale span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stale svg { flex-shrink: 0; }

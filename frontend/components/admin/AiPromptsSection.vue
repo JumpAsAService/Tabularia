@@ -173,7 +173,7 @@ function tooLong(agent: AiAgent): boolean {
 .page-error { color: var(--danger); font-size: 13px; margin: 0; }
 .unsaved { margin: 0; color: var(--warning); }
 
-.agents { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; }
+.agents { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-control); }
 .agent + .agent { border-top: 1px solid var(--border-soft); }
 .agent-head {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; min-height: 0;
@@ -203,13 +203,13 @@ textarea {
 .meta { margin: 0; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .actions button { display: inline-flex; align-items: center; gap: 6px; }
-.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 
 .context { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .context h5 { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .context p { margin: 0; line-height: 1.5; }
 .context pre {
-  margin: 4px 0 0; max-height: 240px; overflow: auto; padding: 10px 12px; border-radius: 8px;
+  margin: 4px 0 0; max-height: 240px; overflow: auto; padding: 10px 12px; border-radius: var(--radius-control);
   background: var(--bg-soft); border: 1px solid var(--border-soft); font-size: 12px; line-height: 1.5;
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text);
 }

@@ -404,7 +404,7 @@ onBeforeUnmount(() => {
 .sha .k { color: var(--muted); }
 .hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; padding: 1px 6px; border-radius: 5px; background: var(--bg-soft); border: 1px solid var(--border-soft); color: var(--text); }
 .cp { display: inline-flex; align-items: center; gap: 5px; }
-.notice { display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; border: 1px solid var(--border); background: var(--bg-soft); }
+.notice { display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 10px 12px; border-radius: var(--radius); font-size: 12.5px; line-height: 1.45; border: 1px solid var(--border); background: var(--bg-soft); }
 .notice.err { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); background: color-mix(in srgb, var(--warning) 10%, transparent); }
 .notice .ic { margin-top: 2px; color: var(--warning); }
 .nb { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 
 /* the code stays in sight while the table under it is read: a row chosen is seen next to the lines it makes */
-.codebox { --box-h: min(300px, 38vh); position: sticky; top: -1px; z-index: 3; height: var(--box-h); border: 1px solid var(--border-soft); border-radius: 8px; overflow: hidden; background: var(--bg); }
+.codebox { --box-h: min(300px, 38vh); position: sticky; top: -1px; z-index: 3; height: var(--box-h); border: 1px solid var(--border-soft); border-radius: var(--radius-control); overflow: hidden; background: var(--bg); }
 .host { height: 100%; }
 .codebox > .state { padding: 12px; }
 .plain {
@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
 .mh, .row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 4px 10px; align-items: baseline; padding: 6px 10px; }
 .mh { margin-top: 4px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border-soft); padding-bottom: 5px; }
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.row { scroll-margin-top: calc(min(300px, 38vh) + 14px); font-size: 12.5px; line-height: 1.4; border-radius: 6px; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
+.row { scroll-margin-top: calc(min(300px, 38vh) + 14px); font-size: 12.5px; line-height: 1.4; border-radius: var(--radius-small); border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
 .row.pick { cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .row.pick:not(.sel):hover { background: var(--bg-soft); } }
 .row.sel { background: var(--tint-accent); box-shadow: inset 0 0 0 1px var(--accent); border-bottom-color: transparent; }

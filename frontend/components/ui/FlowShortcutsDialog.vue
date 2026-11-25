@@ -97,7 +97,7 @@ function save() { emit('save', restored.value ? null : [...chosen.value]) }
 .qs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .qs-rest { max-height: 220px; overflow-y: auto; }
 .qs-list li {
-  display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 13px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--radius-small); font-size: 13px;
 }
 .qs-list li:hover { background: var(--panel-2); }
 .qs-icon { color: var(--c); flex: none; }

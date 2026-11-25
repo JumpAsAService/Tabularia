@@ -560,7 +560,7 @@ const unavailable = computed(() => {
 <style scoped>
 .nb { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .page-head { display: flex; align-items: center; gap: 12px; }
-.page-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; flex: 0 1 380px; min-width: 0; }
+.page-head h1 { flex: 0 1 380px; min-width: 0; }
 .nname { font-size: 16px; font-weight: 600; padding: 4px 9px; min-width: 0; }
 .nname[readonly] { border-color: transparent; background: transparent; padding-left: 0; }
 .where { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
@@ -568,14 +568,14 @@ const unavailable = computed(() => {
 .head-actions button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tag {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px;
-  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
 }
 .err { color: var(--danger); }
 .warn { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--warning); }
 .warn-inline { color: var(--warning); }
 .work { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
 .card h2 { margin: 0; font-size: 13.5px; display: inline-flex; align-items: center; gap: 7px; }
 .card p { margin: 0; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
@@ -607,7 +607,7 @@ const unavailable = computed(() => {
 }
 .linkish:hover { box-shadow: none; }
 .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
-.versions li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 9px; display: flex; flex-direction: column; gap: 3px; }
+.versions li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 7px 9px; display: flex; flex-direction: column; gap: 3px; }
 .versions li.current { border-color: var(--accent); }
 .vtop { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .vacts { display: flex; gap: 6px; margin-top: 3px; }

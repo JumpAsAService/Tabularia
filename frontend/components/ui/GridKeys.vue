@@ -114,7 +114,7 @@ defineExpose({
 .gk { position: relative; flex: none; display: inline-flex; }
 .gk-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
-  border: 1px solid transparent; border-radius: 6px; background: none; box-shadow: none; color: var(--muted);
+  border: 1px solid transparent; border-radius: var(--radius-small); background: none; box-shadow: none; color: var(--muted);
 }
 .gk-btn:hover, .gk-btn[aria-expanded="true"] { color: var(--text); background: var(--panel-2); border-color: var(--border); box-shadow: none; }
 .gk-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -169,7 +169,7 @@ function fmtBand(col: { weekday: number; hour: number; minute: number }) {
 .sl {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .sl-head {

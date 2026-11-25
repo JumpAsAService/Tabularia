@@ -139,12 +139,12 @@ const describe = (name: string) => props.ds?.column_descriptions?.[name] ?? prop
 .dsp-title { flex: 1; min-width: 0; }
 .dsp-title h2 { margin: 0; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
 .dsp-title p { margin: 3px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; }
-.dsp-close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+.dsp-close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); }
 .dsp-close:hover { background: var(--panel-2); color: var(--text); box-shadow: none; }
 .dsp-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); max-width: 70ch; }
 .dsp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .dsp-actions > * { display: inline-flex; align-items: center; gap: 7px; height: 32px; box-sizing: border-box; padding: 0 12px; }
-.btn-primary { border-radius: 8px; background: var(--grad-accent); color: var(--on-accent); text-decoration: none; font-size: 13px; font-weight: 500; }
+.btn-primary { border-radius: var(--radius-control); background: var(--grad-accent); color: var(--on-accent); text-decoration: none; font-size: 13px; font-weight: 500; }
 .dsp-sec { display: flex; flex-direction: column; gap: 6px; }
 .dsp-sec h3 { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
 .dsp-contract { display: flex; align-items: center; gap: 10px; }
@@ -153,7 +153,7 @@ const describe = (name: string) => props.ds?.column_descriptions?.[name] ?? prop
 .dsp-schema td { padding: 4px 6px; border-bottom: 1px solid var(--border-soft); }
 .dsp-schema .cn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
 .dsp-schema .ct { color: var(--muted); text-align: right; white-space: nowrap; font-size: 11.5px; }
-.dsp-grid { border: 1px solid var(--border-soft); border-radius: 8px; overflow: hidden; }
+.dsp-grid { border: 1px solid var(--border-soft); border-radius: var(--radius-control); overflow: hidden; }
 /* the grid scrolls in its own box: its header stays in view */
 .dsp-grid :deep(.datagrid) { max-height: 420px; }
 </style>

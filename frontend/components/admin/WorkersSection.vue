@@ -429,7 +429,7 @@ const groups = computed(() => state.value?.groups ?? [])
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .hint { margin: 0; line-height: 1.5; }
 .small { font-size: 12px; }
-.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); }
 .page-error { color: var(--danger); font-size: 13px; }
 
 .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
@@ -451,7 +451,7 @@ const groups = computed(() => state.value?.groups ?? [])
 .controls { display: flex; gap: 8px; align-items: stretch; }
 .controls .primary { white-space: nowrap; }
 .field {
-  flex: 1; display: flex; align-items: stretch; border: 1px solid var(--control-border); border-radius: 8px;
+  flex: 1; display: flex; align-items: stretch; border: 1px solid var(--control-border); border-radius: var(--radius-control);
   background: var(--bg-soft); overflow: hidden; min-width: 0;
 }
 .field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }

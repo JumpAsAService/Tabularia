@@ -32,7 +32,7 @@ function onText(e: Event) {
 <style scoped>
 .rcol { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rcol-swatch {
-  position: relative; flex: none; width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--control-border);
+  position: relative; flex: none; width: 26px; height: 26px; border-radius: var(--radius-small); border: 1px solid var(--control-border);
   cursor: pointer; overflow: hidden;
 }
 .rcol-swatch.none { background: repeating-linear-gradient(45deg, var(--bg-soft) 0 4px, var(--panel-2) 4px 8px) !important; }

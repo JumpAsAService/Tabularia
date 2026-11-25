@@ -190,7 +190,7 @@ defineExpose({ focusChip })
 .fs.vertical .fs-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; overflow-y: auto; min-height: 0; }
 .fs-chip {
   display: inline-flex; align-items: center; min-width: 0; max-width: 100%; height: 26px;
-  border: 1px solid var(--control-border); border-radius: 6px; background: var(--panel-2);
+  border: 1px solid var(--control-border); border-radius: var(--radius-small); background: var(--panel-2);
 }
 .fs-chip.lift { opacity: 0.42; }
 .fs-chip.unused { border-style: dashed; }

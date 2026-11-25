@@ -123,7 +123,7 @@ function isScript(s: MySession): boolean {
 .sd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .sd-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2);
 }
 .sd-row.current { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .sd-icon { color: var(--muted); flex: none; }

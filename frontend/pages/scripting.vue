@@ -174,9 +174,7 @@ const statusIcon = (s: string | null) => (s === 'SUCCESS' ? CircleCheck : s === 
 
 <style scoped>
 .st { display: flex; flex-direction: column; gap: 14px; }
-.page-head h1 { margin: 0; display: inline-flex; align-items: center; gap: 8px; }
-.intro { margin: 4px 0 0; font-size: 12.5px; max-width: 760px; }
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
 .card h2 { margin: 0; font-size: 13.5px; display: inline-flex; align-items: center; gap: 7px; }
 .n { font-size: 11px; color: var(--muted); font-weight: 500; }
 .sec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -194,10 +192,10 @@ const statusIcon = (s: string | null) => (s === 'SUCCESS' ? CircleCheck : s === 
 .last.success svg { color: var(--accent-2); }
 .cron { display: inline-flex; align-items: center; gap: 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-.item { border: 1px solid var(--border-soft); border-radius: 8px; padding: 9px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.item { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 9px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .item p { margin: 0; }
-.tag { font-size: 10.5px; padding: 1px 7px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+.tag { font-size: 10.5px; padding: 1px 7px; border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
 .state { margin-left: auto; font-size: 11px; color: var(--warning); }
 .state.ok { color: var(--accent-2); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }

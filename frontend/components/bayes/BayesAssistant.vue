@@ -514,16 +514,16 @@ function onKey (e: KeyboardEvent) {
 .ba-head h2 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; font-weight: 700; }
 .ba-head h2 svg { color: var(--accent-hi); }
 .ba-mini { padding: 2px 6px; }
-.ba-run { margin: 0 0 6px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); }
+.ba-run { margin: 0 0 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); background: var(--bg-soft); }
 .ba-run summary { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; min-width: 0; }
-.ba-run summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+.ba-run summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-control); }
 .ba-run-label { flex: none; font-weight: 600; }
 .ba-run-now { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .ba-run-body { padding: 0 10px 8px; }
 .ba-hint { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 6px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 .ba-hint.err { color: var(--danger-text); }
 .ba-runs { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; }
-.ba-pick { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
+.ba-pick { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: var(--radius-small); font-size: 12.5px; cursor: pointer; }
 .ba-pick input { margin: 0; accent-color: var(--accent); }
 .ba-pick-main { min-width: 0; overflow-wrap: anywhere; }
 .ba-pick-sub { grid-column: 2; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -536,7 +536,7 @@ function onKey (e: KeyboardEvent) {
 .ba-stream { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 2px 0 0; margin-top: 4px;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px); mask-image: linear-gradient(to bottom, transparent 0, #000 12px); }
 .ba-empty p { margin: 2px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
-.ba-example { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left; line-height: 1.4; border-radius: 8px; }
+.ba-example { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left; line-height: 1.4; border-radius: var(--radius-control); }
 .ba-you { display: flex; flex-direction: column; align-items: flex-end; margin-top: 12px; }
 .ba-q { margin: 0 0 6px; width: fit-content; max-width: 92%; padding: 7px 10px; border-radius: 10px 10px 3px 10px;
   background: var(--panel-2); border: 1px solid var(--border-soft); font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }

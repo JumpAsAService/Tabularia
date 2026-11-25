@@ -713,12 +713,12 @@ watch(draft, async () => {
 .rail-head { display: flex; align-items: center; gap: 7px; padding: 14px 14px 6px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; list-style: none; cursor: default; }
 .rail-head::-webkit-details-marker { display: none; }
 .rail-lead { margin: 0; padding: 0 14px 10px; font-size: 12px; line-height: 1.4; }
-.rail-search { display: flex; align-items: center; gap: 6px; margin: 0 12px 8px; padding: 0 8px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--bg-soft); color: var(--muted); }
+.rail-search { display: flex; align-items: center; gap: 6px; margin: 0 12px 8px; padding: 0 8px; border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--bg-soft); color: var(--muted); }
 .rail-search input { flex: 1; min-width: 0; padding: 6px 0; border: 0; background: transparent; font-size: 13px; box-shadow: none; }
 .rail-search:focus-within { border-color: var(--accent); }
 .rail-list { flex: 1; min-height: 0; margin: 0; padding: 0 6px 12px; list-style: none; overflow-y: auto; }
 .rail-empty { padding: 10px 8px; font-size: 12px; }
-.ds { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; text-align: left; box-shadow: none; }
+.ds { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; text-align: left; box-shadow: none; }
 .ds:hover { background: var(--panel-2); box-shadow: none; }
 .ds.on { background: var(--tint-accent, color-mix(in srgb, var(--accent) 12%, transparent)); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .ds-name { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
@@ -744,13 +744,13 @@ watch(draft, async () => {
 .msg { margin-top: 16px; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
 .msg.user p { margin: 0; max-width: 78%; padding: 8px 12px; border-radius: 12px 12px 3px 12px; background: var(--panel-2); border: 1px solid var(--border-soft); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.evidence { margin: 6px 0 2px 19px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.evidence { margin: 6px 0 2px 19px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .evidence-head { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; font-size: 12px; font-weight: 500; border-bottom: 1px solid var(--border-soft); }
 .evidence :deep(.datagrid) { max-height: 260px; overflow: auto; }
 
 @media (prefers-reduced-motion: reduce) { .stream { scroll-behavior: auto; } }
 
-.notice { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); font-size: 13px; line-height: 1.45; }
+.notice { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); font-size: 13px; line-height: 1.45; }
 .notice p { margin: 3px 0 8px; }
 .notice svg { flex: none; margin-top: 2px; color: var(--muted); }
 .notice.err { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 40%, transparent); color: var(--text); }
@@ -829,7 +829,7 @@ watch(draft, async () => {
 /* search on the conversations: the same pill as the list pages */
 .chatsearch {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px;
-  margin-bottom: 6px; padding: 5px 9px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 6px; padding: 5px 9px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-control);
 }
 .chatsearch > svg { color: var(--muted); flex: none; }
 .chatsearch input {
@@ -849,7 +849,7 @@ watch(draft, async () => {
 .chats ul { list-style: none; margin: 0; padding: 0; }
 .chats li { display: flex; align-items: center; gap: 6px; }
 .chats li + li { margin-top: 2px; }
-.chats .pick { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; border: 0; background: none; color: var(--text); text-align: left; border-radius: 6px; cursor: pointer; }
+.chats .pick { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; border: 0; background: none; color: var(--text); text-align: left; border-radius: var(--radius-small); cursor: pointer; }
 .chats .pick:hover:not(:disabled) { background: var(--panel-2); box-shadow: none; }
 .chats .pick:disabled { opacity: 0.5; cursor: not-allowed; }
 .chats li.sel .pick { background: var(--tint-accent); box-shadow: inset 2px 0 0 var(--accent); }

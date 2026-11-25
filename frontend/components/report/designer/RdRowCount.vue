@@ -31,7 +31,7 @@ const text = computed(() => {
 <style scoped>
 .rdc { display: flex; align-items: flex-start; gap: 5px; margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 .rdc svg { flex: none; margin-top: 2px; }
-.rdc.slow, .rdc.over { padding: 5px 7px; border-radius: 6px; }
+.rdc.slow, .rdc.over { padding: 5px 7px; border-radius: var(--radius-small); }
 .rdc.slow {
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);

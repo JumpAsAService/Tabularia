@@ -39,7 +39,7 @@ async function copy() {
 .secret {
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-  border-radius: 10px; background: var(--tint-accent);
+  border-radius: var(--radius); background: var(--tint-accent);
 }
 .secret-head { margin: 0; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
 .secret-row { display: flex; align-items: center; gap: 8px; }

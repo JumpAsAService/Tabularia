@@ -199,7 +199,7 @@ const shown = computed(() => flat.value.length)
   gap: 7px;
   padding: 5px 9px;
   border: 1px solid var(--control-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--panel-2);
   color: var(--muted);
 }

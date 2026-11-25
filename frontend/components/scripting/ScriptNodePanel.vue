@@ -298,12 +298,12 @@ async function runFromPanel() {
 .script-panel { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row h3 { flex: 1; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
-.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: var(--radius-small); }
 .del:hover { color: var(--danger); background: var(--bg-soft); }
 label { font-size: 12px; color: var(--muted); }
 .outhint { margin: 0; font-size: 12px; line-height: 1.5; }
 .warn { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--warning); }
-.code { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 8px; }
+.code { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-control); }
 .code-files { font-size: 12px; overflow-wrap: anywhere; }
 .code button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .trial { display: flex; flex-direction: column; gap: 6px; }
@@ -313,8 +313,8 @@ label { font-size: 12px; color: var(--muted); }
 .outcome.ko, .outcome.ko svg { color: var(--danger); }
 .error { overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
-.mode { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: var(--radius-small); background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mode { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .mode button { border: 0; border-radius: 0; background: transparent; padding: 5px 8px; font-size: 12px; color: var(--muted); }
 .mode button.on { background: var(--panel-2); color: var(--text); font-weight: 600; }
 .saved-inputs { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }

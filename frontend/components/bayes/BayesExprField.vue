@@ -170,7 +170,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .xwrap { position: relative; }
 .xf {
   display: flex; align-items: center; gap: 8px; min-height: 32px; padding-right: 8px;
-  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: 8px;
+  background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: var(--radius-control);
   transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
 .xf:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -190,7 +190,7 @@ defineExpose({ focus: () => input.value?.focus() })
 }
 .area input {
   position: relative; width: 100%; height: 100%; box-sizing: border-box; margin: 0;
-  background: transparent; border: 0; border-radius: 8px; box-shadow: none; outline: none; color: var(--text);
+  background: transparent; border: 0; border-radius: var(--radius-control); box-shadow: none; outline: none; color: var(--text);
 }
 .area input:focus { box-shadow: none; border: 0; }
 .area input::placeholder { color: var(--muted); opacity: 0.8; }
@@ -199,7 +199,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .ok .ic { flex: none; color: var(--accent-2); }
 .role {
   flex: none; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 5px; line-height: 15px;
-  border-radius: 6px; border: 1px solid var(--border); color: var(--muted); font-weight: 500;
+  border-radius: var(--radius-small); border: 1px solid var(--border); color: var(--muted); font-weight: 500;
 }
 .errmsg, .warnmsg { display: grid; grid-template-columns: 15px 1fr; gap: 6px; margin: 0; font-size: 12px; line-height: 1.45; }
 .errmsg { color: var(--danger-text); }
@@ -209,11 +209,11 @@ defineExpose({ focus: () => input.value?.focus() })
 /* the names at the caret: the Select's panel language, under the field */
 .names {
   position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 4px; list-style: none;
-  max-height: 260px; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  max-height: 260px; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-2);
 }
 .names li[role="option"] {
-  display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; min-width: 0;
+  display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-radius: var(--radius-small); cursor: pointer; min-width: 0;
 }
 .names li.on { background: var(--panel-2); }
 .names code { flex: none; font-size: 12.5px; color: var(--text); }

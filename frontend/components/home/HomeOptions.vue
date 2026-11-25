@@ -209,7 +209,7 @@ function save() {
 .field > span, legend { font-weight: 600; font-size: 13px; }
 .field input[type="number"] { width: 110px; }
 .field textarea { width: 100%; resize: vertical; font: inherit; }
-fieldset { border: 1px solid var(--border-soft); border-radius: 10px; padding: 10px 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+fieldset { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 10px 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
 legend { padding: 0 6px; }
 .chk, .sw { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-height: 28px; }
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; flex-basis: 100%; }

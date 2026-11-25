@@ -185,7 +185,7 @@ const barWidth = computed(() => 100 / Math.max(bars.value.length, 1))
 </template>
 
 <style scoped>
-.card { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .card h2 { margin: 0; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .sum { font-size: 12px; font-weight: 500; margin-left: auto; }
 .sum.good { color: var(--accent-2); }
@@ -197,13 +197,13 @@ const barWidth = computed(() => 100 / Math.max(bars.value.length, 1))
 .err { color: var(--danger); }
 .warn { color: var(--warning); }
 .mono, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+.note { margin: 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--bg-soft); border: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
 .note.warn { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); color: var(--text); }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 14px; margin: 0; }
 .facts dt { color: var(--muted); font-size: 11.5px; }
 .facts dd { margin: 0; overflow-wrap: anywhere; }
 .pods, .served, .latest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.pods > li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 9px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pods > li { border: 1px solid var(--border-soft); border-radius: var(--radius-control); padding: 7px 9px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pods > li.error { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .ptop { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
@@ -213,7 +213,7 @@ const barWidth = computed(() => 100 / Math.max(bars.value.length, 1))
 .served { gap: 2px; padding-left: 15px; }
 .served li, .latest li { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
 .trouble { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
 .tag.c-ready { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 45%, var(--border)); }
 .tag.c-preparing, .tag.c-starting { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
 .tag.c-error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }

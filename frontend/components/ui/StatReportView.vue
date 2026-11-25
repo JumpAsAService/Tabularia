@@ -422,7 +422,7 @@ const problemTitle = computed(() => {
 .sr-state-icon { flex: none; margin-top: 2px; }
 .sr-error {
   display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: var(--radius-control);
   background: var(--tint-danger); color: var(--danger-text); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .sr-again { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; font-size: 12px; }

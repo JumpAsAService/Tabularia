@@ -38,7 +38,11 @@
   --danger: #ff6b6b;
   --warning: #f5b53d;
   --on-warning: #1a1205; /* text on the --warning fill */
+  /* the scale of corners (DESIGN.md, Shapes): containers, controls, small things inside them. Tokens and not
+     literals, so a finish that changes shape (assets/finishes.css) reaches every one of them */
   --radius: 10px;
+  --radius-control: 8px;
+  --radius-small: 6px;
   /* motion: one ease-out for arrivals and exits, three durations (feedback, state, overlay) */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-1: 0.1s;
@@ -383,7 +387,7 @@ button {
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 6px 12px;
   cursor: pointer;
   display: inline-flex;
@@ -504,7 +508,7 @@ input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
   color: var(--text);
   background: var(--bg-soft);
   border: 1px solid var(--control-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   width: 100%;
   transition: border-color var(--dur-2), box-shadow var(--dur-2);
@@ -992,7 +996,7 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__edge.edge-seq:hover .vue-flow__edge-path { stroke: #d8b4fe; }
 
 /* Vue Flow controls in theme */
-.vue-flow__controls { box-shadow: var(--shadow-1); border-radius: 8px; overflow: hidden; }
+.vue-flow__controls { box-shadow: var(--shadow-1); border-radius: var(--radius-control); overflow: hidden; }
 .vue-flow__controls-button {
   background: var(--panel-2);
   border-bottom: 1px solid var(--border);
@@ -1009,7 +1013,7 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 @keyframes node-in { from { opacity: 0; transform: scale(0.96); } }
 /* nodes the flow assistant just added or changed glow for a moment */
-.vue-flow__node.ai-touched { animation: ai-touched 2.4s ease-out; border-radius: 10px; }
+.vue-flow__node.ai-touched { animation: ai-touched 2.4s ease-out; border-radius: var(--radius); }
 @keyframes ai-touched {
   0%, 35% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
   100% { box-shadow: 0 0 0 3px transparent; }
@@ -1021,7 +1025,7 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__minimap {
   background-color: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-1);
   overflow: hidden;
 }
@@ -1263,3 +1267,36 @@ table.data td.null { font-style: normal; } /* the ∅ in muted: upright, an ital
 :root { --ease-expand: cubic-bezier(0.25, 0.1, 0.25, 1); }
 details[data-closing] > summary { list-style-type: disclosure-closed; }
 /* ══ end EXPANDERS ═══ */
+
+/* ══ PAGE HEAD ═══ One page header for every page: title on the left, actions on the right,
+   description right below. Pages keep only their own layout properties (flex-basis of an
+   editor's name field, ...), never the title's size or margin. */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.page-head h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+/* The page's description: a row of its own under the title, never beside it. The row is the head's whole
+   width (a narrower item would fit beside the title and stay there); the padding keeps the text to a
+   readable measure. */
+.page-head > p:not(.sr-only) {
+  flex: 0 0 100%;
+  box-sizing: border-box;
+  margin: -6px 0 0;
+  padding-right: max(0px, calc(100% - 80ch));
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+/* ══ end PAGE HEAD ═══ */

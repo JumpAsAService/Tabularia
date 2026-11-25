@@ -321,7 +321,7 @@ const pageLine = computed(() => {
 .rpp-id[aria-invalid='true'] { border-color: var(--danger); }
 .rpp-pad { padding: 4px 12px 0; }
 .rpp-alert {
-  display: flex; gap: 8px; align-items: flex-start; margin: 8px 12px 0; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  display: flex; gap: 8px; align-items: flex-start; margin: 8px 12px 0; padding: 8px 10px; border-radius: var(--radius-control); font-size: 12px; line-height: 1.4;
   color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .rpp-alert svg { flex: none; margin-top: 1px; }
@@ -329,7 +329,7 @@ const pageLine = computed(() => {
 .rpp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .rpp-auto { font-size: 12px; color: var(--muted); padding: 6px 0; font-weight: 400; }
 .rpp-imgrow { display: flex; gap: 10px; align-items: center; }
-.rpp-thumb { width: 64px; height: 48px; object-fit: contain; border-radius: 6px; background: #fff; border: 1px solid var(--border-soft); }
+.rpp-thumb { width: 64px; height: 48px; object-fit: contain; border-radius: var(--radius-small); background: #fff; border: 1px solid var(--border-soft); }
 .rpp-imgacts { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .rpp-setup { align-self: flex-start; }
 .rpp-keys { margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
