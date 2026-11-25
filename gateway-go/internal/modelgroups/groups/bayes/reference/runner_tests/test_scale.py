@@ -19,6 +19,7 @@ import bayes_pass2 as P2  # noqa: E402
 import bayes_rows  # noqa: E402
 import bayes_scale  # noqa: E402
 from bayes_task import Element, Entry, Layout, ManifestMismatch  # noqa: E402
+from numeric import assert_same_numbers  # noqa: E402
 
 CHAINS, DRAWS = 4, 1500
 SAMPLER = ("lp__", "accept_stat__", "divergent__")
@@ -142,8 +143,9 @@ class TestTheOriginalScale(unittest.TestCase):
         _, rows_a, sum_a = run(self.dir, self.layout, scale=self.scale())
         small = P2.Budget(8 * s, bayes_diag.BYTES_PER_VALUE * s, 1 << 20)
         _, rows_b, sum_b = run(self.dir, self.layout, budget=small, scale=self.scale())
-        self.assertEqual(sum_a, sum_b)
-        self.assertEqual(rows_a, rows_b)
+        # the blocks add the draws in another order: the same numbers up to what a reordered sum changes (numeric.py), the rest to the byte
+        assert_same_numbers(self, sum_a, sum_b, what="summary")
+        assert_same_numbers(self, rows_a, rows_b, what="rows")
 
     def test_a_vector_intercept_shifts_each_element_by_the_same_sum(self):
         layout = layout_of(["b_x1", "b_x2"], plate="a_g")

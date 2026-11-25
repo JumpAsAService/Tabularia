@@ -11,12 +11,13 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py")]
+sys.path[:0] = [str(HERE.parents[3] / "common" / "py"), str(HERE.parents[1] / "runner" / "py"), str(HERE)]
 WITNESSES = HERE.parents[1] / "reference" / "diagnostics"
 
 import numpy as np  # noqa: E402
 
 import bayes_diag as D  # noqa: E402
+from numeric import REORDER_RTOL  # noqa: E402
 
 # the spec's tolerances («Witnesses»), relative to the witness's number; the mean and the sd, which the spec does not name,
 # at the quantiles' (one formula, double precision: only the order of the sums differs)
@@ -161,7 +162,8 @@ class TestTheBlocks(unittest.TestCase):
             alone = D.measures(x[i:i + 1])
             for k in D.NUMBERS:
                 with self.subTest(quantity=i, measure=k):
-                    np.testing.assert_array_equal(alone[k], block[k][i:i + 1])
+                    # another shape, another order of the sums: the same numbers up to what reordering changes (numeric.py)
+                    np.testing.assert_allclose(alone[k], block[k][i:i + 1], rtol=REORDER_RTOL, atol=0, equal_nan=True)
 
     def test_the_input_is_not_changed(self):
         x = np.random.default_rng(3).normal(size=(3, 2, 50))

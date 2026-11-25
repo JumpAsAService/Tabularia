@@ -21,6 +21,7 @@ import bayes_pass2 as P2  # noqa: E402
 import bayes_rows  # noqa: E402
 import fake_draws  # noqa: E402
 from bayes_task import ManifestMismatch  # noqa: E402
+from numeric import REORDER_RTOL, assert_same_numbers, close  # noqa: E402
 from tab_protocol import Refusal  # noqa: E402
 
 CHAINS, DRAWS, Q = 4, 120, 14
@@ -56,7 +57,7 @@ class TestTheNumbers(Base):
         self.assertEqual(report.quantities, Q)
         for name in bayes_diag.NUMBERS:
             got = np.array([np.nan if v is None else v for v in summary[name]])
-            np.testing.assert_array_equal(got, want[name], err_msg=name)
+            np.testing.assert_allclose(got, want[name], rtol=REORDER_RTOL, atol=0, equal_nan=True, err_msg=name)   # blocks add in another order
         self.assertEqual(summary["quantity"], [e.quantity for e in self.layout.draws[3:]])
         self.assertEqual(summary["scale"], ["model"] * Q)
 
@@ -69,19 +70,19 @@ class TestTheNumbers(Base):
             results.append((rows, summary))
             self.assertEqual(report.passes, -(-Q // per_block))
         for rows, summary in results[1:]:
-            self.assertEqual(rows, results[0][0])
-            self.assertEqual(summary, results[0][1])
+            assert_same_numbers(self, results[0][0], rows, what="rows")            # another block, another order of the sums (numeric.py)
+            assert_same_numbers(self, results[0][1], summary, what="summary")
 
     def test_the_results_rows_hold_the_summary_of_the_scope_and_the_extremes_of_the_entries(self):
         want = bayes_diag.measures(self.full[3:])
         report, rows, _ = self.run_pass()
         by_key = dict(zip(rows["key"], rows["value"]))
-        self.assertEqual(by_key["summary|mu||mean"], want["mean"][0])
-        self.assertEqual(by_key["summary|rho|b,a|rhat"], want["rhat"][4])
+        self.assertTrue(close(want["mean"][0], by_key["summary|mu||mean"]))
+        self.assertTrue(close(want["rhat"][4], by_key["summary|rho|b,a|rhat"]))
         alpha = slice(5, Q)
-        self.assertEqual(by_key["quantity|alpha||rhat_max"], np.nanmax(want["rhat"][alpha]))
-        self.assertEqual(by_key["quantity|alpha||ess_bulk_min"], np.nanmin(want["ess_bulk"][alpha]))
-        self.assertEqual(by_key["summary|alpha|s2|q50"], want["q50"][7])
+        self.assertTrue(close(np.nanmax(want["rhat"][alpha]), by_key["quantity|alpha||rhat_max"]))
+        self.assertTrue(close(np.nanmin(want["ess_bulk"][alpha]), by_key["quantity|alpha||ess_bulk_min"]))
+        self.assertTrue(close(want["q50"][7], by_key["summary|alpha|s2|q50"]))
         self.assertEqual(by_key["model|||n_in_summary"], Q)
         self.assertNotIn("model|||note_summary_capped", by_key)
         self.assertEqual(report.in_summary, Q)
@@ -156,10 +157,10 @@ class TestTheContraction(Base):
             if name in ("tau", "beta"):
                 self.assertIsNone(got, name)
             else:
-                self.assertEqual(got, 1.0 - want["sd"][i] ** 2 / 25.0, name)
+                self.assertTrue(close(1.0 - want["sd"][i] ** 2 / 25.0, got), name)
         by_key = dict(zip(rows["key"], rows["value"]))
         self.assertIsNone(by_key["summary|tau||contraction"])
-        self.assertEqual(by_key["summary|mu||contraction"], 1.0 - want["sd"][0] ** 2 / 25.0)
+        self.assertTrue(close(1.0 - want["sd"][0] ** 2 / 25.0, by_key["summary|mu||contraction"]))
         self.assertEqual(report.contraction, {"computed": Q - 2, P2.NO_FINITE_VARIANCE: 1, P2.NO_PRIOR_DRAWS: 1})
         text = rows["text"][rows["key"].index("model|||note_contraction_null")]
         self.assertEqual(text, "@bayes_contraction_null no_finite_variance=1 no_prior_draws=1 not_decided=0")
@@ -287,12 +288,12 @@ class TestTheCharts(Base):
         med = [r for r in rows if r["level"] == "units:alpha" and r["level_2"] == "median"]
         self.assertEqual(len(med), Q - 5)
         by_text = {r["text"]: r for r in med}
-        self.assertEqual(by_text["a|b"]["value"], want["q50"][7])
+        self.assertTrue(close(want["q50"][7], by_text["a|b"]["value"]))
         self.assertEqual(by_text["a|b"]["key"].rsplit("|", 1)[0], "point|units:alpha|median|y")
         self.assertEqual(sorted(r["x0"] for r in med), list(range(1, Q - 4)))
         self.assertTrue([r for r in rows if r["key"].startswith("summary|alpha|a|b|mean")])      # the key as the engine joins it
         low = {r["text"]: r["value"] for r in rows if r["level"] == "units:alpha" and r["level_2"] == "low"}
-        self.assertEqual(low["a|b"], want["q5"][7])
+        self.assertTrue(close(want["q5"][7], low["a|b"]))
 
     def test_no_row_holds_a_threshold_or_a_verdict_word(self):
         _, rows, summary = self.run_pass(prior=lambda position: np.random.default_rng(3).normal(size=500) if position == 3 else None)

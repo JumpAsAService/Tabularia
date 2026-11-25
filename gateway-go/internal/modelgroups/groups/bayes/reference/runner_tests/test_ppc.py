@@ -19,6 +19,7 @@ import bayes_ppc  # noqa: E402
 import bayes_rows  # noqa: E402
 import fake_checks  # noqa: E402
 from bayes_task import ManifestMismatch  # noqa: E402
+from numeric import assert_same_numbers  # noqa: E402
 from tab_protocol import Refusal  # noqa: E402
 from test_run import CONTRACT, engine_check  # noqa: E402
 
@@ -144,15 +145,17 @@ class TestRows(Case):
         self.assertEqual(len([k for k in rows if k.startswith("curve|") and "|observed|" in k]), 42)
         self.assertFalse(any("|draw_" in k for k in rows))
 
-    def test_the_blocks_of_the_file_do_not_change_a_byte(self):
+    def test_the_blocks_of_the_file_do_not_change_a_number(self):
         outs = []
         for block_draws in (1, 7, 40):
             self.tearDown()
             self.setUp()
             _, _, rows, _, _ = self.run_rows(block_draws=block_draws, nan_draws=((2, 5),), keep=False)
-            outs.append(json.dumps({k: [r["value"], r["x0"], r["x1"], r["level_2"], r["text"]] for k, r in rows.items()}, sort_keys=True))
-        self.assertEqual(outs[0], outs[1])
-        self.assertEqual(outs[1], outs[2])
+            outs.append({k: [r["value"], r["x0"], r["x1"], r["level_2"], r["text"]] for k, r in sorted(rows.items())})
+        # a block of 1, 7 or 40 draws sums the rows of a draw in another order (numeric.py): the same keys, the texts and the counts to the
+        # byte, the statistics and the edges built from them up to what a reordered sum changes
+        assert_same_numbers(self, outs[0], outs[1], what="blocks of 1 and 7")
+        assert_same_numbers(self, outs[1], outs[2], what="blocks of 7 and 40")
 
     def test_counts_and_binary_outcomes_and_an_outcome_without_a_group(self):
         for kind in ("counts", "binary"):
