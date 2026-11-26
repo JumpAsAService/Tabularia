@@ -672,6 +672,18 @@ helm upgrade tabularia infrastructure/helm/tabularia --namespace tabularia \
   --values "$WORK/values.yaml" --values "$WORK/clickhouse.yaml"
 ```
 
+**Give the engine a memory limit.** A managed ClickHouse often sets none per query, and a large
+join or sort then takes memory until the service itself runs out of it. Two more lines under
+`clickhouse:` in `clickhouse.yaml` set how much one query of Tabularia may take, and all of them
+together, in bytes; the engine then has the server spill to disk before the limit. A third and
+two thirds of the service's memory are starting points (on a 16 GB service, as below); add
+them and run the `helm upgrade` above again:
+
+```yaml
+    maxMemoryUsage: 5000000000
+    maxMemoryUsageForUser: 10000000000
+```
+
 After a minute, **Administration → Engines** lists ClickHouse. Choose it as your
 **Preferred engine** in **Settings**, or as the engine of a flow, and open a datasource in
 the **Viewer**: its rows come from ClickHouse. Every later `helm upgrade` takes both

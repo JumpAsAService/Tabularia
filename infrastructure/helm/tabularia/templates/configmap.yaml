@@ -171,6 +171,8 @@ CLICKHOUSE_EXTERNAL__TRANSPORT: {{ include "tabularia.env" (.Values.externalServ
 CLICKHOUSE_EXTERNAL__S3_ENDPOINT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.s3Endpoint) }}
 CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.connectTimeout) }}
 CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME: {{ include "tabularia.env" (.Values.externalServices.clickhouse.maxExecutionTime) }}
+CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE: {{ include "tabularia.env" (.Values.externalServices.clickhouse.maxMemoryUsage) }}
+CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE_FOR_USER: {{ include "tabularia.env" (.Values.externalServices.clickhouse.maxMemoryUsageForUser) }}
 CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeMinRows) }}
 CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeDatabase) }}
 CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeTtlSeconds) }}

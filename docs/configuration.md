@@ -59,10 +59,10 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 176 |
-| [Engine and workers](#engine-and-workers) | 104 |
+| [Engine and workers](#engine-and-workers) | 106 |
 | [Frontend](#frontend) | 6 |
 | [Compose and Helm only](#compose-and-helm-only) | 52 |
-| **Total** | **345** |
+| **Total** | **347** |
 
 ## Before production
 
@@ -535,6 +535,8 @@ Optional: flows run on a remote ClickHouse server (managed or self-hosted) inste
 | `CLICKHOUSE_EXTERNAL__S3_ENDPOINT` | string | empty | `externalServices.clickhouse.s3Endpoint` | The storage endpoint as the server sees it (`s3` mode), e.g. `https://s3.fr-par.scw.cloud`. Empty = `STORAGE__ENDPOINT`, right only when the server is on the same network. Also adjustable in Administration → Settings, applied after a restart of the engine API and workers and scheduler (beat). |
 | `CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION` | string | empty | `externalServices.clickhouse.s3NamedCollection` | A named collection created on the server with the storage credentials, so the keys never travel in queries nor reach the `query_log`. Also adjustable in Administration → Settings, applied after a restart of the engine API and workers and scheduler (beat). |
 | `CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME` | integer | `0` | `externalServices.clickhouse.maxExecutionTime` | Per-query execution cap in seconds. 0 = none (previews are still bounded by `PREVIEW_TIMEOUT_SECONDS`). Also adjustable in Administration → Settings. |
+| `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE` | integer | `0` | `externalServices.clickhouse.maxMemoryUsage` | The most memory one query of Tabularia may take on the server, in bytes. 0 = no limit of Tabularia's own, the server's defaults alone, which on a managed service are often no limit per query. With a limit the engine also has the server spill a group by, a sort and a join to disk before reaching it, and a `DISTINCT` over too many rows fails by name instead of exhausting the server. A third of the server's memory is a starting point. |
+| `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE_FOR_USER` | integer | `0` | `externalServices.clickhouse.maxMemoryUsageForUser` | The same for all the queries of Tabularia's user running at one time: previews, runs and the Viewer are in parallel. 0 = none. Two thirds of the server's memory is a starting point. |
 | `CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS` | integer | `0` | `externalServices.clickhouse.materializeMinRows` | `s3` mode: a dataset the viewer reads with more rows than this is copied once into a MergeTree table on the server, 2–6× faster on full scans. 0 = off: the copy is built inside the request and, with large row groups, direct reads are already fast. Also adjustable in Administration → Settings. |
 | `CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE` | string | empty | `externalServices.clickhouse.materializeDatabase` | Database of those copies. Empty = the working database. Also adjustable in Administration → Settings, applied after a restart of the engine API and workers and scheduler (beat). |
 | `CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS` | integer | `1800` | `externalServices.clickhouse.materializeTtlSeconds` | A copy unused for this long is dropped. Also adjustable in Administration → Settings. |

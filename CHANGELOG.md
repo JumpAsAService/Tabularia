@@ -8,6 +8,26 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- **The external ClickHouse engine can be given a memory limit, and spills to disk before it.**
+  `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE` (one query) and `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE_FOR_USER`
+  (all of Tabularia's queries at one time), `externalServices.clickhouse.maxMemoryUsage` and
+  `maxMemoryUsageForUser` in the chart; 0, the default, changes nothing. A managed service often has
+  no limit per query: a join with a large right side or a group by with many keys then grows until
+  the server runs out of memory for all its users. With a limit, every query carries it together
+  with the thresholds that make the server spill a group by, a sort and a join to disk before
+  reaching it, in proportion to the limit; a `DISTINCT` over too many rows fails by name. Measured
+  on ClickHouse 25.3: the server's own ratio defaults never spilled under a query's limit, and of
+  the join algorithms only `grace_hash` spills for every kind of join.
+- **A crosstab reads what is upstream once less.** On ClickHouse and chDB the pivot counted the
+  combinations of its column fields and then listed them: two full executions of everything
+  before it. One bounded pass now answers both. On a billion rows read from S3: three scans in 103
+  seconds, now two in 63.
+- **An aggregated preview on the external ClickHouse brings its row count.** A grouped table or a
+  crosstab cut at its first rows was counted by running the whole aggregation a second time. The
+  rows and their total now come from one statement, and the count asked next is remembered. On a
+  billion rows in the Viewer: a table grouped by a text column from 61 to 39 seconds, a crosstab
+  from 134 to 83.
+
 ## 1.5.1 «Augustus» — 2026-11-26
 
 The interface, the assistants, and a first version of pivot tables over the data APIs. No

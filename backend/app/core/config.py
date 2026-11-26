@@ -281,6 +281,21 @@ class ClickHouseExternalSettings(BaseModel):
     # the longest one query may run (seconds, 0 = no limit); the interactive
     # previews have one anyway, from the API's timeout
     max_execution_time: int = 0
+    # ── Memory on the server ──────────────────────────────────────────────────
+    # env: __MAX_MEMORY_USAGE — the most memory ONE query of Tabularia may take on the
+    # server, in bytes. 0 = no limit of Tabularia's own, the server's defaults alone:
+    # on a managed service those are often «no limit per query», and a join with a
+    # large right side, a group by with many keys or a full sort then grows until the
+    # server itself runs out of memory, for every one of its users. With a limit the
+    # engine also tells the server to spill to disk before reaching it (see
+    # `memory_guard` in the engine): a query that cannot spill, such as a DISTINCT
+    # over too many rows, fails with a clear message and the server stays up.
+    # A third of the server's memory is a starting point: 5 GB on a 16 GB server.
+    max_memory_usage: int = 0
+    # env: __MAX_MEMORY_USAGE_FOR_USER — the same for ALL the queries of Tabularia's
+    # user running at one time (previews, runs and the viewer are in parallel).
+    # 0 = none. Two thirds of the server's memory: 10 GB on a 16 GB server.
+    max_memory_usage_for_user: int = 0
     # ── Materialization for the viewer (transport s3 only) ────────────────────
     # env: __MATERIALIZE_MIN_ROWS — above this many rows, a dataset read by the
     # viewer is COPIED once into a MergeTree on the server, and the next queries

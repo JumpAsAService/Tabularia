@@ -114,6 +114,14 @@ externalServices:
     # server's query_log. Strongly preferred over inline credentials.
     s3NamedCollection: ""
     maxExecutionTime: 0   # seconds, 0 = no ceiling imposed by us
+    # The most memory one query of Tabularia may take on the server, and all of its
+    # queries together, in bytes. 0 = no limit of Tabularia's own: on a managed service
+    # that is often no limit at all, and a large join or sort grows until the server
+    # runs out of memory for every user of it. With a limit the engine tells the server
+    # to spill to disk before reaching it. Starting points on a 16 GB server:
+    # 5000000000 per query and 10000000000 together.
+    maxMemoryUsage: 0
+    maxMemoryUsageForUser: 0
     connectTimeout: 10
     # Viewer speed-up (s3 transport only): a dataset larger than materializeMinRows
     # is copied once into a MergeTree on the server; later viewer queries read from

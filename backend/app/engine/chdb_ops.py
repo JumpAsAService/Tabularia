@@ -607,13 +607,19 @@ def op_pivot(sql, params, ctx):
             expr = f"toInt64({expr})"
         return f"SELECT {idx_sql}, {expr} AS {_qi(PIVOT_VALUES_COLUMN)} FROM {base} GROUP BY {idx_sql}"
     on_sql = ", ".join(_qi(c) for c in on)
-    n_cols = ctx.scalar(f"SELECT count() FROM (SELECT DISTINCT {on_sql} FROM {base})")
-    if n_cols > MAX_PIVOT_COLUMNS:
+    # ClickHouse has no PIVOT: conditional columns, so the combinations are read first. ONE
+    # pass over what is upstream answers both «how many» and «which»: one more than the
+    # maximum is enough to know there are too many. Counting them and then listing them
+    # were two full executions of everything upstream: on a billion rows read from S3,
+    # 32 s and 34 s before the pivot's own 36 s began.
+    combos = ctx.distinct_rows(f"(SELECT DISTINCT {on_sql} FROM {base} LIMIT {MAX_PIVOT_COLUMNS + 1})", on)
+    if len(combos) > MAX_PIVOT_COLUMNS:
+        # the message says how many: counted only here, on the way to an error
+        n_cols = ctx.scalar(f"SELECT count() FROM (SELECT DISTINCT {on_sql} FROM {base})")
         raise EngineError(
             f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
             f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
-    combos = ctx.distinct_rows(base, on)  # ClickHouse has no PIVOT: conditional columns
     # the new columns' order = the labels' TEXT order (as Polars and DuckDB, which sort
     # the string key): "10" < "2", "null" between "false" and "true"
     combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))

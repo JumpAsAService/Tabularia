@@ -94,6 +94,44 @@ def _needs_scan_tuning(ops) -> bool:
     return any(t in _SCAN_HEAVY or is_stat_operation(t) for t in types)
 
 
+# the steps that reduce the rows to groups: after them the whole result is computed before its first
+# row comes out, whatever LIMIT follows
+_AGGREGATING = frozenset({"group_by", "pivot"})
+# the column the total travels in, next to a preview's rows (see rows_with_total_sql)
+_TOTAL_COLUMN = "__tab_total"
+
+
+def _ends_in_aggregation(ops) -> bool:
+    """True when the last step that changes the rows is an aggregation: what follows it (a sort, a
+    projection, a computed column) keeps one row per group. Counting such a chain costs nothing
+    more than previewing it; counting it apart costs the whole aggregation again."""
+    from app.engine.rowcount import PRESERVING
+
+    for op in reversed(list(ops)):
+        t = op.type if hasattr(op, "type") else op.get("type")
+        if t in PRESERVING:
+            continue
+        return t in _AGGREGATING
+    return False
+
+
+def rows_with_total_sql(sql: str, columns: list[str], n: int) -> str:
+    """The first `n` rows of `sql` and, in `_TOTAL_COLUMN` of each, how many rows `sql` has.
+
+    One pass, constant memory: the rows go by through a count that keeps the first `n`. After an
+    aggregation everything is computed before the LIMIT anyway, so the count is free, while asking
+    it apart (the Viewer does, when a table is cut at 500 rows) runs the aggregation again: measured
+    on a billion rows grouped by 1,000 agents, 17.8 s for the rows and 9.3 s more for the count,
+    against 19.7 s for both. The rows are those of `LIMIT n` in the same order, checked with 8 and
+    with 16 threads: after a sort the result is one stream, and one stream is aggregated by one
+    thread. No rows at all gives no row, and so no total: the caller knows it is zero.
+    """
+    names = ", ".join(_qi(c) for c in columns)
+    elems = ", ".join(f"tupleElement(__r, {i}) AS {_qi(c)}" for i, c in enumerate(columns, 1))
+    return (f"SELECT {elems}, __n AS {_qi(_TOTAL_COLUMN)} FROM (SELECT __n, arrayJoin(__rs) AS __r FROM "
+            f"(SELECT count() AS __n, groupArray({n})(tuple({names})) AS __rs FROM ({sql})))")
+
+
 def _effective_scan_threads(target: int, server_threads: int) -> int:
     """Threads to impose on a scan: `target`, but only when it RAISES the server's default
     (= its cores). 0 = leave it alone (off, or a server large enough already)."""
@@ -102,6 +140,46 @@ def _effective_scan_threads(target: int, server_threads: int) -> int:
     if server_threads and target <= server_threads:
         return 0
     return target
+
+
+def memory_guard(limit: int, user_limit: int = 0) -> dict[str, Any]:
+    """The settings that keep a query inside `limit` bytes of the server's memory (0 = none).
+
+    A limit alone makes a large query FAIL; what lets it finish is spilling to disk, and the server
+    does that only at thresholds given in bytes. Measured on ClickHouse 25.3, with synthetic data
+    and with the sample flows on 42 million rows read from S3:
+    - the server's defaults (`max_bytes_ratio_before_external_*` = 0.5) never spilled under a
+      query's limit: the ratio is of the server's memory. A group by, a sort and a join each ended
+      at the limit;
+    - join: `grace_hash` is the one algorithm that spills for every kind of join (inner, left, semi
+      and full were tried; `auto` leaves a full join in memory, `full_sorting_merge` refuses the
+      joins the engine writes). Its memory is about 1.6 times `max_bytes_in_join` for each join of
+      the chain, and a chain often has two: a tenth of the limit each. On a large table joined to
+      a small one it costs 15% more time than the server's default (`parallel_hash`), which on two
+      joins of 42 and 12 million rows took 7.7 GB, and over 10 GB with two threads;
+    - group by and sort: the server compares their threshold with the memory of the WHOLE query,
+      the joins' hash tables included. At a third of the limit, a query whose joins held 6 GB wrote
+      2,650 parts of an aggregation of a few groups to disk and read them back: 12 of its 31
+      seconds. At 45% of the limit they spill for their own size and not for two joins' (a group
+      by peaks at 1.35 times its threshold, a sort at its threshold), and the three together still
+      fit the limit;
+    - DISTINCT cannot spill: past its own cap it fails by name instead of taking the query to the
+      limit. It peaks at twice the cap, so a quarter.
+    """
+    out: dict[str, Any] = {}
+    if limit > 0:
+        out.update({
+            "max_memory_usage": limit,
+            "max_bytes_before_external_group_by": limit * 9 // 20,
+            "max_bytes_before_external_sort": limit * 9 // 20,
+            "join_algorithm": "grace_hash",
+            "max_bytes_in_join": limit // 10,
+            "max_bytes_in_distinct": limit // 4,
+            "distinct_overflow_mode": "throw",
+        })
+    if user_limit > 0:
+        out["max_memory_usage_for_user"] = user_limit
+    return out
 
 
 def _clean_error(e: Exception, host: str | None = None, port: int | None = None) -> str:
@@ -244,6 +322,8 @@ class ClickHouseContext:
         # the missing side of an outer join is NULL, as in every engine (a column that is
         # not Nullable, e.g. computed on the right, would otherwise be 0 / '')
         self.settings: dict[str, Any] = {"join_use_nulls": 1}
+        # the server's memory is every user's: a limit per query, and spilling before it
+        self.settings.update(memory_guard(cfg.max_memory_usage, cfg.max_memory_usage_for_user))
         # the label of the work in progress (see query_tag.py): lets the queries of
         # an interrupted preview be killed on the server
         _tag = current_query_tag()
@@ -734,6 +814,14 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         return n, _columns_of(df.schema)
 
     # ── Preview ───────────────────────────────────────────────────────────
+    def _remember_total(self, source: DataSource, ops: list[Operation], total: int) -> None:
+        """Keeps the chain's row count where a count request looks first (rowcount.known, read by
+        POST /tasks/count before any worker is asked): exact, so it answers whatever cap is asked."""
+        from app.engine import rowcount
+
+        key = rowcount.count_key(ClickHouseContext.engine_name, source.bucket, source.key, [op.model_dump() for op in ops])
+        rowcount.remember(key, total, False, total)
+
     def preview(
         self,
         source: DataSource,
@@ -791,8 +879,18 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             # copy is being CREATED now (the first time, or after a drop)
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             _t = _phase("sql", _t)
+            # an aggregated result is counted while its rows go by (rows_with_total_sql): the
+            # count the Viewer and the editor ask next is then remembered, not computed again.
+            # Not for a profile's sample, which is not the chain's own result.
+            with_total = not sampling and _ends_in_aggregation(ops)
+
+            def _rows_sql(chain: str) -> str:
+                if with_total:
+                    return rows_with_total_sql(chain, ctx.columns_of(chain), limit + 1)
+                return f"SELECT * FROM ({chain}) LIMIT {limit + 1}"
+
             try:
-                raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
+                raw = ctx.parquet_bytes(_rows_sql(sql))
             except EngineError as e:
                 if ctx.root_source != "matview" or not _is_unknown_table(e):
                     raise
@@ -802,10 +900,15 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 self.matviews.discard(source, sort_keys)
                 ctx.allow_matview = False
                 sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
-                raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
+                raw = ctx.parquet_bytes(_rows_sql(sql))
             _t = _phase("query", _t)
             # cross-engine standard: NAIVE datetime (a UTC instant), not "+00:00"
             df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()
+            if with_total and (_TOTAL_COLUMN in df.columns or df.width == 0):
+                total = int(df[_TOTAL_COLUMN][0]) if df.height else 0
+                if df.width:
+                    df = df.drop(_TOTAL_COLUMN)
+                self._remember_total(source, ops, total)
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
