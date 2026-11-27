@@ -20,9 +20,13 @@ REGISTRIES = {
 
 # Operations an engine really does not have: {engine: {operation: why}}.
 # "documented" = listed in docs/engines/engine-differences.md.
+#
+# `foreach` IS in chDB's registry, for the external ClickHouse that shares it: the loop runs there
+# on the s3 transport, where the server can keep each iteration's result apart. The operation
+# itself refuses a context that cannot (embedded chDB, the push transport), which is checked below
+# and in test_clickhouse_loop.py.
 EXCEPTIONS: dict[str, dict[str, str]] = {
-    "chdb": {"foreach": "documented: the loop runs on Polars and DuckDB only"},
-    "bigquery": {"foreach": "documented: the loop runs on Polars and DuckDB only"},
+    "bigquery": {"foreach": "documented: the loop runs on Polars, DuckDB and the external ClickHouse (s3)"},
 }
 
 
@@ -41,7 +45,18 @@ def test_every_engine_has_every_operation_but_the_documented_ones():
 
 
 def test_the_counts_match_the_documentation():
-    # engine-differences.md: "all 38" on DuckDB and Polars, 37 on chDB, ClickHouse and BigQuery
+    # engine-differences.md: "all 41" on DuckDB, Polars and the external ClickHouse on s3 (the
+    # registry it shares with chDB), one fewer on BigQuery; embedded chDB has the name and refuses it
     assert len(REGISTRIES["duckdb"]) == len(REGISTRIES["polars"])
-    assert len(REGISTRIES["chdb"]) == len(REGISTRIES["polars"]) - 1
+    assert len(REGISTRIES["chdb"]) == len(REGISTRIES["polars"])
     assert len(REGISTRIES["bigquery"]) == len(REGISTRIES["polars"]) - 1
+
+
+def test_the_loop_is_refused_where_nothing_can_keep_its_iterations_apart():
+    # embedded chDB's context has no way to: the name is registered, the step says it is not supported
+    import pytest
+
+    from app.engine.exceptions import EngineError
+
+    with pytest.raises(EngineError, match="not supported"):
+        chdb_ops.get_chdb_operation("foreach")("SELECT 1", {"items": [{"a": 1}, {"a": 2}], "body": [{"type": "limit", "params": {"n": 1}}]}, object())

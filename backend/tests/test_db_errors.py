@@ -73,6 +73,25 @@ def test_clickhouse_broken_stream_without_a_message():
         "ClickHouse: nessuno: Authentication failed: password is incorrect, or there is no user with "
         "such name (AUTHENTICATION_FAILED, code 516). " + AUTH_HINT,
     ),
+    (
+        # a query past the memory it is allowed: said as the server's limit, with what to do about it
+        "Received ClickHouse exception, code: 241, server response: Code: 241. DB::Exception: Query memory "
+        "limit exceeded: would use 3.73 GiB (attempt to allocate chunk of 4.00 MiB bytes), maximum: 3.73 GiB. "
+        "(MEMORY_LIMIT_EXCEEDED) (for url https://play.clickhouse.com:443)",
+        "ClickHouse: Query memory limit exceeded: would use 3.73 GiB (attempt to allocate chunk of 4.00 MiB "
+        "bytes), maximum: 3.73 GiB (MEMORY_LIMIT_EXCEEDED, code 241). The database server reached the memory "
+        "it allows this query: reduce the data with a filter or an aggregation earlier in the chain, or raise "
+        "the limit if the server has room.",
+    ),
+    (
+        # a DISTINCT over more different rows than fit: it cannot spill, and says so
+        "Received ClickHouse exception, code: 191, server response: Code: 191. DB::Exception: Limit for "
+        "DISTINCT exceeded, max bytes: 2.33 GiB, current bytes: 4.00 GiB. (SET_SIZE_LIMIT_EXCEEDED) "
+        "(for url https://play.clickhouse.com:443)",
+        "ClickHouse: Limit for DISTINCT exceeded, max bytes: 2.33 GiB, current bytes: 4.00 GiB "
+        "(SET_SIZE_LIMIT_EXCEEDED, code 191). Removing duplicates keeps every different row in the server's "
+        "memory, and these do not fit: remove duplicates on fewer columns, or aggregate first.",
+    ),
 ])
 def test_clickhouse_server_errors(text, expected):
     from clickhouse_connect.driver.exceptions import DatabaseError

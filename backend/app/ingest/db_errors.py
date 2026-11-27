@@ -78,7 +78,16 @@ _AUTH_HINT = "Check the connection's username and password."
 _PERM_HINT = "The connection's user lacks the required privileges on this object."
 _READONLY_HINT = ("The statement tried to write where it can only read: a query on a connection runs read-only, "
                   "and a read-only user cannot be used as a destination.")
-_SERVER_MEMORY_HINT = "The database server ran out of memory for this query: reduce the data."
+_SERVER_MEMORY_HINT = (
+    "The database server reached the memory it allows this query: reduce the data with a filter or an "
+    "aggregation earlier in the chain, or raise the limit if the server has room."
+)
+# a DISTINCT keeps every different row in memory and cannot spill to disk: the server (or the limit the
+# ClickHouse engine sets on it, see clickhouse_engine.memory_guard) stops it by name before it takes it all
+_DISTINCT_HINT = (
+    "Removing duplicates keeps every different row in the server's memory, and these do not fit: "
+    "remove duplicates on fewer columns, or aggregate first."
+)
 _NET_HINT = "The server is unreachable: check host, port and network."
 _SERVICE_HINT = "Check the service name in the connection's Database field."
 # the encryption of the connections (db_tls): the choices as the connection's form names them
@@ -104,6 +113,7 @@ _CH_HINTS = {
     159: _TIMEOUT_HINT,         # TIMEOUT_EXCEEDED
     160: _TIMEOUT_HINT,         # TOO_SLOW
     241: _SERVER_MEMORY_HINT,   # MEMORY_LIMIT_EXCEEDED
+    191: _DISTINCT_HINT,        # SET_SIZE_LIMIT_EXCEEDED
     516: _AUTH_HINT,            # AUTHENTICATION_FAILED
     192: _AUTH_HINT,            # UNKNOWN_USER
     194: _AUTH_HINT,            # REQUIRED_PASSWORD

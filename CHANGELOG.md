@@ -18,6 +18,15 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   reaching it, in proportion to the limit; a `DISTINCT` over too many rows fails by name. Measured
   on ClickHouse 25.3: the server's own ratio defaults never spilled under a query's limit, and of
   the join algorithms only `grace_hash` spills for every kind of join.
+- **The loop runs on the external ClickHouse** (s3 transport). A flow on that engine with a
+  «for each» step was refused. Each iteration is now a statement of its own, written by the
+  server as one Parquet object under a prefix of the chain's, and the result is read from all of
+  them together by column name: a column only some iterations have is NULL in the others, as
+  on Polars and DuckDB. One statement with every iteration in it would have run them all at
+  once on the server, in one query's memory. The objects are removed when the chain is done,
+  and the cache's periodic sweep removes by age what a worker that died left behind.
+- A query the external ClickHouse stops for its memory limit says what to do about it, and a
+  removal of duplicates over more rows than fit says that it is the duplicates.
 - **A preview nobody waits for any more stops on the external ClickHouse too.** A preview given
   up on at its timeout went on running on the server: the worker's process was ended before it
   could stop its query, and `KILL QUERY` needs a grant on `system.processes` that a managed

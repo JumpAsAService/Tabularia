@@ -143,6 +143,28 @@ def _effective_scan_threads(target: int, server_threads: int) -> int:
     return target
 
 
+# where a loop keeps its iterations' results while its chain runs (ClickHouseContext.loop_parts)
+LOOP_PREFIX = "cache/loop"
+# a part older than this belongs to a chain that is over, whatever became of its worker
+LOOP_PARTS_MAX_AGE_SECONDS = 6 * 3600
+
+
+def sweep_loop_parts(storage, bucket: str, now: float | None = None) -> int:
+    """Removes the loops' parts a chain did not remove itself (its worker died): those older than
+    LOOP_PARTS_MAX_AGE_SECONDS. Returns how many. Called by the cache's periodic sweep."""
+    cutoff = (now if now is not None else time.time()) - LOOP_PARTS_MAX_AGE_SECONDS
+    old = []
+    paginator = storage.client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=LOOP_PREFIX + "/"):
+        for obj in page.get("Contents", []):
+            modified = obj.get("LastModified")
+            if modified is not None and modified.timestamp() < cutoff:
+                old.append(obj["Key"])
+    for i in range(0, len(old), 1000):
+        storage.delete_objects(bucket, old[i:i + 1000])
+    return len(old)
+
+
 # the tag of the queries someone is waiting for at the screen (app/tasks/jobs.py: previews, counts, profiles)
 _INTERACTIVE_TAG = "tab-prev:"
 
@@ -344,6 +366,10 @@ class ClickHouseContext:
         self.statement_id: str | None = None
         # the engine's step cache, where a chain may keep an intermediate result of its own (stash)
         self.cache = cache
+        # the loops of this chain: (bucket, prefix, how many parts), removed when the chain is done
+        self.loops: list[tuple[str, str, int]] = []
+        # the cumulative budget of a loop's iterations over the whole chain (see chdb_ops.op_foreach)
+        self.foreach_iterations = 0
         # the server's memory is every user's: a limit per query, and spilling before it
         self.settings.update(memory_guard(cfg.max_memory_usage, cfg.max_memory_usage_for_user))
         # the label of the work in progress (see query_tag.py): lets the queries of
@@ -475,6 +501,37 @@ class ClickHouseContext:
             self.cache.mark(h)
         return f"(SELECT * FROM {self.s3_fn(kept)})"
 
+    @property
+    def can_loop(self) -> bool:
+        """A loop keeps each iteration's result as an object the server writes and reads: the s3
+        transport, with a storage to remove them from afterwards."""
+        return self.cfg.transport == "s3" and self.cache is not None and self.storage is not None
+
+    def loop_parts(self, parts: list[str]) -> str:
+        """Runs each of `parts` as a statement of its own, into one parquet each under a prefix of
+        this chain's, and returns the statement that reads them all together.
+
+        They are read with a glob and `schema_inference_mode = 'union'`: the columns of every
+        part by name, NULL where a part lacks one, the wider type where two differ (checked on
+        25.3: an Int32 and a Float64 read as Float64). Without that setting the server takes
+        the first file's columns for all of them: a column only later parts have is dropped
+        and a 0.5 is read as 0, without a word. The parts are removed when the chain is done
+        (cleanup); what a worker that died left behind is swept by age (sweep_loop_parts)."""
+        prefix = f"{LOOP_PREFIX}/{uuid.uuid4().hex}"
+        bucket = self.cache.bucket
+        self.loops.append((bucket, prefix, len(parts)))
+        for i, part in enumerate(parts):
+            dest = DataSource(bucket=bucket, key=f"{prefix}/{i:06d}.parquet")
+            try:
+                self.command(
+                    f"INSERT INTO FUNCTION {self.s3_fn(dest)} SELECT * FROM ({self.parquet_safe(part)})",
+                    settings={**_PARQUET_OUT, "s3_truncate_on_insert": 1, "s3_create_new_file_on_insert": 0},
+                )
+            except EngineError as e:
+                raise EngineError(f"iteration {i + 1}/{len(parts)}: {e}") from e
+        self.settings["schema_inference_mode"] = "union"
+        return f"SELECT * FROM {self.s3_fn(DataSource(bucket=bucket, key=f'{prefix}/*.parquet'))}"
+
     # ── transport s3: table function on the storage ──────────────────────
     def s3_fn(self, source: DataSource) -> str:
         """`s3(...)` pointing at the object `source` (read AND write)."""
@@ -605,6 +662,12 @@ class ClickHouseContext:
         return [(r[0], float(r[1])) for r in rows]
 
     def cleanup(self) -> None:
+        for bucket, prefix, n in self.loops:
+            try:
+                self.storage.delete_objects(bucket, [f"{prefix}/{i:06d}.parquet" for i in range(n)])
+            except Exception:  # best effort: the sweep by age removes what is left
+                logger.warning("cannot remove the loop's parts under %s", prefix)
+        self.loops.clear()
         for table in self.staging:
             try:
                 self.client.command(f"DROP TABLE IF EXISTS {table}")

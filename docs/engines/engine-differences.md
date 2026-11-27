@@ -27,7 +27,7 @@ run history when a number surprises you.
 | DuckDB | `duckdb` | all 41 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
 | Polars | `polars` | all 41 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
 | chDB | `chdb` | 40 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
-| ClickHouse (external) | `clickhouse` | 40 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
+| ClickHouse (external) | `clickhouse` | all 41 on the `s3` transport; 40 — no `foreach` on `push` | Same dialect as chDB, executed on a remote server. The loop runs each iteration as a statement of its own, into one Parquet object each, and reads them back together by column name: every iteration stays inside the memory one query may take, where one statement holding them all would run them at once. The objects are removed when the chain is done. |
 | BigQuery | `bigquery` | 40 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |
 
 The count is the 19 transformations and the loop, plus the 21 [statistical tests](../capabilities/statistics.md)

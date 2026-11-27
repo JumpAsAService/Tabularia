@@ -841,6 +841,16 @@ def evict_cache_task() -> dict:
     from app.reports import tile_cache
 
     removed += tile_cache.sweep()  # the dashboards' rows: on the same prefix, each with its own end
+    # what a loop on the external ClickHouse left behind when its worker died half way
+    from app.engine import _CLICKHOUSE_AVAILABLE
+
+    if _CLICKHOUSE_AVAILABLE:
+        try:
+            from app.engine.clickhouse_engine import sweep_loop_parts
+
+            removed += sweep_loop_parts(get_storage_service(), settings.storage.bucket)
+        except Exception as e:  # noqa: BLE001 — the sweep must not stop for an optional engine
+            logger.warning("sweep of the loops' parts failed: %s", e)
     return {"removed": removed, "ttl_seconds": settings.cache.ttl_seconds}
 
 

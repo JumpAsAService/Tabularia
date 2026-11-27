@@ -12,7 +12,8 @@ Signature: `(sql, params, ctx)`. `ctx` serves the column introspection
 Security: the structural operations use only column names / operators / values (no free
 SQL). `compute` takes scalar expressions but FORBIDS subqueries and reading table
 functions (file/url/s3/…) → no filesystem, no network. `sql` (a whole query) and
-`foreach` are not supported on chDB yet.
+`foreach` are not supported on chDB yet; `foreach` runs where the context can keep each
+iteration's result apart (`can_loop`: the external ClickHouse on the s3 transport).
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.expressions import forbidden_expression
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
+    MAX_FOREACH_ITERATIONS, MAX_FOREACH_TOTAL, _reject_dynamic_source_keys, _substitute,
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, PIVOT_VALUES_COLUMN, SAMPLE_BUCKETS, check_filter_value, check_pivot_labels,
     pivot_measure_label, pivot_params, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
@@ -46,13 +48,17 @@ def _register(name: str) -> Callable[[ChdbOpFn], ChdbOpFn]:
     return deco
 
 
+def _not_supported(name: str) -> EngineError:
+    return EngineError(
+        f"operation '{name}' is not supported by the chDB engine yet. "
+        "Use the Polars or DuckDB engine for this flow (or this node)."
+    )
+
+
 def get_chdb_operation(name: str) -> ChdbOpFn:
     fn = _REGISTRY.get(name)
     if fn is None:
-        raise EngineError(
-            f"operation '{name}' is not supported by the chDB engine yet. "
-            "Use the Polars or DuckDB engine for this flow (or this node)."
-        )
+        raise _not_supported(name)
     return fn
 
 
@@ -651,6 +657,63 @@ def op_pivot(sql, params, ctx):
         cols.append(f"{expr} AS {_qi(colname)}")
     group = f" GROUP BY {idx_sql}" if index else ""
     return f"SELECT {', '.join(cols)} FROM {base}{group}"
+
+
+# ── foreach (a loop with placeholders) ────────────────────────────────────────
+@_register("foreach")
+def op_foreach(sql, params, ctx):
+    """Runs the body once per iteration and APPENDS the results by column name, as Polars
+    (`diagonal_relaxed`) and DuckDB (`UNION ALL BY NAME`) do. The iterations come from `items`
+    (a static list of dicts) or from a `driver` (a sub-flow: every row an iteration, its columns
+    the `{{key}}` placeholders); the substitution and its safety are Polars' own, shared.
+
+    One statement holding every iteration (a UNION ALL of them) would run them all at once on
+    the server: a thousand chains in one query's memory, and past the server's limits on a
+    query's size. Each iteration is instead a statement of its own, whose result the context
+    keeps apart (`loop_parts`: a parquet per iteration, read back together), so each stays
+    inside the memory one query may take. Where the context cannot keep them the step is not
+    supported, as before."""
+    if not getattr(ctx, "can_loop", False):
+        raise _not_supported("foreach")
+    body = _require(params, "body")
+    items = params.get("items")
+    if not items and "driver" in params:
+        driver = ctx.build_right(params["driver"])
+        cols = ctx.columns_of(driver)
+        rows = ctx.rows(f"SELECT * FROM {_sub(driver)} LIMIT {MAX_FOREACH_ITERATIONS + 1}")
+        if len(rows) > MAX_FOREACH_ITERATIONS:
+            raise EngineError(
+                f"the driver has more than {MAX_FOREACH_ITERATIONS} rows: reduce the driver (unique/filter)."
+            )
+        items = [dict(zip(cols, r)) for r in rows]
+    if not items:
+        raise EngineError("foreach has no iterations: connect a driver (the top input) or define 'items'")
+    if len(items) > MAX_FOREACH_ITERATIONS:
+        raise EngineError(f"foreach: {len(items)} iterations, over the limit of {MAX_FOREACH_ITERATIONS}")
+    if not body:
+        raise EngineError("foreach has an empty body: drag some operations into the container")
+    _reject_dynamic_source_keys(body)  # a source cannot take its path from the data
+
+    ctx.foreach_iterations = getattr(ctx, "foreach_iterations", 0) + len(items)
+    if ctx.foreach_iterations > MAX_FOREACH_TOTAL:
+        raise EngineError(
+            f"foreach: too many iterations in total ({ctx.foreach_iterations}) — the nesting is too deep"
+        )
+
+    add_keys = params.get("add_keys_as_columns", False)
+    parts = []
+    for idx, item in enumerate(items):
+        try:
+            part = ctx.apply(sql, _substitute(body, item))
+        except EngineError as e:
+            raise EngineError(f"iteration {idx + 1}/{len(items)}: {e}") from e
+        if add_keys:
+            lits = ", ".join(f"{_lit(v)} AS {_qi(str(k))}" for k, v in item.items())
+            part = f"SELECT *, {lits} FROM {_sub(part)}"
+        parts.append(part)
+    if len(parts) == 1:
+        return parts[0]
+    return ctx.loop_parts(parts)
 
 
 # A crosstab from its cells. One cell is one combination of the row fields and of the column
