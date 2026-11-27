@@ -508,6 +508,7 @@ const notesOpen = ref(false)
 
         <ReportParamsBar
           v-if="parameters.length"
+          data-tour="report-params"
           :parameters="parameters"
           :model-value="form"
           :errors="fieldErrors"
@@ -516,7 +517,7 @@ const notesOpen = ref(false)
           @submit="view"
         />
 
-        <section class="frame" :aria-label="$t('report.pagesRegion')" :aria-busy="busy ? 'true' : 'false'">
+        <section class="frame" data-tour="report-frame" :aria-label="$t('report.pagesRegion')" :aria-busy="busy ? 'true' : 'false'">
           <div data-fin="bar" class="tools">
             <div class="nav" :class="{ off: !pageCount }">
               <button type="button" class="mini icon" :disabled="currentPage <= 1" :title="$t('report.prevPage')" :aria-label="$t('report.prevPage')" @click="goTo(currentPage - 1)">

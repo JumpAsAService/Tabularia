@@ -475,7 +475,7 @@ async function toggleEngine(m: EnginePolicy) {
 
     <div class="layout">
       <!-- section navigation: for administration only -->
-      <nav v-roving.main.vertical class="sidenav" role="tablist" aria-orientation="vertical" :aria-label="$t('appKeys.sections')">
+      <nav v-roving.main.vertical class="sidenav" data-tour="admin-sections" role="tablist" aria-orientation="vertical" :aria-label="$t('appKeys.sections')">
         <button
           v-for="s in sections"
           :key="s.id"

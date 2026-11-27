@@ -48,6 +48,7 @@ import StatReportView from '~/components/ui/StatReportView.vue'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
+import { edgeCacheClass, edgeCacheKey, withEdgeCacheClass } from '~/composables/edgeCache'
 import { planStep, chainNeighbour, upstreamEdgeIds, flowEndIds, openingViewport, easeOutExpo, FLOW_STEP_X, type ChainNode, type ChainEdge, type StepOptions, type Walk } from '~/composables/flowChain'
 import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -339,6 +340,23 @@ function cacheChains() {
   return chains
 }
 
+/** Marks the data edges that leave a cached node (`edge-cached`: dots passing, main.css). */
+function syncCachedEdges() {
+  for (const e of getEdges.value) {
+    const on = edgeCacheClass(e.source, cachedNodes, {
+      seq: (e.targetHandle as string) === 'seq-in',
+      animated: !!e.animated,
+    }) !== ''
+    if ((typeof e.class === 'string' && e.class.split(/\s+/).includes('edge-cached')) !== on) {
+      e.class = withEdgeCacheClass(e.class, on)
+    }
+  }
+}
+// An edge added or removed, or one that starts or stops being worked along, changes the marks; so
+// does the set of cached nodes. The mark itself is in the key: an undo rebuilds the edges with the
+// same ids and no class, and nothing else would say they are to be marked again.
+watch(() => edgeCacheKey(getEdges.value, cachedNodes), syncCachedEdges)
+
 async function refreshCacheStatus(force = false) {
   const chains = cacheChains()
   const asked = JSON.stringify([flowEngine.value, chains])
@@ -353,6 +371,7 @@ async function refreshCacheStatus(force = false) {
     if (asked !== cacheAsked) return // the flow changed meanwhile: a newer answer is coming
     cachedNodes.clear()
     for (const id of res.cached) cachedNodes.add(id)
+    syncCachedEdges()
   } catch {
     /* the halo is a hint: without an answer the nodes simply have none */
   }
@@ -1800,7 +1819,11 @@ function dropTarget(ev: DragEvent): { edge?: string; node?: string; el: Element 
   return null
 }
 function lightDrop(el: Element | null) {
-  if (dropLit === el) return
+  if (dropLit === el) {
+    // the same link, but its classes were written again meanwhile (its cache mark changed): the hint goes back on
+    if (el && !el.classList.contains('drop-into')) el.classList.add('drop-into')
+    return
+  }
   dropLit?.classList.remove('drop-into')
   dropLit = el
   dropLit?.classList.add('drop-into')
@@ -3625,6 +3648,7 @@ async function pollTask(id: string) {
   <div v-label-fields class="app" :style="appStyle">
     <Toolbar
       class="toolbar"
+      data-tour="editor-toolbar"
       :status="status ?? idleStatus"
       :status-kind="statusKind"
       :busy="busy"
@@ -3651,7 +3675,7 @@ async function pollTask(id: string) {
       <span class="also-open-why">{{ $t('presence.lastSaveWins') }}</span>
     </p>
 
-    <div class="sidebar">
+    <div class="sidebar" data-tour="editor-palette">
       <OpSidebar
         :operations="operations" :read-only="observerOnly" :scripting="scriptingAvailable" :containers="containersAvailable"
         :scripting-off="scriptingEditor.state.value?.disabled_reason === 'kubernetes'"
@@ -3662,7 +3686,7 @@ async function pollTask(id: string) {
     </div>
 
     <div
-      ref="canvasEl" class="canvas" tabindex="-1"
+      ref="canvasEl" class="canvas" data-tour="editor-canvas" tabindex="-1"
       @drop="onCanvasDrop" @dragover="onCanvasDragOver" @dragleave="onCanvasDragLeave"
       @contextmenu="onCanvasContextMenu" @keydown.capture="onCanvasKeys"
     >
@@ -3773,7 +3797,7 @@ async function pollTask(id: string) {
       </VueFlow>
     </div>
 
-    <div class="panel" :class="{ tabbed: aiReady }">
+    <div class="panel" data-tour="editor-panel" :class="{ tabbed: aiReady }">
       <div
         class="panel-resizer"
         role="separator"
@@ -3864,7 +3888,7 @@ async function pollTask(id: string) {
       @cancel="runDialogOpen = false"
     />
 
-    <div class="grid">
+    <div class="grid" data-tour="editor-preview">
       <div
         class="grid-resizer"
         role="separator"

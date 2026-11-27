@@ -9325,4 +9325,127 @@ export default {
       "duplicated": "« {name} » créé comme copie.",
     },
   },
+  "tour": {
+    "name": "Visite guidée",
+    "menu": "Visite guidée",
+    "resume": "Reprendre la visite guidée",
+    "progress": "{n} sur {total}",
+    "announce": "Étape {n} sur {total} : {title}",
+    "start": "Commencer",
+    "notNow": "Pas maintenant",
+    "skip": "Passer la visite",
+    "back": "Précédent",
+    "next": "Suivant",
+    "done": "Terminer",
+    "steps": {
+      "welcome": {
+        "title": "Bienvenue dans Tabularia",
+        "text": "Tabularia est l'endroit où l'on prépare, analyse et partage des données : les flux nettoient et joignent des tables, et les résultats se lisent sous forme de vues, de rapports et de tableaux de bord. Cette visite ouvre les vrais objets du dossier Sample, une entreprise imaginaire de pâtes et de boulangerie avec un système de commandes et un système clients. Elle dure environ dix minutes et vous pouvez la quitter à tout moment.",
+      },
+      "topbar": {
+        "title": "La barre du haut",
+        "text": "Chaque onglet est un espace de l'application, et Analyse regroupe le Visualiseur, les Rapports et les Tableaux de bord. La zone de recherche trouve n'importe quel objet par son nom, et la touche / mène au filtre de la page où vous êtes, ou à cette zone quand la page n'en a pas. Le bouton clavier à côté de la roue dentée liste toutes les touches, et G suivi d'une lettre mène directement à un espace.",
+      },
+      "home": {
+        "title": "Accueil",
+        "text": "L'accueil est une page de widgets que vous disposez vous-même, chacun étant un raccourci vers ce que vous utilisez souvent. Choisissez Personnaliser pour les ajouter, les retirer et les déplacer. La disposition n'est enregistrée que pour vous.",
+      },
+      "explore": {
+        "title": "Explorer",
+        "text": "Explorer est l'endroit où tout est rangé, dans des dossiers comme dans un gestionnaire de fichiers. Le dossier Sample contient les données, les flux et les rapports de l'entreprise. Chaque dossier a ses propres droits : ce que vous voyez ici, vous pouvez l'ouvrir.",
+      },
+      "exploreNew": {
+        "title": "Créer des objets",
+        "text": "Le bouton Nouveau crée un flux, un dossier, un rapport, un tableau de bord et le reste, dans le dossier où vous êtes. Il n'apparaît que là où vous avez le droit de créer.",
+      },
+      "folder": {
+        "title": "Dans un dossier",
+        "text": "Un dossier liste ensemble ses objets : flux, tables, vues enregistrées, rapports, tableaux de bord et connexions. Les boutons au-dessus de la liste filtrent par type et indiquent combien il y en a de chaque. Un clic sur une ligne ouvre l'objet, où qu'il se trouve.",
+      },
+      "connections": {
+        "title": "Connexions",
+        "text": "Une connexion contient l'adresse et les identifiants d'une base de données externe. L'exemple en a deux : le système de commandes sur PostgreSQL et le système clients sur ClickHouse. Pour importer une table, on choisit une connexion puis la table, et Tabularia en garde une copie sous forme de source de données.",
+      },
+      "datasources": {
+        "title": "Sources de données",
+        "text": "Une source de données est une table que Tabularia conserve, soit importée depuis une connexion, comme orders et order_rows ici, soit écrite par un flux. Cliquez sur une ligne pour ouvrir son panneau avec le schéma, le contrat de données et la planification de l'actualisation.",
+      },
+      "editorCanvas": {
+        "title": "Le canevas du flux",
+        "text": "Un flux est une chaîne de nœuds reliés par des liens : les sources à gauche, les opérations au milieu, les sorties à droite. Un halo sur un nœud et des points qui défilent le long de son lien indiquent que son résultat est déjà en cache, et un lien en tirets rapides signifie que le moteur le calcule en ce moment. Faites glisser un nœud pour le déplacer, ou tirez depuis sa poignée pour le relier.",
+      },
+      "editorPalette": {
+        "title": "La palette d'opérations",
+        "text": "À gauche se trouvent les opérations que vous pouvez ajouter, comme le filtre, la jointure et le regroupement, classées par type. Cliquez sur l'une d'elles ou faites-la glisser sur le canevas pour l'ajouter au flux.",
+      },
+      "editorPreview": {
+        "title": "Aperçu des données",
+        "text": "Sélectionnez un nœud et ce panneau affiche les données telles qu'elles sont après cette étape, avec le nombre de lignes et le type de chaque colonne. Cliquez sur le nom d'une colonne pour voir son profil : valeurs distinctes, valeurs nulles et valeurs les plus fréquentes. Regarder ne modifie jamais rien.",
+      },
+      "editorParams": {
+        "title": "Réglages du nœud",
+        "text": "Le panneau de droite contient les réglages du nœud sélectionné : quelles colonnes, quelle condition, quelles clés de jointure. Modifier un réglage recalcule l'aperçu à partir de ce nœud, et l'effet se voit tout de suite.",
+      },
+      "editorRun": {
+        "title": "Moteur, Exécuter et planification",
+        "text": "Le badge de la barre d'outils nomme le moteur qui calcule ce flux, avec une flèche quand les exécutions planifiées en utilisent un autre. Exécuter lance tout le flux et écrit ses sorties. Pour qu'un flux démarre seul, on le planifie depuis la page Flux : trois des flux de l'exemple le sont déjà.",
+      },
+      "editorOutput": {
+        "title": "Le nœud de sortie",
+        "text": "Un nœud de sortie termine un flux en publiant son résultat comme source de données. Celui-ci écrit la table que lisent les vues, le rapport et le tableau de bord de l'exemple. Relancez le flux et la table est mise à jour, ainsi que tout ce qui la lit.",
+      },
+      "flows": {
+        "title": "Flux : activité et charge",
+        "text": "La page Flux s'ouvre sur le calendrier de ce qui a tourné et quand, et sur la prévision des exécutions planifiées, qui montre les heures où plusieurs flux démarrent ensemble. Ils servent à repérer une nuit chargée avant qu'elle ne ralentisse quoi que ce soit.",
+      },
+      "flowsList": {
+        "title": "La liste des flux",
+        "text": "Tous les flux que vous pouvez voir sont listés ici avec leur dernière exécution et, pour ceux qui sont planifiés, la prochaine. Depuis une ligne, vous pouvez lancer un flux tout de suite, le planifier ou l'ouvrir dans l'éditeur.",
+      },
+      "viewerFields": {
+        "title": "Le Visualiseur : les champs",
+        "text": "Le Visualiseur explore une table sans la modifier. Cette vue enregistrée est déjà réglée sur une source de données : les champs de gauche se glissent dans Lignes, Colonnes et Mesures pour construire un tableau croisé, et on peut aussi les filtrer.",
+      },
+      "viewerResult": {
+        "title": "Le Visualiseur : le résultat",
+        "text": "Le résultat s'affiche en tableau ou en graphique, selon les onglets. Enregistrer une vue conserve ses champs, ses filtres et son graphique : un collègue ouvre exactement ce que vous avez vu. Les données sous-jacentes ne sont jamais modifiées.",
+      },
+      "reportParams": {
+        "title": "Paramètres du rapport",
+        "text": "Un rapport peut demander des valeurs avant d'être dessiné, comme une période ou une zone. Remplissez-les et appuyez sur le bouton : les pages sont générées de nouveau avec ces valeurs.",
+      },
+      "report": {
+        "title": "Rapports",
+        "text": "Un rapport est un ensemble de pages mises en forme, construites sur les tables de l'exemple et prêtes à imprimer. Téléchargez-le en PDF ou en Excel, ou choisissez Modifier pour le changer dans le concepteur. Margin review compare le chiffre d'affaires et la marge d'une période aux mêmes mois un an plus tôt.",
+      },
+      "dashboard": {
+        "title": "Tableaux de bord",
+        "text": "Un tableau de bord place des tuiles côte à côte : chiffres, graphiques et tables sur les mêmes données. Les tuiles répondent au clic : cliquez sur une barre ou une part et les autres tuiles se filtrent dessus, cliquez de nouveau pour retirer le filtre.",
+      },
+      "dashboardFilters": {
+        "title": "Filtres du tableau de bord",
+        "text": "Les filtres au-dessus des tuiles s'appliquent à toutes à la fois. Réglez une valeur et appuyez sur Appliquer pour voir tout le tableau de bord pour cette période ou cette zone.",
+      },
+      "lineage": {
+        "title": "Lignage",
+        "text": "Le lignage montre d'où vient une donnée et ce qui en dépend. Cherchez un objet à gauche, par exemple une source de données ou un rapport, et le graphe dessine ce qui l'alimente et ce qu'il alimente. Consultez-le avant de modifier une table que d'autres utilisent.",
+      },
+      "runs": {
+        "title": "Exécutions",
+        "text": "Chaque exécution est listée ici, qu'elle vienne d'un flux, d'un import ou d'une tâche planifiée, avec son état. Filtrez par état pour ne voir que les échecs, et ouvrez une ligne pour lire son détail et la raison de l'échec.",
+      },
+      "queue": {
+        "title": "File",
+        "text": "La file montre les workers en ligne, combien de tâches tournent et combien attendent un worker libre. Si une exécution tarde à démarrer, c'est ici qu'il faut regarder.",
+      },
+      "admin": {
+        "title": "Administration",
+        "text": "Cet espace concerne l'installation elle-même : utilisateurs et groupes, qui voit quel dossier, les moteurs, les réglages et les sauvegardes. Seuls les comptes autorisés à s'en occuper ont cet onglet.",
+      },
+      "end": {
+        "title": "La visite est terminée",
+        "text": "Vous pouvez la refaire depuis le menu de la roue dentée, sous Visite guidée. Le bouton clavier à côté liste toutes les touches, et la zone de recherche trouve tout par son nom. Tout ce que vous avez ouvert était un vrai objet du dossier Sample : revenez-y et essayez.",
+      },
+    },
+  },
 }

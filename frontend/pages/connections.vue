@@ -109,12 +109,12 @@ async function remove(c: ConnectionInfo) {
       {{ q ? $t('connections.noSearchResults') : $t('connections.noConnections') }}
     </p>
 
-    <table v-else class="list">
+    <table v-else class="list" data-tour="connections-list">
       <thead>
         <tr><th>{{ $t('connections.colName') }}</th><th>{{ $t('connections.colType') }}</th><th>{{ $t('connections.colHostDatabase') }}</th><th>{{ $t('connections.colFolder') }}</th><th /></tr>
       </thead>
       <tbody>
-        <tr v-for="c in items" :id="`conn-${c.id}`" :key="c.id" :class="{ target: c.id === target }">
+        <tr v-for="c in items" :id="`conn-${c.id}`" :key="c.id" :data-tour="`connection-${c.id}`" :class="{ target: c.id === target }">
           <td>
             <span class="rowlink"><ConnIcon :type="c.db_type" :size="15" /> {{ c.name }}</span>
             <div v-if="c.description" class="muted desc">{{ c.description }}</div>

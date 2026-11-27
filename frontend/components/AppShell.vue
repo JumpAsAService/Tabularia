@@ -9,6 +9,7 @@ import { useAppInfo } from '~/composables/useAppInfo'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useModelGroups } from '~/composables/useModelGroups'
+import { useTour } from '~/composables/useTour'
 // The app's shell: navbar with brand, sections and user. The pages use it as a wrapper
 // (<AppShell>…content…</AppShell>); the editor stays full screen.
 import { computed, onMounted, ref, nextTick, type Component } from 'vue'
@@ -40,6 +41,7 @@ import {
   ChartNoAxesCombined,
   Code2,
   Dices,
+  Compass,
 } from 'lucide-vue-next'
 
 // fluid = full-width content (no centred max-width): for pages like the Viewer that use
@@ -56,6 +58,8 @@ const { finish, sheen, setFinish, setSheen } = useFinish()
 const { info: appInfo, load: loadAppInfo } = useAppInfo()
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
 const { locale, setLocale, locales } = useLocale()
+// the guided tour, over the Sample folder: its entry in the menu is there only when the person has the folder
+const tour = useTour()
 const route = useRoute()
 
 const isSuper = computed(() => !!user.value?.is_superuser)
@@ -88,7 +92,7 @@ const menuByKey = ref(false)
 function toggleMenu(ev?: MouseEvent) {
   if (!menuOpen.value) menuByKey.value = ev?.detail === 0
   menuOpen.value = !menuOpen.value
-  if (menuOpen.value) loadCatalog() // loads the engines' catalog at the first opening
+  if (menuOpen.value) { loadCatalog(); tour.ensureSample() } // the engines' catalog and the sample folder (one light request, once): at the first opening
 }
 function closeMenu() {
   menuOpen.value = false
@@ -226,7 +230,7 @@ onMounted(async () => {
 
 <template>
   <div v-label-fields class="app-shell">
-    <header class="topbar">
+    <header class="topbar" data-tour="topbar">
       <NuxtLink to="/" class="brand" :title="$t('nav.home')" aria-keyshortcuts="g h">
         <BrandMark :size="28" /> <span class="brand-name">Tabularia</span>
       </NuxtLink>
@@ -290,7 +294,7 @@ onMounted(async () => {
       />
 
       <!-- settings: gear → full user name, theme, logout -->
-      <div class="settings">
+      <div class="settings" data-tour="settings">
         <button
           class="gear"
           :class="{ on: menuOpen }"
@@ -370,6 +374,9 @@ onMounted(async () => {
 
             <button class="menu-item" @click="closeMenu(); sessionsOpen = true">
               <MonitorSmartphone :size="14" /> {{ t('settings.sessions') }}
+            </button>
+            <button v-if="tour.menuVisible.value" class="menu-item" @click="closeMenu(); tour.start()">
+              <Compass :size="14" /> {{ tour.resumable.value ? t('tour.resume') : t('tour.menu') }}
             </button>
             <button v-if="canChangePassword" class="menu-item" @click="closeMenu(); passwordOpen = true">
               <LockKeyhole :size="14" /> {{ t('settings.changePassword') }}

@@ -376,7 +376,7 @@ function nodeIcon(t: string) {
 
       <div class="ln-body">
         <!-- sidebar: picker + parameters + upstream/downstream lists -->
-        <aside class="ln-side">
+        <aside class="ln-side" data-tour="lineage-side">
           <div class="ln-block">
             <label class="ln-label">{{ $t('lineage.centerOn') }}</label>
             <div class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('lineage.searchPlaceholder')" :aria-label="$t('lineage.searchPlaceholder')" /></div>

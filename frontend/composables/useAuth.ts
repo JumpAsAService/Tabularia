@@ -72,7 +72,7 @@ export function syncLocale(me: Me | null, code?: string) {
 
 // what the tab keeps for the whole session and depends on who is signed in (the Scripting
 // tab, the registries of the Container nodes, the pins of the home page, the folder tree, what
-// was copied in the editors): dropped when the person changes
+// was copied in the editors, the guided tour's sample folder): dropped when the person changes
 function forgetPerUserCaches() {
   resetScriptingEditor()
   resetModelGroups()
@@ -82,6 +82,7 @@ function forgetPerUserCaches() {
   resetBayesPins()
   resetFlowClipboard()
   resetReportClipboard()
+  resetTour()
 }
 
 export function useAuth() {

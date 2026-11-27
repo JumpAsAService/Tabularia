@@ -341,7 +341,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
     </div>
 
     <!-- overview: the activity's calendar plot (hourly drill-down on click) -->
-    <RunCalendar />
+    <RunCalendar data-tour="flows-activity" />
 
     <!-- the schedules' forecast load: critical time slots (collisions) -->
     <ScheduleLoad />
@@ -352,7 +352,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
       {{ q ? $t('flows.noResultsSearch') : $t('flows.noFlows') }}
     </p>
 
-    <div v-else class="flows">
+    <div v-else class="flows" data-tour="flows-list">
       <div v-for="f in items" :key="f.id" class="flow" :class="{ open: expanded === f.id, blocked: !!f.locked_reason }"
            :title="f.locked_reason || undefined" :aria-disabled="f.locked_reason ? 'true' : undefined">
         <div class="flow-row">

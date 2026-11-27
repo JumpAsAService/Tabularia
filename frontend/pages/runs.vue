@@ -109,7 +109,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
         : (q ? $t('runs.noRunsSearch') : $t('runs.noRunsAny')) }}
     </p>
 
-    <div v-else class="runs">
+    <div v-else class="runs" data-tour="runs-list">
       <div v-for="g in groups" :key="g.head.id" class="run" :class="{ open: !!shown(g) }">
         <button class="run-row" :aria-expanded="!!shown(g)" @click="toggle(g)">
           <ChevronRight :size="14" class="chev" :class="{ rot: !!shown(g) }" />

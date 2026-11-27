@@ -686,6 +686,7 @@ onBeforeUnmount(() => {
 
         <ReportParamsBar
           v-if="parameters.length && !wall"
+          data-tour="dashboard-filters"
           :parameters="parameters"
           :model-value="form"
           :errors="fieldErrors"
@@ -723,6 +724,7 @@ onBeforeUnmount(() => {
         </div>
         <DashboardGrid
           v-else
+          data-tour="dashboard-tiles"
           :tiles="tiles"
           :slots="slots"
           :ctx="ctx"

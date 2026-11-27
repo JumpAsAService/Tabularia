@@ -980,6 +980,27 @@ optgroup { font-style: normal; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .vue-flow__edge.animated path, .vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: none; animation: none; }
 }
+/* A data edge leaving a node whose result is in the step cache (`edge-cached`, set by the
+   editor): small round dots in the cache's colour, slower and sparser than the working
+   dashes (which win: `.animated`). Selected, hovered and drop target edges keep their own
+   look. The dots travel source to target for a few turns each time the rule starts to
+   apply (the editor opens, a step's result lands in the cache, the engine stops working
+   along the edge, the pointer leaves it) and then stand still, as a dotted link.
+   NEVER `infinite`: an animation of a stroke runs on the main thread, and one that never
+   ends kept a whole core busy with the editor at rest (measured: 80 to 150% of a core in
+   Chrome and Firefox, with 3 cached links as with 63; none once the turns are over).
+   Under reduced motion the dots do not travel at all. */
+.canvas:not(.dropping) .vue-flow__edge.edge-cached:not(.animated):not(.selected):not(:hover):not(.drop-into):not(.edge-seq) .vue-flow__edge-path {
+  stroke: var(--cache-ring);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 8;
+  animation: cachedflow 1.6s linear 4;
+}
+@keyframes cachedflow { from { stroke-dashoffset: 8.1; } }
+@media (prefers-reduced-motion: reduce) {
+  .canvas:not(.dropping) .vue-flow__edge.edge-cached:not(.animated):not(.selected):not(:hover):not(.drop-into):not(.edge-seq) .vue-flow__edge-path { animation: none; }
+}
 /* SEQUENCE edges (orchestration): a dedicated colour, dashed and always STATIC, to tell them
    apart from the DATA flow (whole at rest, running while computed) by more than colour */
 .vue-flow__edge.edge-seq .vue-flow__edge-path { stroke: #c084fc; stroke-dasharray: 4 5; animation: none; }

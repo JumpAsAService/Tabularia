@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
 <template>
   <AppShell>
     <BannerBar />
-    <div class="home" @keydown="onPageKey">
+    <div class="home" data-tour="home-widgets" @keydown="onPageKey">
       <header class="home-head">
         <div class="hello">
           <h1>{{ greeting }}</h1>

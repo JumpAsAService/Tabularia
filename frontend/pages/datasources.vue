@@ -300,8 +300,8 @@ async function saveSchedule(cron: string) {
       {{ q ? $t('datasources.noSearchResults') : $t('datasources.emptyState') }}
     </p>
 
-    <div v-else class="dsl">
-      <div v-for="d in items" :id="`ds-${d.id}`" :key="d.id" class="ds" :class="{ open: expanded === d.id }">
+    <div v-else class="dsl" data-tour="datasources-list">
+      <div v-for="d in items" :id="`ds-${d.id}`" :key="d.id" :data-tour="`datasource-${d.id}`" class="ds" :class="{ open: expanded === d.id }">
         <div class="ds-row">
           <button class="ds-head" @click="toggle(d)">
             <ChevronRight :size="14" class="chev" :class="{ rot: expanded === d.id }" />

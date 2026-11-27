@@ -9325,4 +9325,127 @@ export default {
       "duplicated": "„{name}“ als Kopie angelegt.",
     },
   },
+  "tour": {
+    "name": "Geführte Tour",
+    "menu": "Geführte Tour",
+    "resume": "Geführte Tour fortsetzen",
+    "progress": "{n} von {total}",
+    "announce": "Schritt {n} von {total}: {title}",
+    "start": "Starten",
+    "notNow": "Jetzt nicht",
+    "skip": "Tour überspringen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "done": "Fertig",
+    "steps": {
+      "welcome": {
+        "title": "Willkommen bei Tabularia",
+        "text": "In Tabularia werden Daten aufbereitet, analysiert und geteilt: Flüsse bereinigen und verbinden Tabellen, und die Ergebnisse lesen Sie als Ansichten, Berichte und Dashboards. Diese Tour öffnet die echten Objekte des Ordners Sample, einer erfundenen Firma für Pasta und Backwaren mit einem Bestellsystem und einem Kundensystem. Sie dauert etwa zehn Minuten, und Sie können sie jederzeit verlassen.",
+      },
+      "topbar": {
+        "title": "Die obere Leiste",
+        "text": "Jeder Reiter ist ein Bereich der App, und unter Analyse finden Sie den Viewer, die Berichte und die Dashboards. Das Suchfeld findet jedes Objekt über seinen Namen, und die Taste / springt zum Filter der Seite, auf der Sie sind, oder zu diesem Feld, wenn die Seite keinen hat. Die Tastatur-Schaltfläche neben dem Zahnrad listet alle Tasten auf, und G gefolgt von einem Buchstaben springt direkt zu einem Bereich.",
+      },
+      "home": {
+        "title": "Start",
+        "text": "Der Start ist eine Seite mit Widgets, die Sie selbst anordnen, jedes eine Abkürzung zu etwas, das Sie oft brauchen. Wählen Sie Anpassen, um sie hinzuzufügen, zu entfernen und zu verschieben. Die Anordnung wird nur für Sie gespeichert.",
+      },
+      "explore": {
+        "title": "Erkunden",
+        "text": "Unter Erkunden liegt alles, in Ordnern wie in einem Dateimanager. Der Ordner Sample enthält die Daten, Flüsse und Berichte der Firma. Jeder Ordner hat eigene Berechtigungen, was Sie hier sehen, dürfen Sie also öffnen.",
+      },
+      "exploreNew": {
+        "title": "Objekte anlegen",
+        "text": "Die Schaltfläche Neu legt einen Fluss, einen Ordner, einen Bericht, ein Dashboard und mehr an, und zwar in dem Ordner, in dem Sie gerade sind. Sie erscheint nur dort, wo Sie etwas anlegen dürfen.",
+      },
+      "folder": {
+        "title": "In einem Ordner",
+        "text": "Ein Ordner listet seine Objekte gemeinsam auf: Flüsse, Tabellen, gespeicherte Ansichten, Berichte, Dashboards und Verbindungen. Die Schaltflächen über der Liste filtern nach Art und zeigen, wie viele es von jeder gibt. Ein Klick auf eine Zeile öffnet das Objekt, wo auch immer es liegt.",
+      },
+      "connections": {
+        "title": "Verbindungen",
+        "text": "Eine Verbindung enthält die Adresse und die Zugangsdaten einer externen Datenbank. Das Beispiel hat zwei: das Bestellsystem auf PostgreSQL und das Kundensystem auf ClickHouse. Um eine Tabelle zu übernehmen, wählen Sie eine Verbindung und dann die Tabelle, und Tabularia behält eine Kopie als Datenquelle.",
+      },
+      "datasources": {
+        "title": "Datenquellen",
+        "text": "Eine Datenquelle ist eine Tabelle, die Tabularia vorhält, entweder aus einer Verbindung importiert, wie hier orders und order_rows, oder von einem Fluss geschrieben. Klicken Sie auf eine Zeile, um ihr Fenster mit Schema, Datenvertrag und Aktualisierungsplan zu öffnen.",
+      },
+      "editorCanvas": {
+        "title": "Die Fläche des Flusses",
+        "text": "Ein Fluss ist eine Kette von Knoten, die durch Verbindungen verknüpft sind: Quellen links, Operationen in der Mitte, Ausgaben rechts. Ein Schein um einen Knoten und Punkte, die an seiner Verbindung entlanglaufen, zeigen, dass sein Ergebnis bereits im Cache liegt, und eine schnell gestrichelte Verbindung heißt, dass die Engine es gerade berechnet. Ziehen Sie einen Knoten, um ihn zu verschieben, oder ziehen Sie von seinem Anschluss, um ihn zu verbinden.",
+      },
+      "editorPalette": {
+        "title": "Die Palette der Operationen",
+        "text": "Links stehen die Operationen, die Sie hinzufügen können, etwa Filter, Verknüpfung und Gruppierung, nach Art geordnet. Klicken Sie eine an oder ziehen Sie sie auf die Fläche, um sie dem Fluss hinzuzufügen.",
+      },
+      "editorPreview": {
+        "title": "Datenvorschau",
+        "text": "Wählen Sie einen Knoten, und dieses Feld zeigt die Daten nach diesem Schritt, mit der Zeilenzahl und dem Typ jeder Spalte. Klicken Sie auf den Namen einer Spalte, um ihr Profil zu sehen: verschiedene Werte, Nullwerte und häufigste Werte. Ansehen ändert nie etwas.",
+      },
+      "editorParams": {
+        "title": "Einstellungen des Knotens",
+        "text": "Das Feld rechts enthält die Einstellungen des gewählten Knotens: welche Spalten, welche Bedingung, welche Verknüpfungsschlüssel. Eine Änderung berechnet die Vorschau ab diesem Knoten neu, sodass Sie die Wirkung sofort sehen.",
+      },
+      "editorRun": {
+        "title": "Engine, Ausführen und Zeitplan",
+        "text": "Das Abzeichen in der Werkzeugleiste nennt die Engine, die diesen Fluss berechnet, mit einem Pfeil, wenn geplante Ausführungen eine andere nutzen. Ausführen startet den ganzen Fluss und schreibt seine Ausgaben. Damit ein Fluss von selbst läuft, planen Sie ihn auf der Seite Flüsse: drei der Beispielflüsse sind es schon.",
+      },
+      "editorOutput": {
+        "title": "Der Ausgabeknoten",
+        "text": "Ein Ausgabeknoten beendet einen Fluss, indem er sein Ergebnis als Datenquelle veröffentlicht. Dieser schreibt die Tabelle, die die Ansichten, der Bericht und das Dashboard des Beispiels lesen. Starten Sie den Fluss erneut, und die Tabelle wird aktualisiert, ebenso alles, was sie liest.",
+      },
+      "flows": {
+        "title": "Flüsse: Aktivität und Last",
+        "text": "Die Seite Flüsse beginnt mit dem Kalender dessen, was wann gelaufen ist, und mit der Vorschau der geplanten Ausführungen, die die Stunden zeigt, in denen mehrere Flüsse zugleich starten. Damit erkennen Sie eine volle Nacht, bevor sie etwas verlangsamt.",
+      },
+      "flowsList": {
+        "title": "Die Liste der Flüsse",
+        "text": "Hier stehen alle Flüsse, die Sie sehen können, mit der letzten Ausführung und, bei geplanten, der nächsten. Von einer Zeile aus können Sie einen Fluss sofort ausführen, planen oder im Editor öffnen.",
+      },
+      "viewerFields": {
+        "title": "Der Viewer: Felder",
+        "text": "Der Viewer erkundet eine Tabelle, ohne sie zu ändern. Diese gespeicherte Ansicht ist bereits auf eine Datenquelle eingestellt: Die Felder links ziehen Sie in Zeilen, Spalten und Kennzahlen, um eine Kreuztabelle zu bauen, und Sie können sie auch filtern.",
+      },
+      "viewerResult": {
+        "title": "Der Viewer: Ergebnis",
+        "text": "Das Ergebnis erscheint als Tabelle oder als Diagramm, wie die Reiter sagen. Das Speichern einer Ansicht bewahrt ihre Felder, Filter und das Diagramm, sodass ein Kollege genau das öffnet, was Sie gesehen haben. Die Daten darunter werden nie verändert.",
+      },
+      "reportParams": {
+        "title": "Berichtsparameter",
+        "text": "Ein Bericht kann vor dem Zeichnen nach Werten fragen, etwa einem Zeitraum oder einem Gebiet. Füllen Sie sie aus und drücken Sie die Schaltfläche: Die Seiten werden mit diesen Werten neu erzeugt.",
+      },
+      "report": {
+        "title": "Berichte",
+        "text": "Ein Bericht ist eine Folge gestalteter Seiten, aufgebaut auf den Tabellen des Beispiels und druckfertig. Laden Sie ihn als PDF oder Excel herunter, oder wählen Sie Bearbeiten, um ihn im Designer zu ändern. Margin review vergleicht Umsatz und Marge eines Zeitraums mit denselben Monaten des Vorjahres.",
+      },
+      "dashboard": {
+        "title": "Dashboards",
+        "text": "Ein Dashboard stellt Kacheln nebeneinander: Zahlen, Diagramme und Tabellen über dieselben Daten. Die Kacheln reagieren auf Klicks: Klicken Sie auf einen Balken oder ein Segment, und die übrigen Kacheln filtern danach, ein erneuter Klick hebt den Filter auf.",
+      },
+      "dashboardFilters": {
+        "title": "Dashboard-Filter",
+        "text": "Die Filter über den Kacheln gelten für alle zugleich. Setzen Sie einen Wert und drücken Sie Anwenden, um das ganze Dashboard für diesen Zeitraum oder dieses Gebiet zu sehen.",
+      },
+      "lineage": {
+        "title": "Herkunft",
+        "text": "Die Herkunft zeigt, woher eine Zahl stammt und was von ihr abhängt. Suchen Sie links ein Objekt, etwa eine Datenquelle oder einen Bericht, und das Diagramm zeichnet, was in es einfließt und was es speist. Prüfen Sie sie, bevor Sie eine Tabelle ändern, die andere nutzen.",
+      },
+      "runs": {
+        "title": "Ausführungen",
+        "text": "Jede Ausführung steht hier, ob von Flüssen, Importen oder geplanten Aufgaben, mit ihrem Status. Filtern Sie nach Status, um nur die Fehlschläge zu sehen, und öffnen Sie eine Zeile, um Details und den Grund des Fehlers zu lesen.",
+      },
+      "queue": {
+        "title": "Warteschlange",
+        "text": "Die Warteschlange zeigt, welche Worker online sind, wie viele Aufgaben laufen und wie viele auf einen freien Worker warten. Startet eine Ausführung nur langsam, schauen Sie hier nach.",
+      },
+      "admin": {
+        "title": "Verwaltung",
+        "text": "Dieser Bereich betrifft die Installation selbst: Benutzer und Gruppen, wer welchen Ordner sieht, die Engines, die Einstellungen und die Sicherungen. Nur Konten, die sich darum kümmern dürfen, haben diesen Reiter.",
+      },
+      "end": {
+        "title": "Das war die Tour",
+        "text": "Sie können sie über das Zahnrad-Menü unter Geführte Tour erneut starten. Die Tastatur-Schaltfläche daneben listet alle Tasten, und das Suchfeld findet alles über den Namen. Alles, was Sie geöffnet haben, war ein echtes Objekt des Ordners Sample: Gehen Sie zurück und probieren Sie es aus.",
+      },
+    },
+  },
 }

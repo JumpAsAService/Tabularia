@@ -1115,7 +1115,7 @@ onMounted(async () => {
 
     <div v-else class="body" :style="{ gridTemplateColumns: `var(--vw-fields) ${sidebarW}px 6px 1fr` }">
       <!-- the datasource's fields: dragged onto the table, the filters or the chart -->
-      <aside class="flds" :class="{ out: draggedField?.from === 'table' && fieldDragOutside }" :aria-label="$t('viewer.fieldsTitle')">
+      <aside class="flds" data-tour="viewer-fields" :class="{ out: draggedField?.from === 'table' && fieldDragOutside }" :aria-label="$t('viewer.fieldsTitle')">
         <div class="flds-head">
           <span class="flds-title">{{ $t('viewer.fieldsTitle') }} <span class="muted flds-n">{{ fmtx.count(fields.length) }}</span></span>
           <button v-if="mode !== 'empty'" type="button" class="mini" :title="$t('viewer.clearTableTitle')" @click="clearTable">{{ $t('viewer.clearTable') }}</button>
@@ -1229,7 +1229,7 @@ onMounted(async () => {
       <div class="resizer" :title="$t('viewer.resizeHint')" @mousedown="startResize" />
 
       <!-- result area: table or chart -->
-      <section class="result">
+      <section class="result" data-tour="viewer-result">
         <div v-roving.main data-fin="tabs" class="rtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
           <button role="tab" :class="{ active: view === 'table' }" :aria-selected="view === 'table'" @click="view = 'table'" @dragover="springTab($event, 'table')" @dragleave="springStop" @drop="springStop"><Table2 :size="14" aria-hidden="true" /> {{ $t('viewer.tableTab') }}</button>
           <button role="tab" :class="{ active: view === 'chart' }" :aria-selected="view === 'chart'" @click="view = 'chart'" @dragover="springTab($event, 'chart')" @dragleave="springStop" @drop="springStop"><PieChart :size="14" aria-hidden="true" /> {{ $t('viewer.chartTab') }}</button>

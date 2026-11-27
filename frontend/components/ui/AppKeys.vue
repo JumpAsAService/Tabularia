@@ -61,7 +61,9 @@ function onKey(e: KeyboardEvent) {
     }
     return
   }
-  if (typing(e) || shownEl('[role="dialog"], [role="menu"], .sel-panel, .menu-pop, .topbar .menu')) {
+  // the guided tour's card is a dialog too, but not one that takes the keys: the app's own go on
+  // working under it (the tour teaches them)
+  if (typing(e) || shownEl('[role="dialog"]:not([data-tour-card]), [role="menu"], .sel-panel, .menu-pop, .topbar .menu')) {
     pendingSince = null
     return
   }

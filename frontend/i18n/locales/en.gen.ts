@@ -9325,4 +9325,127 @@ export default {
       "duplicated": "«{name}» created as a copy.",
     },
   },
+  "tour": {
+    "name": "Guided tour",
+    "menu": "Guided tour",
+    "resume": "Resume guided tour",
+    "progress": "{n} of {total}",
+    "announce": "Step {n} of {total}: {title}",
+    "start": "Start",
+    "notNow": "Not now",
+    "skip": "Skip tour",
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "steps": {
+      "welcome": {
+        "title": "Welcome to Tabularia",
+        "text": "Tabularia is where data is prepared, analysed and shared: flows clean and join tables, and the results are read as views, reports and dashboards. This tour opens the real objects of the Sample folder, a made-up pasta and bakery company with an order system and a customer system. It takes about ten minutes, and you can leave at any moment.",
+      },
+      "topbar": {
+        "title": "The top bar",
+        "text": "Each tab is an area of the app, and Analysis holds the Viewer, the Reports and the Dashboards. The search box finds any object by its name, and the key / jumps to the filter of the page you are on, or to this box where the page has none. The keyboard button beside the gear lists every key, and G followed by a letter goes straight to a place.",
+      },
+      "home": {
+        "title": "Home",
+        "text": "Home is a page of widgets that you arrange yourself, each one a shortcut to something you use often. Choose Customise to add, remove and move them. The layout is saved for you alone.",
+      },
+      "explore": {
+        "title": "Explore",
+        "text": "Explore is where everything is kept, in folders like a file manager. The folder Sample holds the company's data, flows and reports. Each folder has its own permissions, so what you see here is what you may open.",
+      },
+      "exploreNew": {
+        "title": "Creating things",
+        "text": "The New button creates a flow, a folder, a report, a dashboard and the rest, inside the folder you are in. It appears only where you are allowed to create.",
+      },
+      "folder": {
+        "title": "Inside a folder",
+        "text": "A folder lists its objects together: flows, tables, saved views, reports, dashboards and connections. The buttons above the list filter by kind and show how many there are of each. A click on a row opens that object, wherever it lives.",
+      },
+      "connections": {
+        "title": "Connections",
+        "text": "A connection holds the address and the credentials of an outside database. The sample has two: the order system on PostgreSQL and the customer system on ClickHouse. To bring in a table you pick a connection and then the table, and Tabularia keeps a copy of it as a datasource.",
+      },
+      "datasources": {
+        "title": "Datasources",
+        "text": "A datasource is a table that Tabularia holds, either imported from a connection, like orders and order_rows here, or written by a flow. Click a row to open its panel with the schema, the data contract and the refresh schedule.",
+      },
+      "editorCanvas": {
+        "title": "The flow canvas",
+        "text": "A flow is a chain of nodes joined by links: sources on the left, operations in the middle, outputs on the right. A halo on a node and dots travelling along its link say that its result is already in the cache, and a fast dashed link means the engine is computing it now. Drag a node to move it, or drag from its handle to connect it.",
+      },
+      "editorPalette": {
+        "title": "The palette of operations",
+        "text": "On the left are the operations you can add, such as filter, join and group by, gathered by kind. Click one or drag it onto the canvas to add it to the flow.",
+      },
+      "editorPreview": {
+        "title": "Data preview",
+        "text": "Select a node and this panel shows the data as it is after that step, with the number of rows and the type of every column. Click the name of a column to see its profile: distinct values, nulls and the most frequent values. Looking never changes anything.",
+      },
+      "editorParams": {
+        "title": "Node settings",
+        "text": "The panel on the right holds the settings of the selected node: which columns, which condition, which join keys. Changing a setting recomputes the preview from that node onward, so you see the effect at once.",
+      },
+      "editorRun": {
+        "title": "Engine, Run and schedule",
+        "text": "The badge in the toolbar names the engine that computes this flow, with an arrow when scheduled runs use another one. Run executes the whole flow and writes its outputs. To make a flow run by itself, schedule it from the Flows page: three of the sample flows already are.",
+      },
+      "editorOutput": {
+        "title": "The output node",
+        "text": "An output node ends a flow by publishing its result as a datasource. This one writes the table that the views, the report and the dashboard of the sample read. Run the flow again and the table is updated, and so is everything that reads it.",
+      },
+      "flows": {
+        "title": "Flows: activity and load",
+        "text": "The Flows page opens with the calendar of what ran and when, and with the forecast of the scheduled runs, which shows the hours where several flows start together. Use them to spot a crowded night before it slows anything down.",
+      },
+      "flowsList": {
+        "title": "The list of flows",
+        "text": "Every flow you can see is listed here with its last run and, for scheduled ones, the next. From a row you can run a flow now, schedule it or open it in the editor.",
+      },
+      "viewerFields": {
+        "title": "The Viewer: fields",
+        "text": "The Viewer explores a table without changing it. This saved view is already set up on a datasource: the fields on the left are dragged into Rows, Columns and Measures to build a cross table, and they can be filtered too.",
+      },
+      "viewerResult": {
+        "title": "The Viewer: result",
+        "text": "The result is shown as a table or as a chart, as the tabs say. Saving a view keeps its fields, filters and chart, so a colleague opens exactly what you saw. The data underneath is never modified.",
+      },
+      "reportParams": {
+        "title": "Report parameters",
+        "text": "A report can ask for values before it is drawn, such as a period or an area. Fill them in and press the button: the pages are rendered again with those values.",
+      },
+      "report": {
+        "title": "Reports",
+        "text": "A report is a set of formatted pages built on the sample's tables and ready to print. Download it as PDF or Excel, or choose Edit to change it in the designer. Margin review compares revenue and margin of a period with the same months a year earlier.",
+      },
+      "dashboard": {
+        "title": "Dashboards",
+        "text": "A dashboard puts tiles side by side: numbers, charts and tables over the same data. The tiles answer to clicks: click a bar or a slice and the other tiles filter to it, and click it again to remove the filter.",
+      },
+      "dashboardFilters": {
+        "title": "Dashboard filters",
+        "text": "The filters above the tiles apply to all of them at once. Set a value and press Apply to see the whole dashboard for that period or area.",
+      },
+      "lineage": {
+        "title": "Lineage",
+        "text": "Lineage shows where a figure comes from and what depends on it. Search for an object on the left, such as a datasource or a report, and the graph draws what feeds it and what it feeds. Check it before changing a table that others use.",
+      },
+      "runs": {
+        "title": "Runs",
+        "text": "Every execution is listed here, from flows, imports and scheduled jobs, with its status. Filter by status to see only the failures, and open a row to read its detail and the reason it failed.",
+      },
+      "queue": {
+        "title": "Queue",
+        "text": "The queue shows the workers that are online, how many jobs are running and how many wait for a free worker. If a run is slow to start, this is where to look.",
+      },
+      "admin": {
+        "title": "Administration",
+        "text": "This area holds the installation itself: users and groups, who can see which folder, the engines, the settings and the backups. Only the accounts allowed to look after it have this tab.",
+      },
+      "end": {
+        "title": "That is the tour",
+        "text": "You can run it again from the gear menu, under Guided tour. The keyboard button beside the gear lists every key, and the search box finds anything by its name. Everything you opened was a real object of the Sample folder, so go back and try it.",
+      },
+    },
+  },
 }

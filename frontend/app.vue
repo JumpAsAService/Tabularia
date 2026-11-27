@@ -2,6 +2,7 @@
 // explicit import: in the container new components are not scanned
 import IdleWarning from '~/components/ui/IdleWarning.vue'
 import AppKeys from '~/components/ui/AppKeys.vue'
+import TourHost from '~/components/tour/TourHost.vue'
 import ConfirmHost from '~/components/ui/ConfirmHost.vue'
 </script>
 
@@ -16,4 +17,8 @@ import ConfirmHost from '~/components/ui/ConfirmHost.vue'
   <IdleWarning />
   <!-- the keys of every page: «g» and a letter, «,» «.», «/», «?» -->
   <AppKeys />
+  <!-- the guided tour over the Sample folder's own objects (components/tour/TourHost.vue): idle until it is asked for -->
+  <!-- in the browser only: it measures the window and listens to it, and the server that renders the
+       first page (the sign-in, which the health probes ask for) has neither -->
+  <ClientOnly><TourHost /></ClientOnly>
 </template>

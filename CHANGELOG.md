@@ -8,6 +8,26 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- **A guided tour of the app, on the sample's own objects.** A person who sees the «Sample»
+  folder gets, on their first visit, a walk of about ten minutes through every area: the top
+  bar and its keys, the Home, Explore and a folder, a connection and a datasource, the flow
+  editor (canvas, palette, preview, a step's settings, run, output), the flows' activity, the
+  Viewer, a report, a dashboard, Lineage, Runs, the Queue and Administration. Each step opens
+  the real object of the sample and points at the part it talks about; a person gets only the
+  steps of the areas their account has. It is not modal: the app stays usable under it, a
+  menu or a dialog that opens hides it, and going elsewhere ends it. What was seen is kept
+  in the browser, per person; Esc leaves and the settings menu offers to resume, and «Skip
+  tour» means never again. Without the sample folder there is no tour and no menu entry, and
+  the question costs one light request in a browser session. In the five languages; not on
+  screens narrower than 900 pixels.
+- **In the flow editor, a link that leaves a cached step shows data passing.** A step whose
+  result is in the step cache already had a halo; the links leaving it are now drawn as small
+  dots in the cache's colour, which travel towards the next step for about six seconds when
+  the editor opens, when a step's result lands in the cache and when the engine has finished
+  working along the link, and then stand still. The fast dashes of a link the engine is
+  working along win over them, a selected or hovered link is drawn plain, and under reduced
+  motion the dots do not travel. They do not travel without end on purpose: measured, a link
+  animated forever kept a processor core busy with the editor at rest.
 - **The external ClickHouse engine can be given a memory limit, and spills to disk before it.**
   `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE` (one query) and `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE_FOR_USER`
   (all of Tabularia's queries at one time), `externalServices.clickhouse.maxMemoryUsage` and

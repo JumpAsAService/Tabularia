@@ -113,7 +113,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
       <p v-if="error" class="err"><CircleAlert :size="14" /> {{ error }}</p>
 
       <!-- summary -->
-      <div class="stats">
+      <div class="stats" data-tour="queue-stats">
         <div class="stat">
           <span class="n">{{ workers.length }}</span><span class="l">{{ $t('queue.workersOnline') }}</span>
         </div>

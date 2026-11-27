@@ -31,6 +31,7 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
     class="node node-op"
     :class="{ 'node-join': needsRight, 'node-cached': cached }"
     :style="{ '--node-accent': meta.color }"
+    data-tour="node-op"
   >
     <!-- main input (chain): on the left (at the top when there is a second input) -->
     <Handle id="left" type="target" :position="Position.Left" :class="needsRight ? 'h-left-top' : ''" />

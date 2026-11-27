@@ -62,7 +62,7 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <div class="node node-output">
+  <div class="node node-output" data-tour="node-output">
     <!-- DATA input: the transformation chain (on the left, at the top) -->
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
     <!-- SEQUENCE input: orchestration order (on the left, below) -->

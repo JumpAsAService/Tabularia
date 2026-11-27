@@ -1739,7 +1739,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       </button>
 
       <div v-if="!treeLoaded || target !== null || isSuper" class="newwrap">
-        <button ref="newBtn" class="btn-link" aria-keyshortcuts="n" :disabled="state === 'loading'" :aria-busy="state === 'loading'" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
+        <button ref="newBtn" class="btn-link" data-tour="explore-new" aria-keyshortcuts="n" :disabled="state === 'loading'" :aria-busy="state === 'loading'" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
         <Transition name="pop" :css="!newMenuByKey">
         <div v-if="newMenu" ref="newPop" class="menu-pop">
@@ -1847,9 +1847,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
     <!-- the folder's content: one sheet, rounded as the list tables of the other pages, with a ground of its
          own whatever the page behind it is -->
-    <section class="sheet" data-fin="box" :aria-label="current?.name ?? $t('projectBrowser.rootCrumb')">
+    <section class="sheet" data-tour="explore-sheet" data-fin="box" :aria-label="current?.name ?? $t('projectBrowser.rootCrumb')">
       <!-- kind filter: the numbers say what is inside, before looking. The sheet's heading -->
-      <div v-if="state !== 'loading' && segments.length > 1" v-roving.main class="segs" data-fin="head" role="radiogroup" :aria-label="$t('exploreKeys.kindFilter')">
+      <div v-if="state !== 'loading' && segments.length > 1" v-roving.main class="segs" data-tour="explore-filter" data-fin="head" role="radiogroup" :aria-label="$t('exploreKeys.kindFilter')">
         <button class="seg" role="radio" :aria-checked="kindFilter === null" :class="{ on: kindFilter === null }" @click="kindFilter = null">
           {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
         </button>

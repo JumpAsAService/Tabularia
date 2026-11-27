@@ -9325,4 +9325,127 @@ export default {
       "duplicated": "«{name}» creado como copia.",
     },
   },
+  "tour": {
+    "name": "Visita guiada",
+    "menu": "Visita guiada",
+    "resume": "Reanudar la visita guiada",
+    "progress": "{n} de {total}",
+    "announce": "Paso {n} de {total}: {title}",
+    "start": "Empezar",
+    "notNow": "Ahora no",
+    "skip": "Saltar la visita",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "done": "Terminar",
+    "steps": {
+      "welcome": {
+        "title": "Te damos la bienvenida a Tabularia",
+        "text": "En Tabularia los datos se preparan, se analizan y se comparten: los flujos limpian y unen tablas, y los resultados se leen como vistas, informes y dashboards. Esta visita abre los objetos reales de la carpeta Sample, una empresa inventada de pasta y panadería con un sistema de pedidos y otro de clientes. Dura unos diez minutos y puedes salir en cualquier momento.",
+      },
+      "topbar": {
+        "title": "La barra superior",
+        "text": "Cada pestaña es un área de la aplicación, y Análisis reúne el Visor, los Informes y los Dashboards. El cuadro de búsqueda encuentra cualquier objeto por su nombre, y la tecla / lleva al filtro de la página en la que estás, o a este cuadro cuando la página no tiene uno. El botón del teclado junto al engranaje lista todas las teclas, y G seguida de una letra va directa a un área.",
+      },
+      "home": {
+        "title": "Inicio",
+        "text": "Inicio es una página de widgets que ordenas tú, cada uno un atajo a algo que usas a menudo. Elige Personalizar para añadirlos, quitarlos y moverlos. La disposición se guarda solo para ti.",
+      },
+      "explore": {
+        "title": "Explorar",
+        "text": "Explorar es donde está todo, en carpetas como en un gestor de archivos. La carpeta Sample contiene los datos, los flujos y los informes de la empresa. Cada carpeta tiene sus propios permisos, así que lo que ves aquí es lo que puedes abrir.",
+      },
+      "exploreNew": {
+        "title": "Crear objetos",
+        "text": "El botón Nuevo crea un flujo, una carpeta, un informe, un dashboard y lo demás, dentro de la carpeta en la que estás. Solo aparece donde tienes permiso para crear.",
+      },
+      "folder": {
+        "title": "Dentro de una carpeta",
+        "text": "Una carpeta lista juntos sus objetos: flujos, tablas, vistas guardadas, informes, dashboards y conexiones. Los botones sobre la lista filtran por tipo e indican cuántos hay de cada uno. Un clic en una fila abre ese objeto, esté donde esté.",
+      },
+      "connections": {
+        "title": "Conexiones",
+        "text": "Una conexión guarda la dirección y las credenciales de una base de datos externa. El ejemplo tiene dos: el sistema de pedidos en PostgreSQL y el de clientes en ClickHouse. Para traer una tabla eliges una conexión y después la tabla, y Tabularia guarda una copia como fuente de datos.",
+      },
+      "datasources": {
+        "title": "Fuentes de datos",
+        "text": "Una fuente de datos es una tabla que Tabularia conserva, ya sea importada desde una conexión, como orders y order_rows aquí, o escrita por un flujo. Haz clic en una fila para abrir su panel con el esquema, el contrato de datos y la programación de la actualización.",
+      },
+      "editorCanvas": {
+        "title": "El lienzo del flujo",
+        "text": "Un flujo es una cadena de nodos unidos por enlaces: las fuentes a la izquierda, las operaciones en el centro, las salidas a la derecha. Un halo en un nodo y puntos que recorren su enlace indican que su resultado ya está en la caché, y un enlace de trazos rápidos significa que el motor lo está calculando ahora. Arrastra un nodo para moverlo, o arrastra desde su asa para conectarlo.",
+      },
+      "editorPalette": {
+        "title": "La paleta de operaciones",
+        "text": "A la izquierda están las operaciones que puedes añadir, como filtro, unión y agrupación, ordenadas por tipo. Haz clic en una o arrástrala al lienzo para añadirla al flujo.",
+      },
+      "editorPreview": {
+        "title": "Vista previa de los datos",
+        "text": "Selecciona un nodo y este panel muestra los datos tal como quedan después de ese paso, con el número de filas y el tipo de cada columna. Haz clic en el nombre de una columna para ver su perfil: valores distintos, nulos y valores más frecuentes. Mirar nunca cambia nada.",
+      },
+      "editorParams": {
+        "title": "Ajustes del nodo",
+        "text": "El panel de la derecha contiene los ajustes del nodo seleccionado: qué columnas, qué condición, qué claves de unión. Cambiar un ajuste recalcula la vista previa desde ese nodo en adelante, así ves el efecto enseguida.",
+      },
+      "editorRun": {
+        "title": "Motor, Ejecutar y programación",
+        "text": "La insignia de la barra de herramientas nombra el motor que calcula este flujo, con una flecha cuando las ejecuciones programadas usan otro. Ejecutar lanza todo el flujo y escribe sus salidas. Para que un flujo se ejecute solo se programa desde la página Flujos: tres de los flujos del ejemplo ya lo están.",
+      },
+      "editorOutput": {
+        "title": "El nodo de salida",
+        "text": "Un nodo de salida cierra un flujo publicando su resultado como fuente de datos. Este escribe la tabla que leen las vistas, el informe y el dashboard del ejemplo. Vuelve a ejecutar el flujo y la tabla se actualiza, y con ella todo lo que la lee.",
+      },
+      "flows": {
+        "title": "Flujos: actividad y carga",
+        "text": "La página Flujos se abre con el calendario de lo que se ejecutó y cuándo, y con la previsión de las ejecuciones programadas, que muestra las horas en que varios flujos arrancan a la vez. Sirven para detectar una noche saturada antes de que ralentice algo.",
+      },
+      "flowsList": {
+        "title": "La lista de flujos",
+        "text": "Aquí aparecen todos los flujos que puedes ver, con su última ejecución y, en los programados, la siguiente. Desde una fila puedes ejecutar un flujo ahora, programarlo o abrirlo en el editor.",
+      },
+      "viewerFields": {
+        "title": "El Visor: los campos",
+        "text": "El Visor explora una tabla sin modificarla. Esta vista guardada ya está preparada sobre una fuente de datos: los campos de la izquierda se arrastran a Filas, Columnas y Medidas para construir una tabla cruzada, y también se pueden filtrar.",
+      },
+      "viewerResult": {
+        "title": "El Visor: el resultado",
+        "text": "El resultado se muestra como tabla o como gráfico, según las pestañas. Guardar una vista conserva sus campos, filtros y gráfico, así que un compañero abre exactamente lo que tú viste. Los datos de debajo nunca se modifican.",
+      },
+      "reportParams": {
+        "title": "Parámetros del informe",
+        "text": "Un informe puede pedir valores antes de dibujarse, como un periodo o una zona. Rellénalos y pulsa el botón: las páginas se generan de nuevo con esos valores.",
+      },
+      "report": {
+        "title": "Informes",
+        "text": "Un informe es un conjunto de páginas con formato, construido sobre las tablas del ejemplo y listo para imprimir. Descárgalo en PDF o en Excel, o elige Editar para cambiarlo en el diseñador. Margin review compara los ingresos y el margen de un periodo con los mismos meses del año anterior.",
+      },
+      "dashboard": {
+        "title": "Dashboards",
+        "text": "Un dashboard coloca mosaicos uno junto a otro: números, gráficos y tablas sobre los mismos datos. Los mosaicos responden al clic: haz clic en una barra o en un sector y los demás se filtran por él, y otro clic quita el filtro.",
+      },
+      "dashboardFilters": {
+        "title": "Filtros del dashboard",
+        "text": "Los filtros sobre los mosaicos se aplican a todos a la vez. Fija un valor y pulsa Aplicar para ver todo el dashboard de ese periodo o zona.",
+      },
+      "lineage": {
+        "title": "Linaje",
+        "text": "El linaje muestra de dónde viene un dato y qué depende de él. Busca un objeto a la izquierda, como una fuente de datos o un informe, y el gráfico dibuja lo que lo alimenta y lo que él alimenta. Consúltalo antes de cambiar una tabla que usan otros.",
+      },
+      "runs": {
+        "title": "Ejecuciones",
+        "text": "Cada ejecución aparece aquí, ya sea de flujos, importaciones o tareas programadas, con su estado. Filtra por estado para ver solo los fallos, y abre una fila para leer su detalle y el motivo del error.",
+      },
+      "queue": {
+        "title": "Cola",
+        "text": "La cola muestra los workers conectados, cuántas tareas se ejecutan y cuántas esperan un worker libre. Si una ejecución tarda en arrancar, aquí es donde hay que mirar.",
+      },
+      "admin": {
+        "title": "Administración",
+        "text": "Esta área trata de la instalación misma: usuarios y grupos, quién ve qué carpeta, los motores, los ajustes y las copias de seguridad. Solo las cuentas que pueden ocuparse de ella tienen esta pestaña.",
+      },
+      "end": {
+        "title": "La visita ha terminado",
+        "text": "Puedes repetirla desde el menú del engranaje, en Visita guiada. El botón del teclado junto a él lista todas las teclas, y el cuadro de búsqueda encuentra cualquier cosa por su nombre. Todo lo que abriste era un objeto real de la carpeta Sample: vuelve y pruébalo.",
+      },
+    },
+  },
 }

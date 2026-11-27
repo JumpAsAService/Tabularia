@@ -1085,6 +1085,12 @@ restarts, remove it and run the guide again.
 - **The nodes stay `NotReady`**: the network plugin is not running yet.
   `kubectl get pods --namespace kube-system` shows the `calico-node` (or `cilium`) pods
   and why they wait; an image still downloading takes a few minutes.
+- **`kind create cluster` stops while a worker joins**, or a node's kubelet never starts,
+  and `docker logs <node>` says *too many open files* or *failed to create fsnotify
+  watcher*: the computer's inotify limits are used up, which happens when another kind
+  cluster, or an editor that watches many files, is running. Raise them with
+  `sudo sysctl fs.inotify.max_user_instances=512 fs.inotify.max_user_watches=524288`
+  (or stop the other cluster), delete the cluster and create it again.
 - **`kind create cluster` fails on the port**: something already listens on 8080. Change
   `hostPort` in `$WORK/kind.yaml` and open that port instead.
 - **A Container node, or Try in the cluster, says the nodes do not trust the

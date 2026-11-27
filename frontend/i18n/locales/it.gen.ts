@@ -9325,4 +9325,127 @@ export default {
       "duplicated": "«{name}» creato come copia.",
     },
   },
+  "tour": {
+    "name": "Visita guidata",
+    "menu": "Visita guidata",
+    "resume": "Riprendi la visita guidata",
+    "progress": "{n} di {total}",
+    "announce": "Passo {n} di {total}: {title}",
+    "start": "Inizia",
+    "notNow": "Non ora",
+    "skip": "Salta la visita",
+    "back": "Indietro",
+    "next": "Avanti",
+    "done": "Fine",
+    "steps": {
+      "welcome": {
+        "title": "Benvenuto in Tabularia",
+        "text": "Tabularia è il posto dove i dati si preparano, si analizzano e si condividono: i flussi puliscono e uniscono le tabelle, e i risultati si leggono come viste, report e dashboard. Questa visita apre gli oggetti veri della cartella Sample, un'azienda inventata di pasta e prodotti da forno con un gestionale ordini e un sistema clienti. Dura circa dieci minuti e puoi uscire in qualsiasi momento.",
+      },
+      "topbar": {
+        "title": "La barra in alto",
+        "text": "Ogni scheda è un'area dell'app, e Analisi contiene il Viewer, i Report e le Dashboard. La casella di ricerca trova qualsiasi oggetto dal nome, e il tasto / porta al filtro della pagina in cui sei, oppure a questa casella dove la pagina non ne ha. Il pulsante con la tastiera accanto all'ingranaggio elenca tutti i tasti, e G seguito da una lettera va direttamente a un'area.",
+      },
+      "home": {
+        "title": "Home",
+        "text": "La Home è una pagina di widget che disponi tu: ognuno è una scorciatoia verso qualcosa che usi spesso. Scegli Personalizza per aggiungerli, toglierli e spostarli. La disposizione è salvata solo per te.",
+      },
+      "explore": {
+        "title": "Esplora",
+        "text": "Esplora è il posto dove sta tutto, in cartelle come in un gestore di file. La cartella Sample contiene i dati, i flussi e i report dell'azienda. Ogni cartella ha i suoi permessi, quindi ciò che vedi qui è ciò che puoi aprire.",
+      },
+      "exploreNew": {
+        "title": "Creare oggetti",
+        "text": "Il pulsante Nuovo crea un flusso, una cartella, un report, una dashboard e il resto, dentro la cartella in cui ti trovi. Compare solo dove hai il permesso di creare.",
+      },
+      "folder": {
+        "title": "Dentro una cartella",
+        "text": "Una cartella elenca insieme i suoi oggetti: flussi, tabelle, viste salvate, report, dashboard e connessioni. I pulsanti sopra l'elenco filtrano per tipo e dicono quanti ce ne sono di ciascuno. Un clic su una riga apre quell'oggetto, dovunque si trovi.",
+      },
+      "connections": {
+        "title": "Connessioni",
+        "text": "Una connessione contiene l'indirizzo e le credenziali di un database esterno. Il sample ne ha due: il gestionale ordini su PostgreSQL e il sistema clienti su ClickHouse. Per portare dentro una tabella scegli una connessione e poi la tabella, e Tabularia ne tiene una copia come datasource.",
+      },
+      "datasources": {
+        "title": "Datasource",
+        "text": "Un datasource è una tabella che Tabularia custodisce, importata da una connessione, come orders e order_rows qui, oppure scritta da un flusso. Clicca una riga per aprire il suo pannello con lo schema, il contratto sui dati e la pianificazione dell'aggiornamento.",
+      },
+      "editorCanvas": {
+        "title": "Il canvas del flusso",
+        "text": "Un flusso è una catena di nodi uniti da collegamenti: le sorgenti a sinistra, le operazioni al centro, le uscite a destra. Un alone sul nodo e dei punti che scorrono sul suo collegamento dicono che il risultato è già in cache, mentre un tratteggio veloce significa che il motore lo sta calcolando adesso. Trascina un nodo per spostarlo, o trascina dalla sua maniglia per collegarlo.",
+      },
+      "editorPalette": {
+        "title": "La tavolozza delle operazioni",
+        "text": "A sinistra ci sono le operazioni che puoi aggiungere, come filtro, join e raggruppamento, divise per tipo. Cliccane una o trascinala sul canvas per aggiungerla al flusso.",
+      },
+      "editorPreview": {
+        "title": "Anteprima dei dati",
+        "text": "Seleziona un nodo e questo pannello mostra i dati come sono dopo quel passo, con il numero di righe e il tipo di ogni colonna. Clicca il nome di una colonna per vederne il profilo: valori distinti, nulli e valori più frequenti. Guardare non cambia mai nulla.",
+      },
+      "editorParams": {
+        "title": "Parametri del nodo",
+        "text": "Il pannello a destra contiene i parametri del nodo selezionato: quali colonne, quale condizione, quali chiavi di join. Cambiare un parametro ricalcola l'anteprima da quel nodo in poi, così vedi subito l'effetto.",
+      },
+      "editorRun": {
+        "title": "Motore, Esegui e pianificazione",
+        "text": "Il badge nella barra indica il motore che calcola questo flusso, con una freccia quando le esecuzioni pianificate ne usano un altro. Esegui lancia l'intero flusso e scrive le sue uscite. Per far partire un flusso da solo lo si pianifica dalla pagina Flussi: tre dei flussi del sample lo sono già.",
+      },
+      "editorOutput": {
+        "title": "Il nodo di uscita",
+        "text": "Un nodo di uscita chiude un flusso pubblicando il suo risultato come datasource. Questo scrive la tabella che leggono le viste, il report e la dashboard del sample. Rilancia il flusso e la tabella si aggiorna, e con lei tutto ciò che la legge.",
+      },
+      "flows": {
+        "title": "Flussi: attività e carico",
+        "text": "La pagina Flussi si apre con il calendario di ciò che è girato e quando, e con la previsione delle esecuzioni pianificate, che mostra le ore in cui più flussi partono insieme. Servono a scoprire una notte affollata prima che rallenti qualcosa.",
+      },
+      "flowsList": {
+        "title": "L'elenco dei flussi",
+        "text": "Qui sono elencati tutti i flussi che puoi vedere, con l'ultima esecuzione e, per quelli pianificati, la prossima. Da una riga puoi eseguire subito un flusso, pianificarlo o aprirlo nell'editor.",
+      },
+      "viewerFields": {
+        "title": "Il Viewer: i campi",
+        "text": "Il Viewer esplora una tabella senza modificarla. Questa vista salvata è già impostata su un datasource: i campi a sinistra si trascinano in Righe, Colonne e Misure per costruire una tabella a doppia entrata, e si possono anche filtrare.",
+      },
+      "viewerResult": {
+        "title": "Il Viewer: il risultato",
+        "text": "Il risultato si mostra come tabella o come grafico, a seconda della scheda. Salvare una vista conserva campi, filtri e grafico, così un collega apre esattamente ciò che hai visto tu. I dati di partenza non vengono mai modificati.",
+      },
+      "reportParams": {
+        "title": "Parametri del report",
+        "text": "Un report può chiedere dei valori prima di essere disegnato, come un periodo o un'area. Compilali e premi il pulsante: le pagine vengono generate di nuovo con quei valori.",
+      },
+      "report": {
+        "title": "Report",
+        "text": "Un report è un documento impaginato, costruito sulle tabelle del sample e pronto da stampare. Scaricalo in PDF o in Excel, oppure scegli Modifica per cambiarlo nel designer. Margin review confronta ricavi e margine di un periodo con gli stessi mesi dell'anno prima.",
+      },
+      "dashboard": {
+        "title": "Dashboard",
+        "text": "Una dashboard affianca dei riquadri: numeri, grafici e tabelle sugli stessi dati. I riquadri rispondono al clic: clicca una barra o una fetta e gli altri riquadri si filtrano su quella, clicca di nuovo per togliere il filtro.",
+      },
+      "dashboardFilters": {
+        "title": "Filtri della dashboard",
+        "text": "I filtri sopra i riquadri valgono per tutti insieme. Imposta un valore e premi Applica per vedere l'intera dashboard per quel periodo o quell'area.",
+      },
+      "lineage": {
+        "title": "Lineage",
+        "text": "Il lineage mostra da dove viene un dato e cosa ne dipende. Cerca un oggetto a sinistra, per esempio un datasource o un report, e il grafo disegna ciò che lo alimenta e ciò che alimenta. Consultalo prima di cambiare una tabella che usano anche altri.",
+      },
+      "runs": {
+        "title": "Esecuzioni",
+        "text": "Ogni esecuzione è elencata qui, da flussi, importazioni e lavori pianificati, con il suo stato. Filtra per stato per vedere solo i fallimenti, e apri una riga per leggerne il dettaglio e il motivo dell'errore.",
+      },
+      "queue": {
+        "title": "Coda",
+        "text": "La coda mostra i worker online, quanti lavori stanno girando e quanti aspettano un worker libero. Se un'esecuzione tarda a partire, è qui che si guarda.",
+      },
+      "admin": {
+        "title": "Amministrazione",
+        "text": "Quest'area riguarda l'installazione stessa: utenti e gruppi, chi vede quale cartella, i motori, le impostazioni e i backup. Questa scheda c'è solo per gli account che possono occuparsene.",
+      },
+      "end": {
+        "title": "La visita è finita",
+        "text": "Puoi rifarla dal menu dell'ingranaggio, alla voce Visita guidata. Il pulsante con la tastiera accanto all'ingranaggio elenca tutti i tasti, e la casella di ricerca trova qualsiasi cosa dal nome. Tutto ciò che hai aperto era un oggetto vero della cartella Sample: torna indietro e provalo.",
+      },
+    },
+  },
 }
