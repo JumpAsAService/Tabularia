@@ -8,6 +8,36 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+- **The DuckDB engine does less to give the same answers, above all on tables read from an
+  object storage.** Measured on the sample's large tables (42 million and a billion rows) read
+  from a bucket in another network, from workers of four CPUs' share:
+  - *A count of a column that has no NULLs does not read the column.* DuckDB is asked to prove
+    it from the file's footer (a plan, no data); proved, `count(column)` is the number of rows.
+    The billion-row table grouped by type and counted on its 4 GB identifier did not answer in
+    the two minutes a preview has; it answers in about fifteen seconds.
+  - *A scan of remote files gets more threads.* Up to DuckDB 1.x a thread reading a remote
+    Parquet file waits for its own request, so a scan was bound by the requests in flight: 34.5 s
+    with 4 threads, 9.5 s with 16. A connection that reads the storage to the end gets four
+    times its CPUs' share, as far as its memory allows 125 MB a thread; the first rows of a
+    chain that stops early keep the CPUs' share (more threads only fetched row groups to throw
+    away). The heavy shapes were run again inside the same memory: none gave up.
+  - *Planning a chain asks the storage about each file once.* Every step's planning asked
+    again: twenty light steps over two tables made 46 requests and took 5.1 s before a row was
+    read; now 2 requests and 0.7 s.
+  - *An aggregation is computed once.* Its row count comes with its rows (the Viewer and the
+    editor asked it apart, running the aggregation again), in the editor its result is kept in
+    the step cache as it is shown, and a step's copy no longer counts the chain before writing
+    it. A crosstab runs its chain twice, not three times.
+  - *A count is not slower than what it counts.* Under a count's cap DuckDB handed the rows over
+    in the file's order: counting a filter over 42 million rows took 7.9 s, and 2.3 s where the
+    order cannot change the number, which the engine now tells.
+  - *The result of an «Execute SQL» step is written by the sandbox's own DuckDB* where it
+    writes exactly what Python wrote (checked kind by kind): 7.7 s against 24.7 s after a join
+    of 42 million rows.
+  - *A preview nobody waits for stops at once*, as a column profile already did.
+
+  The Viewer's five clicks on the billion-row table: 493 s with three previews timed out, now
+  57 s with every one answered. The sample's eleven flows on DuckDB: 599 s, now 249 s.
 - **A guided tour of the app, on the sample's own objects.** A person who sees the «Sample»
   folder gets, on their first visit, a walk of about ten minutes through every area: the top
   bar and its keys, the Home, Explore and a folder, a connection and a datasource, the flow

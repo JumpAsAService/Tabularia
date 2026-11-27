@@ -105,9 +105,21 @@ def duckdb_secret_sql() -> str:
 
 
 def duckdb_enable(con: duckdb.DuckDBPyConnection) -> None:
-    """Lets `con` read the object storage with the backend's credentials."""
+    """Lets `con` read the object storage with the backend's credentials.
+
+    And remembers what the storage says of each file (its size, when it changed) for as long as
+    the connection lives, which is one request. A chain is planned step upon step, and every
+    step's planning asked about every file under it again: a chain of twenty light steps over
+    two tables made 46 such requests and took 5.1 s before reading a row; remembered, 2 requests
+    and 0.7 s (measured from a worker to a storage some 30 ms away). The objects the engines
+    read are never rewritten in place (a dataset's key carries its version, a cached step's its
+    fingerprint), and within one request one answer is the one wanted anyway."""
     _load_httpfs(con)
     con.execute(duckdb_secret_sql())
+    try:
+        con.execute("SET enable_http_metadata_cache = true")
+    except duckdb.Error:  # a DuckDB without the setting: each planning asks, as before
+        pass
 
 
 def duckdb_url(bucket: str, key: str) -> str | None:

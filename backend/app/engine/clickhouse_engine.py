@@ -103,17 +103,10 @@ _TOTAL_COLUMN = "__tab_total"
 
 
 def _ends_in_aggregation(ops) -> bool:
-    """True when the last step that changes the rows is an aggregation: what follows it (a sort, a
-    projection, a computed column) keeps one row per group. Counting such a chain costs nothing
-    more than previewing it; counting it apart costs the whole aggregation again."""
-    from app.engine.rowcount import PRESERVING
+    """See rowcount.ends_in_aggregation (shared with the DuckDB engine)."""
+    from app.engine.rowcount import ends_in_aggregation
 
-    for op in reversed(list(ops)):
-        t = op.type if hasattr(op, "type") else op.get("type")
-        if t in PRESERVING:
-            continue
-        return t in _AGGREGATING
-    return False
+    return ends_in_aggregation(ops)
 
 
 def rows_with_total_sql(sql: str, columns: list[str], n: int) -> str:

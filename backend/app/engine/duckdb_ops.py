@@ -15,6 +15,7 @@ flow) are not supported yet.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -270,10 +271,56 @@ _AGG = {
 }
 
 
-def _agg_expr(func: str, col: str) -> str:
+def _plan_operators(node, out: list) -> list:
+    out.append(str(node.get("name", "?")).strip())
+    for child in node.get("children") or []:
+        _plan_operators(child, out)
+    return out
+
+
+def _never_null(ctx, rel, columns) -> frozenset[str]:
+    """The columns of `rel`, among `columns`, that DuckDB itself can PROVE hold no NULL.
+
+    Asked with EXPLAIN, which reads no data: `SELECT 1 FROM rel WHERE column IS NULL`. When the
+    optimizer can prove from what it knows (a parquet file's footer says how many NULLs each
+    column has) that the WHOLE query gives no row, its plan is an empty result and nothing else.
+    That, and only that, is the proof: an empty result somewhere inside a plan proves nothing.
+    A union whose first table has no NULLs and whose second has them is planned as a union of
+    an empty result and a scan, and so is a table appended to one that lacks the column; a left
+    join whose right side is known to be empty has an empty result under it while its left
+    column is full of NULLs (all checked on DuckDB 1.5: taking any empty result for the proof
+    counted 200 where there were 166 values). Proved this way: a column of a file, also after
+    filters and projections. Not proved, and so counted as before: after a join, a union, an
+    aggregation, a computed column, a cast. Anything unexpected (an error, a plan written
+    another way) is «not proved».
+
+    It serves `count(column)`: without NULLs it is the number of rows, and the column needs
+    not be read. On a billion rows counted by a 4 GB identifier, read from the object storage,
+    that was the difference between an answer in half a minute and none in two."""
+    wanted = [c for c in dict.fromkeys(columns) if c in rel.columns]
+    if not wanted:
+        return frozenset()
+    proved = set()
+    try:
+        name = ctx.register(rel)
+        for c in wanted:
+            raw = ctx.con.sql(f"EXPLAIN (FORMAT JSON) SELECT 1 FROM {name} WHERE {_qi(c)} IS NULL").fetchall()
+            tree = json.loads(raw[0][-1])
+            operators = _plan_operators(tree[0] if isinstance(tree, list) else tree, [])
+            if "EMPTY_RESULT" in operators and set(operators) <= {"EMPTY_RESULT", "PROJECTION"}:
+                proved.add(c)
+    except Exception:  # noqa: BLE001 — a doubt: the column is counted as before
+        return frozenset(proved)
+    return frozenset(proved)
+
+
+def _agg_expr(func: str, col: str, never_null: frozenset = frozenset()) -> str:
     """The aggregate of a group_by or a pivot: n_unique is a DISTINCT count (the pivot
     used the plain count of _AGG, counting repeats); first and last follow the rows'
-    order (the input numbered by `_numbered`)."""
+    order (the input numbered by `_numbered`); the count of a column proved without NULLs
+    is the count of the rows (`_never_null`)."""
+    if func == "count" and col in never_null:
+        return "count(*)"
     if func == "n_unique":
         return f"count(DISTINCT {_qi(col)})"
     if func in ("first", "last"):
@@ -292,12 +339,13 @@ def op_group_by(rel, params, a, ctx):
     aggs = _require(params, "aggregations")
     by_sql = ", ".join(_qi(c) for c in by)
     parts = [by_sql]
+    never_null = _never_null(ctx, rel, [g["column"] for g in aggs if g.get("func", "sum") == "count"])
     for agg in aggs:
         col, func = agg["column"], agg.get("func", "sum")
         if func not in _AGG:
             raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
-        parts.append(f"{_agg_expr(func, col)} AS {_qi(alias)}")
+        parts.append(f"{_agg_expr(func, col, never_null)} AS {_qi(alias)}")
     src = _source_for(a, [g.get("func", "sum") for g in aggs])
     return _recast_hugeint(ctx, rel.query(a, f"SELECT {', '.join(parts)} FROM {src} GROUP BY {by_sql}"))
 
@@ -426,24 +474,33 @@ def op_pivot(rel, params, a, ctx):
     name = ctx.register(rel)
     out = _qi(PIVOT_VALUES_COLUMN)
     idx_sql = ", ".join(_qi(c) for c in index)
+    measure_sql = _agg_expr(func, values, _never_null(ctx, rel, [values]) if func == "count" else frozenset())
     if not on:  # rows only: a group by with one measure, named `values`
         return _recast_hugeint(ctx, ctx.con.sql(
-            f"SELECT {idx_sql}, {_agg_expr(func, values)} AS {out} FROM {_source_for(name, [func])} GROUP BY {idx_sql}"
+            f"SELECT {idx_sql}, {measure_sql} AS {out} FROM {_source_for(name, [func])} GROUP BY {idx_sql}"
         ))
     # the cross-engine label (see operations.pivot_label): the value as text,
     # NULL → 'null', several columns joined by "_" (only the combinations present)
     on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({_qi(c)} AS VARCHAR), 'null')" for c in on)
-    n_cols = ctx.con.sql(
-        f"SELECT count(*) FROM (SELECT DISTINCT {on_sql} FROM {name})"
-    ).fetchone()[0]
-    if n_cols > MAX_PIVOT_COLUMNS:
+    # The new columns are found ONCE, here, and given to PIVOT by name. Left to find them,
+    # PIVOT ran the chain a second time for the same list before running it a third time to
+    # fill the table. The list is in the order PIVOT itself would use (the labels' own).
+    labels = [r[0] for r in ctx.con.sql(
+        f"SELECT l FROM (SELECT DISTINCT {on_sql} AS l FROM {name} LIMIT {MAX_PIVOT_COLUMNS + 1}) ORDER BY l"
+    ).fetchall()]
+    n_cols = len(labels)
+    if n_cols > MAX_PIVOT_COLUMNS:  # how many exactly is worth a count only to say it
+        n_cols = ctx.con.sql(f"SELECT count(*) FROM (SELECT DISTINCT {on_sql} FROM {name})").fetchone()[0]
         raise EngineError(
             f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
             f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
+    in_sql = ", ".join(_lit(str(l)) for l in labels)
     if index:
+        if not labels:  # no rows at all: the row fields alone, as PIVOT gave them
+            return ctx.con.sql(f"SELECT DISTINCT {idx_sql} FROM {name} LIMIT 0")
         piv = ctx.con.sql(
-            f"PIVOT {_source_for(name, [func])} ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {idx_sql}"
+            f"PIVOT {_source_for(name, [func])} ON {on_sql} IN ({in_sql}) USING {measure_sql} GROUP BY {idx_sql}"
         )
         # a sum of integers → HUGEINT (a decimal for Polars): back to BIGINT as the other engines
         return _recast_hugeint(ctx, piv)
@@ -457,7 +514,7 @@ def op_pivot(rel, params, a, ctx):
     grp = "__pivot_measure__"
     piv = ctx.register(ctx.con.sql(
         f"PIVOT (SELECT *, {measure} AS {grp} FROM {_source_for(name, [func])}) "
-        f"ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {grp}"
+        f"ON {on_sql} IN ({in_sql}) USING {measure_sql} GROUP BY {grp}"
     ))
     return _recast_hugeint(ctx, ctx.con.sql(f"SELECT {grp} AS {out}, * EXCLUDE ({grp}) FROM {piv}"))
 
@@ -509,6 +566,35 @@ def op_unpivot(rel, params, a, ctx):
 # ── Execute SQL (whole query in a SANDBOX) ────────────────────────────────────
 _NAMES_INPUT = re.compile(r"\b(?:self|input)\b", re.IGNORECASE)
 
+# The column types a parquet file gives back the same whether DuckDB or pyarrow wrote it
+# (checked type by type on DuckDB 1.5: tests/test_duckdb_tuning.py does it again).
+_WRITTEN_ALIKE = frozenset({
+    "BOOLEAN", "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
+    "FLOAT", "DOUBLE", "VARCHAR", "DATE", "TIME", "TIMESTAMP", "TIMESTAMP_MS", "TIMESTAMP_NS",
+    "TIMESTAMP WITH TIME ZONE", "BLOB",
+})
+# …and the ones DuckDB writes another way, with the cast that gives what pyarrow gave: a sum of
+# integers (HUGEINT) is a DECIMAL(38,0) through Arrow and would be a DOUBLE, rounded, from DuckDB
+_WRITTEN_AS = {"HUGEINT": "DECIMAL(38,0)", "UUID": "VARCHAR"}
+
+
+def native_write_projection(columns: list[str], types: list[str]) -> str | None:
+    """The SELECT list with which DuckDB itself writes a result to parquet EXACTLY as the Python
+    writer would, or None when it cannot be said (a type not checked, two columns whose names
+    differ at most by case): then Python writes it, as before."""
+    if len({c.lower() for c in columns}) != len(columns):
+        return None  # `a` and `A` are one name to DuckDB: a list of names would write `a` twice
+    parts = []
+    for name, t in zip(columns, types):
+        t = str(t).upper()
+        if t in _WRITTEN_ALIKE or t.startswith("DECIMAL"):
+            parts.append(_qi(name))
+        elif t in _WRITTEN_AS:
+            parts.append(f"CAST({_qi(name)} AS {_WRITTEN_AS[t]}) AS {_qi(name)}")
+        else:
+            return None
+    return ", ".join(parts)
+
 
 @_register("sql")
 def op_sql(rel, params, a, ctx):
@@ -522,8 +608,14 @@ def op_sql(rel, params, a, ctx):
     read_csv/read_parquet of anything else, attach, copy, install, httpfs are blocked and
     cannot be turned back on. The views read in place only the columns and row groups the
     query needs: copying every column into the sandbox's own tables made a GROUP BY over 60
-    million rows take 45-81 s and some 3 GB (bug hunt 2026-11-03). The result is NOT written
-    by DuckDB (blocked by the sandbox) but by Python (pyarrow), STREAMING → out of core."""
+    million rows take 45-81 s and some 3 GB (bug hunt 2026-11-03).
+
+    The result is written by the sandbox's own DuckDB into ONE more file of this run, allowed
+    like the inputs (a path only this run knows, and all it could hold is the query's own
+    result): streaming, out of core, on every thread. It used to be handed to Python batch by
+    batch and written by pyarrow on one thread: over a join of 42 million rows, 24.7 s of the
+    step's 42, against 7.7 s. Python still writes what the two would not write alike
+    (`native_write_projection`)."""
     query = str(_require(params, "query")).strip()
     if not query:
         raise EngineError("sql: the query is empty")
@@ -547,9 +639,10 @@ def op_sql(rel, params, a, ctx):
     try:
         sbx.execute(f"SET temp_directory = '{os.path.join(work_dir, 'spill')}'")
         duckdb_budget.apply(sbx)
-        files = ([in_tmp] if in_tmp is not None else []) + list(others.values())
-        if files:  # this run's own temporary files, named by ctx.tempfile: no quote inside
-            sbx.execute("SET allowed_paths=[" + ", ".join(f"'{f}'" for f in files) + "]")
+        out_tmp = ctx.tempfile()
+        files = ([in_tmp] if in_tmp is not None else []) + list(others.values()) + [out_tmp]
+        # this run's own temporary files, named by ctx.tempfile: no quote inside
+        sbx.execute("SET allowed_paths=[" + ", ".join(f"'{f}'" for f in files) + "]")
         if in_tmp is not None:
             sbx.execute(f"CREATE VIEW self AS SELECT * FROM read_parquet('{in_tmp}')")
             sbx.execute("CREATE VIEW input AS SELECT * FROM self")
@@ -561,14 +654,21 @@ def op_sql(rel, params, a, ctx):
             result = sbx.sql(query)
             if ctx.limit_output:  # in a preview, last node: do not compute the whole result
                 result = result.limit(ctx.limit_output)
-            reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
-            out_tmp = ctx.tempfile()
-            writer = _pq.ParquetWriter(out_tmp, reader.schema)  # writes PYTHON, not DuckDB
-            try:
-                for batch in reader:
-                    writer.write_batch(batch)
-            finally:
-                writer.close()
+            native = native_write_projection(list(result.columns), [str(t) for t in result.types])
+            if native is not None:
+                # onto the path itself: over a file that is there already DuckDB writes beside it
+                # first and renames, and the name beside it is not one the sandbox may touch
+                if os.path.exists(out_tmp):
+                    os.remove(out_tmp)
+                result.project(native).write_parquet(out_tmp)
+            else:
+                reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
+                writer = _pq.ParquetWriter(out_tmp, reader.schema)  # written by Python
+                try:
+                    for batch in reader:
+                        writer.write_batch(batch)
+                finally:
+                    writer.close()
         except EngineError:
             raise
         except Exception as e:

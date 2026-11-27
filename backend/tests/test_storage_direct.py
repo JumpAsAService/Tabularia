@@ -42,6 +42,21 @@ def test_the_secret_carries_the_storage_s_address_and_keys(monkeypatch):
     assert "ENDPOINT" not in storage_direct.duckdb_secret_sql()  # AWS itself
 
 
+def test_a_connection_remembers_what_the_storage_says_of_a_file():
+    """Planning a chain asks about each file once, not once a step (46 requests for twenty steps)."""
+    import duckdb
+
+    con = duckdb.connect(":memory:")
+    try:
+        try:
+            storage_direct.duckdb_enable(con)
+        except duckdb.Error as e:
+            pytest.skip(f"the httpfs extension does not load here: {e}")
+        assert con.execute("SELECT current_setting('enable_http_metadata_cache')").fetchone()[0] is True
+    finally:
+        con.close()
+
+
 def test_a_name_duckdb_would_read_as_a_pattern_is_downloaded_instead():
     assert storage_direct.duckdb_url("b", "datasets/1/x.parquet") == "s3://b/datasets/1/x.parquet"
     for key in ("datasets/*.parquet", "a?b.parquet", "x[1].parquet", "{a,b}.parquet"):

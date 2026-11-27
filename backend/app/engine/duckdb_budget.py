@@ -13,6 +13,19 @@ The concurrency is the pool's as Admin → Workers sizes it (worker_pool.target_
 the worker's queue), read again at every connection: with the environment's, a pool
 grown from the panel from 2 to 6 processes gave each a third of the container
 three times over, and the kernel killed the whole container.
+
+Threads when the sources are read in place over the network. Up to DuckDB 1.x a thread
+reading a remote Parquet file waits for its own request, one at a time, so a scan of an
+object store is bound by the requests in flight and not by the CPUs: a billion rows
+grouped by one column took 34.5 s with 4 threads, 17.7 with 8 and 9.5 with 16 (measured
+from a worker of four CPUs' share; DuckDB's guide says the same of synchronous reads:
+two to five times the cores). Such a connection gets its CPUs times
+REMOTE_THREADS_PER_CPU, as far as the memory allows MIN_MEMORY_PER_THREAD_MB each (the
+minimum DuckDB documents). The heavy shapes were run again inside the same memory with
+the larger number (a join of 42 million rows with 12 million, 12 million groups, a whole
+sort written out, the first row of each group): none gave up, all were as fast or
+faster, and the process's peak memory grew by a tenth at most. From DuckDB 2 the reads
+are asynchronous and have a pool of their own: there the CPUs' share is left as it is.
 """
 from __future__ import annotations
 
@@ -25,6 +38,8 @@ from app.core.config import get_settings
 
 PROCESS_OVERHEAD_MB = 160  # the interpreter, Arrow buffers, Polars, the task itself
 MIN_MEMORY_MB = 256
+REMOTE_THREADS_PER_CPU = 4
+MIN_MEMORY_PER_THREAD_MB = 125
 # the share of the pod's /tmp DuckDB may spill into: the sources a run downloads and the
 # files it writes are there too, and past the emptyDir's sizeLimit the kubelet evicts
 # the pod at once (every task of it lost)
@@ -104,9 +119,30 @@ def spill_mib() -> int | None:
     return max(64, int(limit * SPILL_SHARE / processes()) // 2**20)
 
 
-def apply(con) -> None:
-    """Sets the budget on a connection; call it before any lock_configuration."""
+def synchronous_remote_reads() -> bool:
+    """Whether this DuckDB reads a remote Parquet file one request a thread (before 2.0)."""
+    import duckdb
+
+    try:
+        return int(str(duckdb.__version__).split(".")[0]) < 2
+    except ValueError:
+        return False
+
+
+def remote_threads(memory_mb: int, cpus: int) -> int:
+    """The threads of a connection that reads its sources in place over the network: the
+    CPUs' share times REMOTE_THREADS_PER_CPU, no more than the memory allows, never fewer
+    than the CPUs' share."""
+    by_memory = memory_mb // MIN_MEMORY_PER_THREAD_MB
+    return max(cpus, min(cpus * REMOTE_THREADS_PER_CPU, by_memory))
+
+
+def apply(con, remote: bool = False) -> None:
+    """Sets the budget on a connection; call it before any lock_configuration. `remote`:
+    the connection reads its sources in place on the object storage."""
     memory_mb, threads = budget()
+    if remote and synchronous_remote_reads():
+        threads = remote_threads(memory_mb, threads)
     con.execute(f"SET memory_limit = '{memory_mb}MiB'")
     con.execute(f"SET threads = {threads}")
     spill = spill_mib()

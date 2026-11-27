@@ -35,6 +35,22 @@ logger = logging.getLogger(__name__)
 # dropped row), so the count after them is the count before them.
 PRESERVING = frozenset({"select", "reorder", "drop", "rename", "cast", "sort", "fill_null", "compute"})
 
+# The operations that give one row per group, whatever the input's size.
+AGGREGATING = frozenset({"group_by", "pivot"})
+
+
+def ends_in_aggregation(ops) -> bool:
+    """True when the last step that changes the rows is an aggregation: what follows it (a sort, a
+    projection, a computed column) keeps one row per group. Counting such a chain costs nothing
+    more than previewing it; counting it apart costs the whole aggregation again."""
+    for op in reversed(list(ops)):
+        t = op.type if hasattr(op, "type") else op.get("type")
+        if t in PRESERVING:
+            continue
+        return t in AGGREGATING
+    return False
+
+
 COUNT_PREFIX = "dataprep:stepcount:"
 # the parquet footer: read with one request for most files (a footer is a few KB)
 _TAIL_BYTES = 64 * 1024
