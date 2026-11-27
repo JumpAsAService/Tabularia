@@ -18,10 +18,31 @@ line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
   reaching it, in proportion to the limit; a `DISTINCT` over too many rows fails by name. Measured
   on ClickHouse 25.3: the server's own ratio defaults never spilled under a query's limit, and of
   the join algorithms only `grace_hash` spills for every kind of join.
-- **A crosstab reads what is upstream once less.** On ClickHouse and chDB the pivot counted the
-  combinations of its column fields and then listed them: two full executions of everything
-  before it. One bounded pass now answers both. On a billion rows read from S3: three scans in 103
-  seconds, now two in 63.
+- **A preview nobody waits for any more stops on the external ClickHouse too.** A preview given
+  up on at its timeout went on running on the server: the worker's process was ended before it
+  could stop its query, and `KILL QUERY` needs a grant on `system.processes` that a managed
+  service does not give by default, so a superseded preview was not stopped either. Measured: a
+  preview abandoned at 120 seconds worked for 334, holding 4.7 GB. Now the timeout interrupts the
+  task from inside as a newer request does; the statement that was running is stopped under its
+  own id, which needs no grant; and the server is told to end an interactive query by itself a
+  few seconds after the API's timeout. A superseded preview of a billion rows is cancelled on the
+  server within the second.
+- **A crosstab reads what is upstream once, on the external ClickHouse.** The pivot counted the
+  combinations of its column fields, listed them, and then filled the table: three executions of
+  everything before it. On ClickHouse and chDB the count and the list are now one bounded pass.
+  On the external ClickHouse reading from the bucket there is one pass in all: the cells (one per
+  combination of row and column fields) are aggregated once and kept as a small object of the
+  step cache, the columns are found in them and the table is spread from them. Asked again (the
+  count after the preview, a sort on the result, the next Apply, the flow's next run on the same
+  data) it is read from the kept cells. On a billion rows with 1,000 row values: 103 seconds, now
+  43, and 1.4 when asked again; with 500,000 row values 130 seconds, now 100, and 1.6 again. The
+  result is the same, checked row by row against the previous method on both.
+- **In the editor, an aggregation over files in the bucket is computed once.** On the external
+  ClickHouse a node's preview ran the aggregation, a task afterwards ran it twice more to keep a
+  copy (once to count it, once to write it), and the node after it ran it again while that copy
+  was not there. A copy is now made in one execution, and an aggregation is kept before its rows
+  are read, so the nodes after it start from the copy. On a billion rows: the group by 60 seconds
+  once, the sort and the filter after it about a second each.
 - **An aggregated preview on the external ClickHouse brings its row count.** A grouped table or a
   crosstab cut at its first rows was counted by running the whole aggregation a second time. The
   rows and their total now come from one statement, and the count asked next is remembered. On a

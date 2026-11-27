@@ -53,6 +53,7 @@ from app.engine.polars_engine import _coerce_ops, _columns_of
 from app.engine.stats.catalog import is_stat_operation
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 from app.engine.query_tag import current_query_tag, is_safe_tag, was_interrupted
+from app.engine.stepcache_defer import max_step_rows
 from app.observability import preview_stats
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,23 @@ def _effective_scan_threads(target: int, server_threads: int) -> int:
     if server_threads and target <= server_threads:
         return 0
     return target
+
+
+# the tag of the queries someone is waiting for at the screen (app/tasks/jobs.py: previews, counts, profiles)
+_INTERACTIVE_TAG = "tab-prev:"
+
+
+def interactive_leash(tag: str | None) -> int:
+    """Seconds after which the server itself stops a query tagged as interactive: the engine API's
+    preview timeout and a few more, so the API's own answer comes first. 0 = not interactive."""
+    if not tag or not tag.startswith(_INTERACTIVE_TAG):
+        return 0
+    try:
+        from app.core.panel_settings import value_at_start
+
+        return int(float(value_at_start("PREVIEW_TIMEOUT_SECONDS"))) + 5
+    except Exception:  # noqa: BLE001 — a setting that cannot be read: the default's leash
+        return 125
 
 
 def memory_guard(limit: int, user_limit: int = 0) -> dict[str, Any]:
@@ -300,7 +318,7 @@ class ClickHouseContext:
 
     def __init__(self, client, storage, cfg: ClickHouseExternalSettings, tmp: list[str],
                  preview_limit: int | None = None, matviews=None, allow_matview: bool = False,
-                 sort_keys=None):
+                 sort_keys=None, cache=None):
         self.client = client
         self.storage = storage
         self.cfg = cfg
@@ -322,6 +340,10 @@ class ClickHouseContext:
         # the missing side of an outer join is NULL, as in every engine (a column that is
         # not Nullable, e.g. computed on the right, would otherwise be 0 / '')
         self.settings: dict[str, Any] = {"join_use_nulls": 1}
+        # the id of the last statement sent (see _sent)
+        self.statement_id: str | None = None
+        # the engine's step cache, where a chain may keep an intermediate result of its own (stash)
+        self.cache = cache
         # the server's memory is every user's: a limit per query, and spilling before it
         self.settings.update(memory_guard(cfg.max_memory_usage, cfg.max_memory_usage_for_user))
         # the label of the work in progress (see query_tag.py): lets the queries of
@@ -331,6 +353,13 @@ class ClickHouseContext:
             self.settings["log_comment"] = _tag
         if cfg.max_execution_time > 0:
             self.settings["max_execution_time"] = cfg.max_execution_time
+        # An interactive query (a preview, a count, a profile) has nobody waiting for it past the
+        # API's own timeout: the server is told to stop it there by itself. The engine also kills
+        # it by its tag when it is interrupted, but that needs the worker alive to do it; this
+        # needs nothing.
+        leash = interactive_leash(_tag)
+        if leash and not 0 < cfg.max_execution_time <= leash:
+            self.settings["max_execution_time"] = leash
 
     def uid(self, prefix: str) -> str:
         self._n += 1
@@ -342,9 +371,16 @@ class ClickHouseContext:
         return path
 
     # ── service queries ────────────────────────────────────────────────────
+    def _sent(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The settings of the statement about to be sent, under an id of its own: with it the
+        engine can stop this statement on the server (ClickHouseEngine.stop_statement) whatever
+        the grants of its user."""
+        self.statement_id = uuid.uuid4().hex
+        return {**self.settings, **(extra or {}), "query_id": self.statement_id}
+
     def _rows(self, sql: str) -> list[list]:
         try:
-            return [list(r) for r in self.client.query(sql, settings=self.settings).result_rows]
+            return [list(r) for r in self.client.query(sql, settings=self._sent()).result_rows]
         except EngineError:
             raise
         except Exception as e:
@@ -356,7 +392,7 @@ class ClickHouseContext:
 
     def command(self, sql: str, settings: dict[str, Any] | None = None) -> None:
         try:
-            self.client.command(sql, settings={**self.settings, **(settings or {})})
+            self.client.command(sql, settings=self._sent(settings))
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
 
@@ -369,14 +405,16 @@ class ClickHouseContext:
         """Runs `sql` and returns the result as parquet (in RAM: for small results only,
         such as previews)."""
         try:
-            return self.client.raw_query(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT})
+            safe = self.parquet_safe(sql)  # asks the columns first: the id is of the statement that follows
+            return self.client.raw_query(safe, fmt="Parquet", settings=self._sent(_PARQUET_OUT))
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
 
     def parquet_to_file(self, sql: str, path: str) -> None:
         """Runs `sql` and writes the parquet to a file, STREAMING (HTTP chunked)."""
         try:
-            with self.client.raw_stream(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT}) as stream, \
+            safe = self.parquet_safe(sql)
+            with self.client.raw_stream(safe, fmt="Parquet", settings=self._sent(_PARQUET_OUT)) as stream, \
                     open(path, "wb") as fh:
                 for chunk in stream:
                     fh.write(chunk)
@@ -400,6 +438,42 @@ class ClickHouseContext:
     def distinct_rows(self, base_sql: str, cols: list[str]) -> list[list]:
         sel = ", ".join(_qi(c) for c in cols)
         return self._rows(f"SELECT DISTINCT {sel} FROM {base_sql} ORDER BY {sel}")
+
+    def stash(self, sql: str) -> str | None:
+        """Computes `sql` once, keeps its result as a parquet object of the step cache and returns
+        what reads it (to put after FROM), or None where it does not pay.
+
+        For a step that must look at what is upstream twice (a crosstab: once to find its
+        columns, once to fill them). On the s3 transport every look is a scan of the files in
+        the bucket; a small aggregate kept beside them is read back in a moment. Its name is the
+        fingerprint of the statement, which names immutable objects: the same question asked
+        again (the count after the preview, the next Apply) finds it, and the cache's own expiry
+        removes it. With `push` the data are already in a table on the server: nothing to gain."""
+        if self.cfg.transport != "s3" or self.cache is None:
+            return None
+        import hashlib
+
+        from app.core import release
+
+        h = hashlib.sha256(f"stash@{release.current()}\n{sql}".encode()).hexdigest()
+        kept = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(h))
+        if self.cache.has(h) and self.cache.blob_exists(h):
+            self.cache.touch(h)
+        else:
+            try:
+                self.command(
+                    f"INSERT INTO FUNCTION {self.s3_fn(kept)} SELECT * FROM ({self.parquet_safe(sql)})",
+                    settings={**_PARQUET_OUT, "s3_truncate_on_insert": 1, "s3_create_new_file_on_insert": 0},
+                )
+            except EngineError as e:
+                if was_interrupted(e):
+                    raise
+                # a user that may not write to the bucket (the assistant's read-only one), or a
+                # result that did not fit: the step goes its ordinary way and says what is wrong
+                logger.info("stash: not kept (%s)", str(e)[:200])
+                return None
+            self.cache.mark(h)
+        return f"(SELECT * FROM {self.s3_fn(kept)})"
 
     # ── transport s3: table function on the storage ──────────────────────
     def s3_fn(self, source: DataSource) -> str:
@@ -708,6 +782,36 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         except Exception as e:  # must never fail whoever is cleaning up
             logger.warning("KILL QUERY for %s failed: %s", tag, _clean_error(e))
 
+    def _step_cache(self):
+        """The step cache a chain may keep its own intermediate results in (ClickHouseContext.stash),
+        or None for an engine built without one."""
+        return getattr(self, "cache", None)
+
+    def stop_statement(self, statement_id: str | None) -> None:
+        """Stops one statement of ours on the server, with no grant at all: a statement sent under
+        the same id with `replace_running_query` takes the place of the running one, which ends as
+        cancelled at once. `KILL QUERY` (kill_tagged) needs SELECT on system.processes, which a
+        managed service does not give by default: there a superseded preview went on to its end
+        on the server, a minute and more of a billion-row scan with nobody waiting. Best effort,
+        with a new client, as kill_tagged."""
+        if not statement_id or not re.fullmatch(r"[0-9a-f]{32}", statement_id):
+            return
+        try:
+            import clickhouse_connect  # a local import, as in _client(): an optional dependency
+
+            c = clickhouse_connect.get_client(
+                host=self.cfg.host, port=self.cfg.port, username=self.cfg.username or "default",
+                password=self.cfg.password.get_secret_value(), database=self.cfg.database or "default",
+                secure=self.cfg.secure, connect_timeout=self.cfg.connect_timeout,
+                autogenerate_session_id=False,
+            )
+            try:
+                c.command("SELECT 1", settings={"query_id": statement_id, "replace_running_query": 1})
+            finally:
+                c.close()
+        except Exception as e:  # must never fail whoever is cleaning up
+            logger.warning("stopping statement %s failed: %s", statement_id, _clean_error(e))
+
     def _source_id(self, source: DataSource) -> str:
         return source_fingerprint(self.engine_name, source.bucket, source.key)
 
@@ -753,16 +857,34 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         if self.cache.has(final):
             return
         sql = self._sql_from_cache(ctx, source, operations, hashes)
-        if self._too_big(ctx, sql, final):
-            return
-        self._write(ctx, sql, DataSource(bucket=self.cache.bucket, key=self.cache.object_key(final)))
+        dest = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(final))
+        cap = max_step_rows()
+        if ctx.cfg.transport == "s3" and cap > 0:
+            # ONE execution of the chain: written up to one row past the cap, and counted from
+            # what was written (the parquet's footer, no scan). Counting first and writing after
+            # ran the chain twice: after an aggregation over a billion rows, two more scans in
+            # the background for every node looked at. A step over the cap costs the write of
+            # a file that is then removed, once: it is remembered as too large.
+            self._write(ctx, f"SELECT * FROM ({sql}) LIMIT {cap + 1}", dest)
+            if ctx.matview_count(dest) > cap:
+                try:
+                    self.storage.delete_object(dest.bucket, dest.key)
+                except Exception:  # noqa: BLE001 — the copy is unindexed either way: nothing reads it
+                    logger.warning("step %s: the oversized copy could not be removed", final[:12])
+                self.cache.mark_skipped(final)
+                logger.info("step %s: over %d rows, not cached (computed again from the source)", final[:12], cap)
+                return
+        else:
+            if self._too_big(ctx, sql, final):
+                return
+            self._write(ctx, sql, dest)
         self.cache.mark(final)
         logger.info("materialized step %d in cache", len(operations))
 
     @contextmanager
     def _materialize_session(self, source: DataSource):
         client = self._client()
-        ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [], cache=self._step_cache())
         threads = self._scan_max_threads(ctx)
         if threads:
             ctx.settings["max_threads"] = threads
@@ -859,7 +981,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                                 # `ai` user is read-only, so it reads the parquet. A
                                 # profile's sample neither: see _through_sql
                                 allow_matview=not use_cache and not self._as_ai() and not sampling,
-                                sort_keys=sort_keys)
+                                sort_keys=sort_keys, cache=self._step_cache())
         # a preview's rows, and a profile's sample, are the FIRST ones, in the file's order,
         # as on the other engines: without it the server reads the row groups in parallel
         # and a LIMIT keeps whichever came first, other rows at every request (measured on
@@ -875,6 +997,13 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 self._defer_materialization(source, ops[:-1])  # AFTER the answer, in a task of its own
                 _t = _phase("stepcache", _t)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            # The editor on files in a bucket: an aggregation is computed ONCE, into its own
+            # copy in the step cache, and its rows are read from there. Reading the rows first
+            # left the copy to a task afterwards, which ran the aggregation again, and the next
+            # node downstream ran it once more while that copy was not there yet.
+            if (use_cache and self.cfg.transport == "s3" and not sampling and _ends_in_aggregation(ops)
+                    and not self.cache.has(hashes[-1]) and not self.cache.is_skipped(hashes[-1])):
+                self._materialize(ctx, source, ops)
             # includes resolving the materialized copy: when this time is high, the
             # copy is being CREATED now (the first time, or after a drop)
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
@@ -941,6 +1070,9 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             # next previews of this process failed.
             if _was_interrupted(e):
                 self._forget_client()
+                # the statement that was running, by its id (needs no grant), then whatever
+                # else carries the task's tag (needs SELECT on system.processes)
+                self.stop_statement(ctx.statement_id)
                 tag = ctx.settings.get("log_comment")
                 if tag:
                     self.kill_tagged(tag)
@@ -973,7 +1105,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
     ) -> RunResult:
         ops = _coerce_ops(operations)
         client = self._client()
-        ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [], cache=self._step_cache())
         threads = self._scan_max_threads(ctx)
         if threads:
             ctx.settings["max_threads"] = threads
@@ -1010,7 +1142,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         if not self.cfg.matview_sweep_enabled:
             return 0
         client = self._client()
-        ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [], cache=self._step_cache())
         try:
             return self.matviews.evict(ctx, self.cfg.materialize_ttl_seconds)
         finally:

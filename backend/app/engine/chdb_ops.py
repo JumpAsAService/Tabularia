@@ -607,6 +607,15 @@ def op_pivot(sql, params, ctx):
             expr = f"toInt64({expr})"
         return f"SELECT {idx_sql}, {expr} AS {_qi(PIVOT_VALUES_COLUMN)} FROM {base} GROUP BY {idx_sql}"
     on_sql = ", ".join(_qi(c) for c in on)
+    # Where reading what is upstream is dear (an external server on files in a bucket), it is
+    # read ONCE: aggregated by the row fields and the column fields together, kept, and the
+    # columns are found and spread from that (see _pivot_from_cells)
+    stash = getattr(ctx, "stash", None)
+    cells = stash(_pivot_cells_sql(base, index, on, values, func)) if stash else None
+    # two combinations merged in one cell (see _pivot_cells_sql): not seen once in practice, and
+    # then the columns are found and filled the ordinary way
+    if cells and ctx.scalar(f"SELECT count() FROM {cells} WHERE NOT {_qi(_PIVOT_CELL_OK)}") == 0:
+        return _pivot_from_cells(cells, index, on, values, func, ctx)
     # ClickHouse has no PIVOT: conditional columns, so the combinations are read first. ONE
     # pass over what is upstream answers both «how many» and «which»: one more than the
     # maximum is enough to know there are too many. Counting them and then listing them
@@ -642,6 +651,85 @@ def op_pivot(sql, params, ctx):
         cols.append(f"{expr} AS {_qi(colname)}")
     group = f" GROUP BY {idx_sql}" if index else ""
     return f"SELECT {', '.join(cols)} FROM {base}{group}"
+
+
+# A crosstab from its cells. One cell is one combination of the row fields and of the column
+# fields: `_PIVOT_CELL` its value, `_PIVOT_CELL_N` how many values it was made of.
+_PIVOT_CELL = "__pivot_cell"
+_PIVOT_CELL_N = "__pivot_cell_n"
+_PIVOT_CELL_OK = "__pivot_cell_ok"
+# What gives a cell's value back when it is taken through the -If combinator from the ONE row
+# of that cell: the same function for those that return their only value (so the types, and
+# what no row at all gives, are the conditional column's own), a sum for the counts.
+_FROM_CELL = {
+    "sum": "sum", "mean": "avg", "min": "min", "max": "max", "median": "median",
+    "first": "any", "last": "anyLast", "std": "any", "var": "any", "count": "sum", "n_unique": "sum",
+}
+
+
+def _pivot_cells_sql(base: str, index: list[str], on: list[str], values: str, func: str) -> str:
+    """The aggregation of a crosstab's cells: one pass over what is upstream.
+
+    The cells are grouped by the row fields and by a NUMBER made of the column fields, not by the
+    column fields themselves. Measured on a billion rows: with a text field among the keys, 500,000
+    row values times 5 column values took 142 s, against 90 s for the two passes this replaces; with
+    the number 91 s (and 35 s against 75 with 1,000 row values). Two different combinations that
+    gave the same number would be merged, so a second, independent number is watched in every cell
+    (`_PIVOT_CELL_OK`): if it is not one alone anywhere, the cells are not used."""
+    idx_sql = ", ".join(_qi(c) for c in index)
+    # a NULL and an empty text must not be one combination: whether each field is NULL goes in too
+    combo = "tuple(" + ", ".join(f"isNull({_qi(c)}), {_qi(c)}" for c in on) + ")"
+    # three levels, so that no name is at once a column of what is upstream and the alias of an
+    # aggregate over it (ClickHouse reads the alias first, and refuses an aggregate among the keys):
+    # the two numbers, then the cells under names of their own, then the fields' names back
+    numbered = f"(SELECT *, cityHash64({combo}) AS `__pivot_k`, farmHash64({combo}) AS `__pivot_g` FROM {base})"
+    keys = ", ".join(k for k in (idx_sql, "`__pivot_k`") if k)
+    on_cells = ", ".join(f"any({_qi(c)}) AS {_qi(f'__pivot_on{i}')}" for i, c in enumerate(on))
+    on_back = ", ".join(f"{_qi(f'__pivot_on{i}')} AS {_qi(c)}" for i, c in enumerate(on))
+    # std and var give NULL under two values (see _aggregate): the count travels with the raw
+    # figure, and the rule is applied when the cell is spread
+    cell = f"{_AGG[func]}({_qi(values)})" if func in ("std", "var") else _aggregate(func, _qi(values))
+    cells = (f"(SELECT {', '.join(k for k in (idx_sql, on_cells) if k)}, {cell} AS {_qi(_PIVOT_CELL)}, "
+             f"count({_qi(values)}) AS {_qi(_PIVOT_CELL_N)}, min(`__pivot_g`) = max(`__pivot_g`) AS {_qi(_PIVOT_CELL_OK)} "
+             f"FROM {numbered} GROUP BY {keys})")
+    return (f"SELECT {', '.join(k for k in (idx_sql, on_back) if k)}, {_qi(_PIVOT_CELL)}, {_qi(_PIVOT_CELL_N)}, "
+            f"{_qi(_PIVOT_CELL_OK)} FROM {cells}")
+
+
+def _pivot_from_cells(cells: str, index: list[str], on: list[str], values: str, func: str, ctx) -> str:
+    """The crosstab read from its kept cells (`cells`: what to put after FROM). The same columns,
+    names, order, types and NULLs as the conditional columns over the rows themselves: a cell is
+    one row here, and a function that returns its only value returns the cell's."""
+    idx_sql = ", ".join(_qi(c) for c in index)
+    on_sql = ", ".join(_qi(c) for c in on)
+    combos = ctx.distinct_rows(f"(SELECT DISTINCT {on_sql} FROM {cells} LIMIT {MAX_PIVOT_COLUMNS + 1})", on)
+    if len(combos) > MAX_PIVOT_COLUMNS:
+        n_cols = ctx.scalar(f"SELECT count() FROM (SELECT DISTINCT {on_sql} FROM {cells})")
+        raise EngineError(
+            f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
+            f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
+        )
+    combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))
+    labels = [PIVOT_LABEL_SEP.join(pivot_label(v) for v in combo) for combo in combos]
+    cols = [idx_sql] if index else [f"{_lit(pivot_measure_label(func, values))} AS {_qi(PIVOT_VALUES_COLUMN)}"]
+    if not index:
+        check_pivot_labels(labels)
+        if not combos:
+            return f"SELECT {cols[0]}"
+    cell, n = _qi(_PIVOT_CELL), _qi(_PIVOT_CELL_N)
+    for combo, colname in zip(combos, labels):
+        cond = " AND ".join(
+            f"{_qi(c)} IS NULL" if v is None else f"{_qi(c)} = {_lit(v)}" for c, v in zip(on, combo)
+        )
+        expr = f"{_FROM_CELL[func]}If({cell}, {cond})"
+        if func in ("std", "var"):
+            expr = f"if(sumIf({n}, {cond}) > 1, {expr}, NULL)"
+        elif func in ("count", "n_unique"):
+            # the kept cells are read back as nullable: a combination with no cell is 0, not NULL
+            expr = f"toInt64(coalesce({expr}, 0))"
+        cols.append(f"{expr} AS {_qi(colname)}")
+    group = f" GROUP BY {idx_sql}" if index else ""
+    return f"SELECT {', '.join(cols)} FROM {cells}{group}"
 
 
 # ClickHouse types → family, for the value's supertype in unpivot

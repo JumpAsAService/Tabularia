@@ -641,6 +641,11 @@ GRANT CREATE TEMPORARY TABLE, S3 ON *.* TO `<clickhouse-user>`;
 GRANT NAMED COLLECTION ON tabularia_s3 TO `<clickhouse-user>`;
 ```
 
+A preview that is replaced by a newer one, or given up on, is stopped on the server too. Tabularia
+stops the statement that was running without any grant; to stop everything else a preview had
+started, by its label, it also needs to see its own queries:
+`GRANT SELECT(query_id, user, query, Settings) ON system.processes TO <clickhouse-user>;`.
+
 With those alone the Viewer reads the bucket's files at every query. To let it keep a
 copy of the datasets over five million rows inside ClickHouse, which is faster, also
 `GRANT CREATE TABLE, DROP TABLE, INSERT, SELECT ON tabularia.* TO <clickhouse-user>;`.

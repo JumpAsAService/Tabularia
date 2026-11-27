@@ -940,8 +940,11 @@ def test_who_others_wait_for_finds_out_a_worker_is_gone_without_waiting_to_the_e
         def forget(self):
             pass
 
-        def revoke(self, terminate=False):
+        def revoke(self, terminate=False, signal=None):  # as celery's: the timeout names its signal
             pass
+
+        def ready(self):
+            return True
 
     monkeypatch.setattr(tasks.celery_app, "send_task", lambda *a, **k: Result())
     monkeypatch.setattr(tasks, "_WORKER_LOOK_SECONDS", 0.0)

@@ -193,7 +193,9 @@ def test_the_timeout_still_applies(monkeypatch):
     monkeypatch.setattr(routes, "PREVIEW_TIMEOUT_SECONDS", 0.0)
     with pytest.raises(HTTPException) as e:
         routes.preview_flow(_req(slot="u1:ed-preview"))
-    assert e.value.status_code == 504 and result.revoked == {"terminate": True}
+    # interrupted from inside, as a superseded preview is: the engine can then stop its query on
+    # the server, which a process ended outright never did
+    assert e.value.status_code == 504 and result.revoked == {"terminate": True, "signal": "SIGUSR1"}
 
 
 @pytest.mark.parametrize("bad", ["a b", "x'y", "é", "x" * 97])

@@ -1,4 +1,5 @@
 import re
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -106,6 +107,26 @@ PROFILE_OUT_OF_MEMORY = ("The profile needed more than the worker's memory and w
 EXPORT_QUEUE_WAIT_SECONDS = 600
 
 
+# how long a preview interrupted at its timeout has to stop by itself before its process is ended
+_INTERRUPT_GRACE_SECONDS = 10.0
+
+
+def _end_if_still_running(async_result) -> None:
+    """After the soft interrupt of a timed-out preview: if the task has not stopped (an engine deep
+    in native code does not see the interrupt until it comes back), its process is ended as before,
+    so the preview worker is not held by work nobody waits for."""
+    def end() -> None:
+        try:
+            if not async_result.ready():
+                async_result.revoke(terminate=True)
+        except Exception:  # noqa: BLE001 — a courtesy to the worker pool, never an error of the request
+            logger.info("preview: the timed-out task could not be checked again")
+
+    timer = threading.Timer(_INTERRUPT_GRACE_SECONDS, end)
+    timer.daemon = True
+    timer.start()
+
+
 def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: float | None = None,
                       watch_worker: bool = False) -> dict:
     """Sends a task to the preview worker and waits for its tagged answer. With a
@@ -146,7 +167,13 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
                     if async_result.state == "STARTED" and worker_pool.lost(task_id, async_result.info):
                         raise HTTPException(status_code=503, detail=WORKER_LOST)
                 if time.monotonic() >= deadline:
-                    async_result.revoke(terminate=True)  # stops the preview in progress
+                    # SIGUSR1, as for a superseded preview above: the task is interrupted from
+                    # INSIDE, so the engine also stops its query on the server. With the default
+                    # signal the worker's process died before it could: a preview given up on
+                    # here at 120 s went on for 334 s and 4.7 GB on an external ClickHouse
+                    # (a group by of a billion rows), with nobody waiting for it.
+                    async_result.revoke(terminate=True, signal="SIGUSR1")
+                    _end_if_still_running(async_result)
                     raise HTTPException(
                         status_code=504, detail="Preview timed out: the worker did not answer in time"
                     )
