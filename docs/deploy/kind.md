@@ -114,9 +114,9 @@ Run every command in **the same terminal**: the steps keep values in shell varia
 ## 1. Get Tabularia and a working folder
 
 ```bash
-git clone --branch v1.5.1 https://github.com/JumpAsAService/Tabularia.git
+git clone --branch v1.5.2 https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia
-export VERSION=1.5.1 WORK="$HOME/tabularia-kind"
+export VERSION=1.5.2 WORK="$HOME/tabularia-kind"
 mkdir -p "$WORK"
 ```
 

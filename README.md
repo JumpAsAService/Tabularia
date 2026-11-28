@@ -38,7 +38,7 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.5.1 «Augustus»** — see [CHANGELOG.md](CHANGELOG.md). The long-term support line is 1.4.7 «Romulus» ([LTS](docs/lts.md), image tag `lts`).
+Current release: **1.5.2 «Augustus»** — see [CHANGELOG.md](CHANGELOG.md). The long-term support line is 1.4.7 «Romulus» ([LTS](docs/lts.md), image tag `lts`).
 
 **Try it in three commands** (Docker with Compose; the first start builds the images, a few minutes):
 
@@ -142,7 +142,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   published images: two lines on top of the backend image add it.
   [Microsoft SQL Server](docs/sqlserver.md)
   ```dockerfile
-  FROM jumpasaservice/tabularia-backend:1.5.1
+  FROM jumpasaservice/tabularia-backend:1.5.2
   USER root
   RUN pip --python /opt/venv/bin/python install --no-cache-dir "mssql-python==1.15.0"
   USER 10001:10001

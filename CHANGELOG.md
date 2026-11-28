@@ -8,6 +8,12 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next release. 1.5 is the current line; the long-term support
 line stays 1.4.x ([long-term support](docs/lts.md)), which takes fixes only.
 
+## 1.5.2 «Augustus» — 2026-11-28
+
+The engines do less to give the same answers, and the app gets a guided tour. No migration.
+The two new settings are optional and change nothing when left alone; the chart is 2.9.3.
+The two gateways' and the data APIs' images are the code of 1.5.1.
+
 - **The DuckDB engine does less to give the same answers, above all on tables read from an
   object storage.** Measured on the sample's large tables (42 million and a billion rows) read
   from a bucket in another network, from workers of four CPUs' share:

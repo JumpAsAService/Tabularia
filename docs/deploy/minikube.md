@@ -180,11 +180,11 @@ minikube addons enable ingress
 
 ## Step 3 — Download Tabularia
 
-1. Download [Tabularia 1.5.1 as a zip file](https://github.com/JumpAsAService/Tabularia/archive/refs/tags/v1.5.1.zip).
+1. Download [Tabularia 1.5.2 as a zip file](https://github.com/JumpAsAService/Tabularia/archive/refs/tags/v1.5.2.zip).
    A newer version, when there is one, is at the top of
    [the list of versions](https://github.com/JumpAsAService/Tabularia/tags): click its **zip**.
 2. Unzip it, for example in your Documents folder. You get a folder such as
-   `Tabularia-1.5.1`, with a folder `infrastructure` inside.
+   `Tabularia-1.5.2`, with a folder `infrastructure` inside.
 3. Open your terminal **in that folder**, as below for your system.
 
 #### Windows

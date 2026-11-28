@@ -221,6 +221,11 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `AI__MAX_RESULT_CHARS_FOR_MODEL` (how much of a long result the assistants' model is given)
    and the `DATA_API__XMLA_*` group, `dataApi.xmla` in the chart, which is off by default
    ([data APIs](../data-apis.md#pivot-tables-xmla)). The engine's image is the code of 1.5.0.
+   **New in 1.5.2:** no migration (chart 2.9.3). The new variables are optional and for the
+   external ClickHouse engine only: `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE` and
+   `CLICKHOUSE_EXTERNAL__MAX_MEMORY_USAGE_FOR_USER`, `externalServices.clickhouse.maxMemoryUsage`
+   and `maxMemoryUsageForUser` in the chart; 0, the default, sets no limit. Only the engine's
+   and the interface's images differ from 1.5.1.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the

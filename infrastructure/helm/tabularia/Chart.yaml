@@ -10,11 +10,11 @@ description: |
 type: application
 
 # Chart version — bump on every chart change.
-version: 2.9.2
+version: 2.9.3
 
 # Version of Tabularia this chart was written against. Overridden per component
 # by image.tag values when you pin your own builds.
-appVersion: "1.5.1"  # release «Augustus»
+appVersion: "1.5.2"  # release «Augustus»
 
 keywords:
   - data-preparation
